@@ -2,33 +2,44 @@
 
 > [← MoC](README.md) | [Architecture](architecture.md) | [Overview](overview.md)
 
-## Current Taxonomy (v0.1)
+## Current Taxonomy (v0.2 — Architecture-first)
+
+> v0.1에서 Option C(Architecture-first) 적용 완료. 변경 이력은 아래 [v0.1 분석](#v01-taxonomy-analysis-historical) 참조.
 
 ### Directory Structure
 
 ```
 models/
-├── graph_models/        ← Axis: Architecture (GCN)
+├── graph/               ← Architecture: GCN family (자체 + 외부 통합)
 │   ├── infogcn.py          InfoGCN, InfoGCN_Interaction
 │   ├── baselines.py        STGCN, AGCN
-│   └── modules.py          SA-GC, EncodingBlock, MS-TCN
-├── sequence_models/     ← Axis: Architecture (RNN/MLP/Attn)
+│   ├── modules.py          SA-GC, EncodingBlock, MS-TCN
+│   └── pyskl.py            ST-GCN++, CTR-GCN, MS-G3D, AAGCN, ... (PySKL)
+├── sequence/            ← Architecture: Sequence classifiers
 │   └── classifiers.py     MLP, LSTM, Transformer, RuleBased
-├── ssl/                 ← Axis: Learning Paradigm
+├── ssl/                 ← Paradigm: Self-supervised learning
 │   ├── encoders.py         GCN, InfoGCN, Interaction encoder
 │   ├── methods.py          MAE, JEPA, DINO
 │   └── models.py           3 encoders × 3 methods = 9 combos
-├── unsupervised/        ← Axis: Learning Paradigm + External
+├── discovery/           ← Task: Behavior discovery (라벨 불필요)
 │   ├── clustering.py       PCA → UMAP → KMeans
 │   ├── bsoid.py            B-SOiD (UMAP+HDBSCAN+RF)
 │   ├── moseq.py            keypoint-MoSeq (AR-HMM/SLDS)
 │   ├── subtle_wrapper.py   SUBTLE (Wavelet+UMAP+Phenograph)
 │   └── behavemae.py        BehaveMAE (Hierarchical MAE)
-├── external/            ← Axis: Source/Origin
-│   └── pyskl.py            ST-GCN++, CTR-GCN, MS-G3D, AAGCN, ...
-└── losses/              ← Axis: Role
+└── losses/              ← Role: Loss functions
     └── __init__.py         LabelSmoothing, MMD
 ```
+
+### v0.1 → v0.2 변경 요약
+
+| Before (v0.1) | After (v0.2) | 이유 |
+|----------------|--------------|------|
+| `graph_models/` | `graph/` | 간결화 |
+| `sequence_models/` | `sequence/` | 간결화 |
+| `unsupervised/` | `discovery/` | 의도 명확화 (행동 발견) |
+| `external/pyskl.py` | `graph/pyskl.py` | GCN 계열 → graph/에 통합 |
+| `external/` 디렉토리 | 삭제 | singleton 카테고리 해소 |
 
 ### Full Model Catalog (30+ models)
 
@@ -65,7 +76,7 @@ models/
 
 ---
 
-## Taxonomy Critique
+## v0.1 Taxonomy Analysis (Historical)
 
 ### Problem: Mixed Classification Axes
 
@@ -189,30 +200,18 @@ models/
 
 ## Recommendation
 
-### 단기 (현재): 현재 구조 유지 + 문서 보완
+### 현재 (v0.2): Option C 적용 완료
 
-`get_model()` factory가 디렉토리 구조를 추상화하므로, 사용자에게는 디렉토리 구조가 보이지 않음.
-분류 기준의 불일치는 **문서로 명시**하면 충분.
+핵심 문제(external/ singleton, 이름 불일치) 해결됨:
 
-```python
-# 사용자는 이렇게 씀 — 디렉토리 구조 무관
-model = get_model('infogcn', num_classes=60, skeleton='ntu')
-model = get_model('bsoid', fps=30)
-model = get_model('stgcn_pyskl', graph='ntu', num_classes=60)
-```
+1. ~~`external/pyskl.py`~~ → `graph/pyskl.py` (같은 GCN 계열 통합)
+2. ~~`unsupervised/`~~ → `discovery/` (의도 명확화)
+3. ~~`graph_models/`~~ → `graph/`, ~~`sequence_models/`~~ → `sequence/` (간결화)
 
-### 중기 (v0.2): Option C (Architecture-first) 전환
+### 향후 (v1.0): Option A (Task-based) 전환 고려
 
-마이그레이션 비용이 가장 낮고, 핵심 문제(external/ singleton, STGCN 중복)를 해결:
-
-1. `external/pyskl.py` → `graph/pyskl.py` (같은 GCN 계열)
-2. `unsupervised/` → `discovery/` (이름 변경, 의도 명확화)
-3. `graph_models/` → `graph/`, `sequence_models/` → `sequence/` (간결화)
-
-### 장기 (v1.0): Option A (Task-based) 전환 고려
-
-연구 플랫폼으로 성숙하면, 연구자 관점 분류가 자연스러움.
-단, `get_model()` factory가 있으므로 내부 구조 변경이 API에 영향 없음.
+연구 플랫폼으로 성숙하면, 연구자 관점 분류(`action_recognition/`, `representation/`, `behavior_discovery/`)가 자연스러움.
+`get_model()` factory가 있으므로 내부 구조 변경이 **API에 영향 없음**.
 
 ---
 

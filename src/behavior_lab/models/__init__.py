@@ -1,16 +1,17 @@
 """Model registry: unified access to all models.
 
 Factory pattern for instantiating any model by name + Hydra config.
-Models are grouped into categories:
 
-- Graph models (supervised): infogcn, stgcn, agcn
-- Sequence models (supervised): mlp, lstm, transformer, rule_based
-- SSL models: gcn_mae, infogcn_jepa, interaction_dino, etc.
-- Unsupervised: bsoid, moseq, subtle, behavemae, clustering
-- External: stgcn_pyskl, ctrgcn_pyskl, msg3d_pyskl, etc.
+Taxonomy (single axis: Architecture, sub-grouped by paradigm):
+
+- graph/       GCN family — InfoGCN, STGCN, AGCN (self) + PySKL wrappers (external)
+- sequence/    Sequence classifiers — MLP, LSTM, Transformer, RuleBased
+- ssl/         Self-supervised — 3 encoders × 3 methods = 9 combinations
+- discovery/   Behavior discovery — B-SOiD, MoSeq, SUBTLE, BehaveMAE, clustering
+- losses/      Label smoothing, MMD
 """
-from .graph_models import InfoGCN, InfoGCN_Interaction, STGCN, AGCN
-from .sequence_models import get_action_classifier
+from .graph import InfoGCN, InfoGCN_Interaction, STGCN, AGCN
+from .sequence import get_action_classifier
 from .ssl import build_ssl_model, MODEL_REGISTRY as SSL_REGISTRY
 
 
@@ -23,25 +24,27 @@ def _remap_infogcn_kwargs(kwargs: dict) -> dict:
     return kw
 
 
-# Lazy-loaded external / unsupervised model constructors
-_UNSUPERVISED_MODELS = {
-    'bsoid': ('behavior_lab.models.unsupervised.bsoid', 'BSOiD'),
-    'b-soid': ('behavior_lab.models.unsupervised.bsoid', 'BSOiD'),
-    'moseq': ('behavior_lab.models.unsupervised.moseq', 'KeypointMoSeq'),
-    'keypoint_moseq': ('behavior_lab.models.unsupervised.moseq', 'KeypointMoSeq'),
-    'subtle': ('behavior_lab.models.unsupervised.subtle_wrapper', 'SUBTLE'),
-    'behavemae': ('behavior_lab.models.unsupervised.behavemae', 'BehaveMAE'),
-    'behave_mae': ('behavior_lab.models.unsupervised.behavemae', 'BehaveMAE'),
+# Lazy-loaded discovery model constructors (heavy optional deps)
+_DISCOVERY_MODELS = {
+    'bsoid': ('behavior_lab.models.discovery.bsoid', 'BSOiD'),
+    'b_soid': ('behavior_lab.models.discovery.bsoid', 'BSOiD'),
+    'moseq': ('behavior_lab.models.discovery.moseq', 'KeypointMoSeq'),
+    'keypoint_moseq': ('behavior_lab.models.discovery.moseq', 'KeypointMoSeq'),
+    'subtle': ('behavior_lab.models.discovery.subtle_wrapper', 'SUBTLE'),
+    'behavemae': ('behavior_lab.models.discovery.behavemae', 'BehaveMAE'),
+    'behave_mae': ('behavior_lab.models.discovery.behavemae', 'BehaveMAE'),
+    'clustering': ('behavior_lab.models.discovery.clustering', 'cluster_features'),
 }
 
-_EXTERNAL_MODELS = {
-    'stgcn_pyskl': ('behavior_lab.models.external.pyskl', 'PySKLModel', 'stgcn'),
-    'stgcn++_pyskl': ('behavior_lab.models.external.pyskl', 'PySKLModel', 'stgcn++'),
-    'ctrgcn_pyskl': ('behavior_lab.models.external.pyskl', 'PySKLModel', 'ctrgcn'),
-    'aagcn_pyskl': ('behavior_lab.models.external.pyskl', 'PySKLModel', 'aagcn'),
-    'msg3d_pyskl': ('behavior_lab.models.external.pyskl', 'PySKLModel', 'msg3d'),
-    'dgstgcn_pyskl': ('behavior_lab.models.external.pyskl', 'PySKLModel', 'dgstgcn'),
-    'poseconv3d_pyskl': ('behavior_lab.models.external.pyskl', 'PySKLModel', 'poseconv3d'),
+# Lazy-loaded PySKL graph models (mmskeleton successor)
+_PYSKL_MODELS = {
+    'stgcn_pyskl': 'stgcn',
+    'stgcn++_pyskl': 'stgcn++',
+    'ctrgcn_pyskl': 'ctrgcn',
+    'aagcn_pyskl': 'aagcn',
+    'msg3d_pyskl': 'msg3d',
+    'dgstgcn_pyskl': 'dgstgcn',
+    'poseconv3d_pyskl': 'poseconv3d',
 }
 
 
@@ -55,11 +58,11 @@ def _lazy_import(module_path: str, class_name: str):
 def get_model(name: str, **kwargs):
     """Get any model by name.
 
-    Supervised graph: 'infogcn', 'stgcn', 'agcn'
-    Supervised sequence: 'lstm', 'mlp', 'transformer', 'rule_based'
-    SSL: 'gcn_dino', 'infogcn_jepa', 'interaction_mae', etc.
-    Unsupervised: 'bsoid', 'moseq', 'subtle', 'behavemae'
-    External (PySKL): 'stgcn_pyskl', 'ctrgcn_pyskl', 'msg3d_pyskl', etc.
+    Graph (supervised):    'infogcn', 'stgcn', 'agcn'
+    Graph (PySKL):         'stgcn_pyskl', 'ctrgcn_pyskl', 'msg3d_pyskl', ...
+    Sequence (supervised): 'lstm', 'mlp', 'transformer', 'rule_based'
+    SSL:                   'gcn_dino', 'infogcn_jepa', 'interaction_mae', ...
+    Discovery:             'bsoid', 'moseq', 'subtle', 'behavemae'
     """
     name_lower = name.lower().replace('-', '_')
 
@@ -67,7 +70,7 @@ def get_model(name: str, **kwargs):
     if name_lower in SSL_REGISTRY:
         return SSL_REGISTRY[name_lower](**kwargs)
 
-    # Graph models (our implementations)
+    # Graph models (self-implemented)
     graph_models = {
         'infogcn': InfoGCN,
         'infogcn_interaction': InfoGCN_Interaction,
@@ -78,37 +81,38 @@ def get_model(name: str, **kwargs):
         kw = _remap_infogcn_kwargs(kwargs) if 'infogcn' in name_lower else kwargs
         return graph_models[name_lower](**kw)
 
+    # Graph models (PySKL external)
+    if name_lower in _PYSKL_MODELS:
+        PySKLModel = _lazy_import('behavior_lab.models.graph.pyskl', 'PySKLModel')
+        preset_name = _PYSKL_MODELS[name_lower]
+        if 'checkpoint_path' in kwargs and 'config_path' in kwargs:
+            return PySKLModel.from_checkpoint(
+                kwargs.pop('config_path'), kwargs.pop('checkpoint_path'),
+                device=kwargs.pop('device', 'cpu'))
+        return PySKLModel.from_config(model_name=preset_name, **kwargs)
+
     # Sequence models
     seq_names = ('lstm', 'mlp', 'transformer', 'rule_based', 'rule', 'baseline')
     if name_lower in seq_names:
         return get_action_classifier(name_lower, **kwargs)
 
-    # Unsupervised models (lazy import — heavy deps)
-    if name_lower in _UNSUPERVISED_MODELS:
-        module_path, class_name = _UNSUPERVISED_MODELS[name_lower]
+    # Discovery models (lazy import — heavy deps)
+    if name_lower in _DISCOVERY_MODELS:
+        module_path, class_name = _DISCOVERY_MODELS[name_lower]
         cls = _lazy_import(module_path, class_name)
-        # BehaveMAE uses from_pretrained, others use __init__
         if name_lower in ('behavemae', 'behave_mae') and 'checkpoint_path' in kwargs:
             return cls.from_pretrained(**kwargs)
+        if name_lower == 'clustering':
+            return cls  # Returns the function itself
         return cls(**kwargs)
-
-    # External models via PySKL (lazy import)
-    if name_lower in _EXTERNAL_MODELS:
-        module_path, class_name, preset_name = _EXTERNAL_MODELS[name_lower]
-        cls = _lazy_import(module_path, class_name)
-        if 'checkpoint_path' in kwargs and 'config_path' in kwargs:
-            return cls.from_checkpoint(
-                kwargs.pop('config_path'), kwargs.pop('checkpoint_path'),
-                device=kwargs.pop('device', 'cpu'))
-        return cls.from_config(model_name=preset_name, **kwargs)
 
     # Collect all available model names
     available = (
         list(SSL_REGISTRY.keys()) +
         list(graph_models.keys()) +
+        list(_PYSKL_MODELS.keys()) +
         list(seq_names) +
-        list(_UNSUPERVISED_MODELS.keys()) +
-        list(_EXTERNAL_MODELS.keys())
+        list(_DISCOVERY_MODELS.keys())
     )
     raise ValueError(f"Unknown model: {name}. Available: {sorted(set(available))}")
 
@@ -117,8 +121,8 @@ def list_models() -> dict:
     """List all available model names grouped by category."""
     return {
         'graph': ['infogcn', 'infogcn_interaction', 'stgcn', 'agcn'],
+        'graph_pyskl': sorted(_PYSKL_MODELS.keys()),
         'sequence': ['mlp', 'lstm', 'transformer', 'rule_based'],
         'ssl': sorted(SSL_REGISTRY.keys()),
-        'unsupervised': sorted(_UNSUPERVISED_MODELS.keys()),
-        'external': sorted(_EXTERNAL_MODELS.keys()),
+        'discovery': sorted(_DISCOVERY_MODELS.keys()),
     }

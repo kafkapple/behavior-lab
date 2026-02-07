@@ -1,5 +1,5 @@
 name: subtle
-_target_: behavior_lab.models.unsupervised.subtle_wrapper.SUBTLE
+_target_: behavior_lab.models.discovery.subtle_wrapper.SUBTLE
 fps: 20
 n_train_frames: 120000
 embedding_method: umap

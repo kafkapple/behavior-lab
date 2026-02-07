@@ -1,5 +1,5 @@
 name: behavemae
-_target_: behavior_lab.models.unsupervised.behavemae.BehaveMAE
+_target_: behavior_lab.models.discovery.behavemae.BehaveMAE
 # Use from_pretrained() classmethod:
 #   checkpoint_path: path/to/checkpoint.pth
 #   dataset: mabe22  # or shot7m2

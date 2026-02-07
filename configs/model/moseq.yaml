@@ -1,5 +1,5 @@
 name: moseq
-_target_: behavior_lab.models.unsupervised.moseq.KeypointMoSeq
+_target_: behavior_lab.models.discovery.moseq.KeypointMoSeq
 project_dir: ./moseq_output
 num_iters: 50
 latent_dim: 10

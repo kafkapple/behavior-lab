@@ -110,9 +110,9 @@ Social behaviors (attack, mount, investigation) require explicit inter-subject m
 | **Discovery** | MoSeq | (T,K,D) | AR-HMM / SLDS syllables |
 | **Discovery** | SUBTLE | (T,K,D) | Wavelet spectrogram + UMAP |
 | **Discovery** | BehaveMAE | (T,K,D) | Hierarchical masked autoencoder |
-| **External** | ST-GCN++ (PySKL) | (T,K,D)→auto | Good practices + multi-stream |
-| **External** | CTR-GCN (PySKL) | (T,K,D)→auto | Channel-wise topology refinement |
-| **External** | MS-G3D (PySKL) | (T,K,D)→auto | Multi-scale disentangled graph |
+| **Graph (PySKL)** | ST-GCN++ | (T,K,D)→auto | Good practices + multi-stream |
+| **Graph (PySKL)** | CTR-GCN | (T,K,D)→auto | Channel-wise topology refinement |
+| **Graph (PySKL)** | MS-G3D | (T,K,D)→auto | Multi-scale disentangled graph |
 
 ## Datasets
 

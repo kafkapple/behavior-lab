@@ -1,5 +1,5 @@
 name: infogcn
-_target_: behavior_lab.models.graph_models.infogcn.InfoGCN
+_target_: behavior_lab.models.graph.infogcn.InfoGCN
 base_channel: 64
 num_heads: 3
 k: 1

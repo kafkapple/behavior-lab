@@ -1,5 +1,5 @@
 name: stgcn_pyskl
-_target_: behavior_lab.models.external.pyskl.PySKLModel
+_target_: behavior_lab.models.graph.pyskl.PySKLModel
 model_name: stgcn++
 graph: ntu
 in_channels: 3

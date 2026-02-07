@@ -19,14 +19,15 @@ Supervised, Self-supervised, Unsupervised 3 paradigm을 단일 `get_model()` fac
 ```
 get_model('name')
     │
-    ├── Graph (Supervised) ──── InfoGCN, STGCN, AGCN           자체 구현
-    ├── Sequence (Supervised) ─ MLP, LSTM, Transformer          자체 구현
-    ├── SSL (Self-Supervised) ─ {GCN,InfoGCN,Interaction}       자체 구현
-    │                           × {MAE,JEPA,DINO} = 9 combos
-    ├── Discovery (Unsupervised) B-SOiD, MoSeq, SUBTLE,        외부 wrapper
-    │                            BehaveMAE, clustering
-    └── External (Supervised) ── ST-GCN++, CTR-GCN, MS-G3D,    PySKL wrapper
-                                 AAGCN, PoseConv3D
+    ├── graph/         GCN family (자체 + 외부 통합)
+    │   ├── Self ───── InfoGCN, STGCN, AGCN
+    │   └── PySKL ──── ST-GCN++, CTR-GCN, MS-G3D, AAGCN, PoseConv3D
+    ├── sequence/      Sequence classifiers
+    │   └── MLP, LSTM, Transformer, RuleBased
+    ├── ssl/           Self-supervised (3 encoder × 3 method = 9)
+    │   └── {GCN, InfoGCN, Interaction} × {MAE, JEPA, DINO}
+    └── discovery/     Behavior discovery (라벨 불필요)
+        └── B-SOiD, MoSeq, SUBTLE, BehaveMAE, clustering
 ```
 
 | 상황 | 추천 모델 |

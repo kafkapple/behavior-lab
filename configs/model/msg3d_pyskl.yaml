@@ -1,5 +1,5 @@
 name: msg3d_pyskl
-_target_: behavior_lab.models.external.pyskl.PySKLModel
+_target_: behavior_lab.models.graph.pyskl.PySKLModel
 model_name: msg3d
 graph: ntu
 in_channels: 3

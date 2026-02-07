@@ -19,12 +19,11 @@ behavior-lab/
 │   └── features/      Kinematic + morphometric extraction
 │
 ├── models/            30+ models via get_model() factory
-│   ├── graph_models/  InfoGCN, ST-GCN, AGCN        (N,C,T,V,M)
-│   ├── sequence_models/ LSTM, MLP, Transformer      (T,K*D)
-│   ├── ssl/           3 encoders × 3 methods = 9    (N,C,T,V,M)
-│   ├── unsupervised/  B-SOiD, MoSeq, SUBTLE,        (T,K,D)
+│   ├── graph/         InfoGCN, STGCN, AGCN + PySKL  (N,C,T,V,M)
+│   ├── sequence/      LSTM, MLP, Transformer         (T,K*D)
+│   ├── ssl/           3 encoders × 3 methods = 9     (N,C,T,V,M)
+│   ├── discovery/     B-SOiD, MoSeq, SUBTLE,         (T,K,D)
 │   │                  BehaveMAE, clustering
-│   ├── external/      PySKL: ST-GCN++, CTR-GCN, ... (T,K,D)→auto
 │   └── losses/        Label smoothing, MMD
 │
 ├── training/          Trainer + SSL trainer
@@ -107,7 +106,7 @@ Special Cases:
   SequenceModel:   (T, K*D) directly
   SSL:             tensor_format → (N, C, T, V, M)
   Discovery:       (T, K, D) → internal conversion per wrapper
-  External(PySKL): (T, K, D) → pose_to_pyskl_format() → (M, T, V, C)
+  Graph(PySKL):    (T, K, D) → pose_to_pyskl_format() → (M, T, V, C)
 
 [Training]
   Hydra config ──> Trainer ──> Model + DataLoader + Optimizer
@@ -191,10 +190,10 @@ ML Layer:           data/, models/, training/, evaluation/
 
 Optional extras:
   [clustering]  umap-learn              unsupervised/clustering
-  [bsoid]       umap-learn, hdbscan     unsupervised/bsoid
-  [moseq]       keypoint-moseq          unsupervised/moseq
-  [subtle]      subtle                  unsupervised/subtle
-  [pyskl]       pyskl, mmcv, mmaction2  external/pyskl
+  [bsoid]       umap-learn, hdbscan     discovery/bsoid
+  [moseq]       keypoint-moseq          discovery/moseq
+  [subtle]      subtle                  discovery/subtle
+  [pyskl]       pyskl, mmcv, mmaction2  graph/pyskl
   [dlc]         deeplabcut>=3.0         pose/
   [web]         fastapi, react          app/
   [viz]         matplotlib, seaborn     visualization/

@@ -1,5 +1,5 @@
 name: bsoid
-_target_: behavior_lab.models.unsupervised.bsoid.BSOiD
+_target_: behavior_lab.models.discovery.bsoid.BSOiD
 fps: 30
 n_neighbors: 60
 min_dist: 0.0
