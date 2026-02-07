@@ -1,5 +1,7 @@
 # behavior-lab: Research Overview
 
+> [← MoC](README.md) | [Architecture →](architecture.md) | [Model Taxonomy →](model_taxonomy.md)
+
 ## Purpose
 
 Skeleton-based behavior recognition across species (human + animal) through a unified modular framework. Three fragmented repositories consolidated into one platform supporting supervised, self-supervised, and unsupervised approaches.
@@ -89,7 +91,9 @@ Social behaviors (attack, mount, investigation) require explicit inter-subject m
 | **SSL** | (N,C,T,V,M) | Feature embeddings | InfoGCN + MAE/JEPA/DINO | Label-scarce settings |
 | **Unsupervised** | Statistical features | Cluster assignments | PCA + UMAP + KMeans | Behavior discovery |
 
-### Model Zoo
+### Model Zoo (30+)
+
+> 상세 카탈로그 + 분류 체계 분석: [Model Taxonomy](model_taxonomy.md)
 
 | Category | Model | Input Format | Key Innovation |
 |----------|-------|-------------|----------------|
@@ -102,6 +106,13 @@ Social behaviors (attack, mount, investigation) require explicit inter-subject m
 | **SSL** | MAE | (N,C,T,V,M) | Masked joint reconstruction |
 | **SSL** | JEPA | (N,C,T,V,M) | Latent prediction (no decoder) |
 | **SSL** | DINO | (N,C,T,V,M) | Self-distillation + centering |
+| **Discovery** | B-SOiD | (T,K,2) | UMAP + HDBSCAN + RF two-space |
+| **Discovery** | MoSeq | (T,K,D) | AR-HMM / SLDS syllables |
+| **Discovery** | SUBTLE | (T,K,D) | Wavelet spectrogram + UMAP |
+| **Discovery** | BehaveMAE | (T,K,D) | Hierarchical masked autoencoder |
+| **External** | ST-GCN++ (PySKL) | (T,K,D)→auto | Good practices + multi-stream |
+| **External** | CTR-GCN (PySKL) | (T,K,D)→auto | Channel-wise topology refinement |
+| **External** | MS-G3D (PySKL) | (T,K,D)→auto | Multi-scale disentangled graph |
 
 ## Datasets
 
@@ -126,7 +137,12 @@ Social behaviors (attack, mount, investigation) require explicit inter-subject m
 | SuperAnimal | Nat Comm 2024 | Foundation model for animal pose |
 | CalMS21 | NeurIPS 2021 | Mouse social behavior benchmark |
 | CEBRA | Nature 2023 | Neural-behavior joint embedding |
+| B-SOiD | Nat Comm 2021 | Unsupervised behavioral segmentation |
+| keypoint-MoSeq | Nat Methods 2024 | Behavioral syllables via SLDS |
+| SUBTLE | IJCV 2024 | Wavelet-UMAP behavioral repertoires |
+| BehaveMAE | ECCV 2024 | Hierarchical MAE for behavior |
+| PySKL | ACM MM 2022 | ST-GCN good practices toolbox |
 
 ---
 
-*See also: [Theory: Graph Models](theory/graph_models.md) | [Theory: SSL Methods](theory/ssl_methods.md) | [Theory: Cross-Species](theory/cross_species.md) | [Architecture](architecture.md)*
+> [← MoC](README.md) | [Architecture](architecture.md) | [Model Taxonomy](model_taxonomy.md) | [Theory →](theory/)

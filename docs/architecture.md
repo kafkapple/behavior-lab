@@ -1,34 +1,40 @@
 # System Architecture
 
+> [← MoC](README.md) | [Overview →](overview.md) | [Model Taxonomy →](model_taxonomy.md)
+
 ## Module Map
 
 ```
 behavior-lab/
-├── core/           numpy only, zero torch dependency
-│   ├── skeleton    SkeletonDefinition registry (7+ species)
-│   ├── graph       Adjacency matrices from skeleton
-│   ├── tensor_format   (T,K,D) <-> (N,C,T,V,M) bridge
-│   └── types       Protocols: ActionClassifier, PoseEstimator
+├── core/              numpy only, zero torch dependency
+│   ├── skeleton       SkeletonDefinition registry (7+ species)
+│   ├── graph          Adjacency matrices from skeleton
+│   ├── tensor_format  (T,K,D) <-> (N,C,T,V,M) bridge
+│   └── types          Protocols: ActionClassifier, PoseEstimator
 │
-├── data/           PyTorch datasets + raw parsers
-│   ├── feeders/    SkeletonFeeder (unified, config-driven)
-│   ├── loaders/    Raw data parsers (NPZ, JSON, H5)
-│   ├── preprocessing/  Augmentation (rotation, scaling, noise)
-│   └── features/   Kinematic + morphometric extraction
+├── data/              PyTorch datasets + raw parsers
+│   ├── feeders/       SkeletonFeeder (unified, config-driven)
+│   ├── loaders/       Raw data parsers (NPZ, JSON, H5)
+│   ├── preprocessing/ Augmentation (rotation, scaling, noise)
+│   └── features/      Kinematic + morphometric extraction
 │
-├── models/         All model implementations
-│   ├── graph/      InfoGCN, ST-GCN, AGCN (input: N,C,T,V,M)
-│   ├── sequence/   LSTM, MLP, Transformer (input: T,K,D)
-│   ├── ssl/        MAE, JEPA, DINO + encoders
-│   ├── unsupervised/  PCA + UMAP + KMeans pipeline
-│   └── losses/     Label smoothing, MMD, contrastive
+├── models/            30+ models via get_model() factory
+│   ├── graph_models/  InfoGCN, ST-GCN, AGCN        (N,C,T,V,M)
+│   ├── sequence_models/ LSTM, MLP, Transformer      (T,K*D)
+│   ├── ssl/           3 encoders × 3 methods = 9    (N,C,T,V,M)
+│   ├── unsupervised/  B-SOiD, MoSeq, SUBTLE,        (T,K,D)
+│   │                  BehaveMAE, clustering
+│   ├── external/      PySKL: ST-GCN++, CTR-GCN, ... (T,K,D)→auto
+│   └── losses/        Label smoothing, MMD
 │
-├── training/       Trainer + SSL trainer + callbacks
-├── evaluation/     Metrics + comparison framework
-├── pose/           [dlc] DLC SuperAnimal + YOLO wrappers
-├── visualization/  Skeleton, trajectory, attention plots
-└── app/            [web] FastAPI + React (optional)
+├── training/          Trainer + SSL trainer
+├── evaluation/        Classification + Cluster + LinearProbe metrics
+├── pose/              [dlc] DLC SuperAnimal + YOLO wrappers
+├── visualization/     [viz] Skeleton, trajectory, attention plots
+└── app/               [web] FastAPI + React (optional)
 ```
+
+> **분류 체계 상세**: [Model Taxonomy](model_taxonomy.md) — 30+ 모델 카탈로그, 분류 기준 비판 및 대안
 
 ## Data Format Specification
 
@@ -71,6 +77,18 @@ Special Cases:
   - Temporal pad/crop: max_frames parameter
 ```
 
+### External Model Format Bridge
+
+외부 모델 wrapper들은 (T,K,D) 입력을 내부적으로 각 라이브러리 포맷으로 변환:
+
+| Model | Internal Format | Conversion |
+|-------|----------------|------------|
+| PySKL | (M, T, V, C) → (N, C, T, V, M) | `pose_to_pyskl_format()` |
+| BehaveMAE | (B, 1, T, 1, K*D) | `pose_to_behavemae_input()` |
+| B-SOiD | (T', n_features) @ 10fps | `_compute_bsoid_features()` |
+| MoSeq | {name: (T, K, D)} dict | `_to_kpms_format()` |
+| SUBTLE | List[(T, K*D)] | `_preprocess()` |
+
 ## Data Flow
 
 ```
@@ -85,9 +103,11 @@ Special Cases:
             ──> Normalization (body-size, z-score)
 
 [Model Input]
-  SequenceModel:  (T, K, D) directly
-  GraphModel:     tensor_format.sequence_to_graph() -> (N, C, T, V, M)
-  Unsupervised:   features -> (T, n_features)
+  GraphModel:      tensor_format → (N, C, T, V, M)
+  SequenceModel:   (T, K*D) directly
+  SSL:             tensor_format → (N, C, T, V, M)
+  Discovery:       (T, K, D) → internal conversion per wrapper
+  External(PySKL): (T, K, D) → pose_to_pyskl_format() → (M, T, V, C)
 
 [Training]
   Hydra config ──> Trainer ──> Model + DataLoader + Optimizer
@@ -95,7 +115,7 @@ Special Cases:
 
 [Evaluation]
   Supervised:    accuracy, F1, confusion matrix
-  SSL:           NMI, ARI, silhouette (via KMeans clustering)
+  SSL:           NMI, ARI, silhouette (via KMeans on features)
   Unsupervised:  silhouette, calinski-harabasz, UMAP viz
 ```
 
@@ -111,21 +131,23 @@ defaults:
 
 # Override via CLI:
 # python scripts/train.py model=stgcn training=fast_debug
-# python scripts/train.py +experiment=mars_infogcn
+# python scripts/train.py model=bsoid   (unsupervised)
+# python scripts/train.py model=stgcn_pyskl   (external)
 ```
 
 ### Config Groups
 
-| Group | Purpose | Examples |
-|-------|---------|---------|
-| `skeleton/` | Joint topology definitions | ntu25, mars_mouse7, dlc_topviewmouse27 |
-| `dataset/` | Data paths + split strategy | ntu60_xsub, mars, calms21 |
-| `model/` | Model architecture + hyperparams | infogcn, stgcn, lstm, transformer |
+| Group | Purpose | Files |
+|-------|---------|-------|
+| `skeleton/` | Joint topology definitions | ntu25, ucla20, mars_mouse7, coco17, dlc_* |
+| `dataset/` | Data paths + split strategy | ntu60_xsub, mars |
+| `model/` | Model architecture + hyperparams | infogcn, stgcn, agcn, bsoid, moseq, subtle, behavemae, *_pyskl |
 | `ssl/` | SSL method config | mae, jepa, dino |
-| `training/` | Optimizer + schedule | default (110ep), fast_debug (5ep) |
-| `experiment/` | Composed presets | mars_infogcn, ntu_ssl_dino |
+| `training/` | Optimizer + schedule | default, fast_debug, ssl_pretrain |
 
 ## Skeleton Registry
+
+> [← MoC § Skeleton](README.md#skeleton-registry-7-species)
 
 ### Built-in Skeletons
 
@@ -152,9 +174,7 @@ TopViewMouse 27 (full)
 ### Extension
 
 ```python
-# Option 1: YAML config
-# configs/skeleton/my_skeleton.yaml
-
+# Option 1: YAML config (configs/skeleton/my_skeleton.yaml)
 # Option 2: Runtime registration
 from behavior_lab.core import register_skeleton, SkeletonDefinition
 register_skeleton("my_skeleton", SkeletonDefinition(...))
@@ -169,12 +189,19 @@ Core (numpy only):  core/
 ML Layer:           data/, models/, training/, evaluation/
   └── + torch, scikit-learn, hydra-core, einops
 
-Optional:
-  [dlc]  deeplabcut>=3.0     pose/
-  [web]  fastapi, react      app/
-  [viz]  matplotlib, seaborn  visualization/
+Optional extras:
+  [clustering]  umap-learn              unsupervised/clustering
+  [bsoid]       umap-learn, hdbscan     unsupervised/bsoid
+  [moseq]       keypoint-moseq          unsupervised/moseq
+  [subtle]      subtle                  unsupervised/subtle
+  [pyskl]       pyskl, mmcv, mmaction2  external/pyskl
+  [dlc]         deeplabcut>=3.0         pose/
+  [web]         fastapi, react          app/
+  [viz]         matplotlib, seaborn     visualization/
 ```
 
 ---
 
-*See also: [Overview](overview.md) | [Integration Plan](INTEGRATION_PLAN.md) | [Theory: Graph Models](theory/graph_models.md)*
+> [← MoC](README.md) | [Overview](overview.md) | [Model Taxonomy](model_taxonomy.md) | [Theory →](theory/)
+
+*behavior-lab v0.1 | Updated: 2026-02-07*
