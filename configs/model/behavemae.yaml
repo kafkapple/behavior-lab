@@ -1,0 +1,8 @@
+name: behavemae
+_target_: behavior_lab.models.unsupervised.behavemae.BehaveMAE
+# Use from_pretrained() classmethod:
+#   checkpoint_path: path/to/checkpoint.pth
+#   dataset: mabe22  # or shot7m2
+#   device: cpu
+dataset: mabe22
+target_frames: 400

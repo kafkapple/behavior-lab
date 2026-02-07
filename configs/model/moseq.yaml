@@ -1,0 +1,6 @@
+name: moseq
+_target_: behavior_lab.models.unsupervised.moseq.KeypointMoSeq
+project_dir: ./moseq_output
+num_iters: 50
+latent_dim: 10
+kappa: 1e6

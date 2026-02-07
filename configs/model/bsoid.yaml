@@ -1,0 +1,8 @@
+name: bsoid
+_target_: behavior_lab.models.unsupervised.bsoid.BSOiD
+fps: 30
+n_neighbors: 60
+min_dist: 0.0
+umap_dim: 11
+min_cluster_size: 30
+random_state: 42

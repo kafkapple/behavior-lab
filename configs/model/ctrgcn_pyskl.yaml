@@ -1,0 +1,5 @@
+name: ctrgcn_pyskl
+_target_: behavior_lab.models.external.pyskl.PySKLModel
+model_name: ctrgcn
+graph: ntu
+in_channels: 3

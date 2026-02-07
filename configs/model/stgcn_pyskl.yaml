@@ -1,0 +1,8 @@
+name: stgcn_pyskl
+_target_: behavior_lab.models.external.pyskl.PySKLModel
+model_name: stgcn++
+graph: ntu
+in_channels: 3
+# For pretrained: set config_path + checkpoint_path
+# config_path: configs/stgcn++/stgcn++_ntu60_xsub_hrnet.py
+# checkpoint_path: weights/stgcn++.pth
