@@ -1,5 +1,11 @@
 # behavior-lab: Modular Integration Plan
 
+> **Note (v0.2)**: 이 문서는 초기 통합 계획의 히스토리 기록입니다.
+> 실제 구현에서 디렉토리명이 변경되었습니다:
+> `graph_models/` → `graph/`, `sequence_models/` → `sequence/`,
+> `unsupervised/` → `discovery/`, `external/` → `graph/`에 통합.
+> 현재 구조는 [Architecture](architecture.md) 참조.
+
 ## Context
 
 **문제**: 3개의 분산된 레포 (infogcn-project, superanimal-behavior-poc, animal-behavior-analysis)가 스켈레톤 정의, 데이터 형식, 모델 인터페이스가 각각 달라 연구 워크플로우가 단편화됨.

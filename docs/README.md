@@ -57,7 +57,7 @@ get_model('name')
 
 | Document | 핵심 내용 | 관련 모델 |
 |----------|----------|-----------|
-| **[Graph Models](theory/graph_models.md)** | GCN → ST-GCN → InfoGCN 이론 체계 | graph_models/, PySKL |
+| **[Graph Models](theory/graph_models.md)** | GCN → ST-GCN → InfoGCN 이론 체계 | graph/ (self + PySKL) |
 | **[SSL Methods](theory/ssl_methods.md)** | MAE vs JEPA vs DINO, sparse data 문제 | ssl/ |
 | **[Cross-Species](theory/cross_species.md)** | Canonical 5-part skeleton, 종간 전이 | core/skeleton.py |
 | **[Evaluation](theory/evaluation.md)** | NMI/ARI/Silhouette, Hungarian matching | evaluation/ |

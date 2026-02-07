@@ -85,11 +85,11 @@ Social behaviors (attack, mount, investigation) require explicit inter-subject m
 
 ### Learning Paradigms
 
-| Paradigm | Input | Output | Models | Use Case |
-|----------|-------|--------|--------|----------|
-| **Supervised** | (T,K,D) + labels | Action class | LSTM, MLP, Transformer | Labeled datasets |
-| **SSL** | (N,C,T,V,M) | Feature embeddings | InfoGCN + MAE/JEPA/DINO | Label-scarce settings |
-| **Unsupervised** | Statistical features | Cluster assignments | PCA + UMAP + KMeans | Behavior discovery |
+| Paradigm | Input | Output | Models (Dir) | Use Case |
+|----------|-------|--------|--------------|----------|
+| **Supervised** | (T,K,D) + labels | Action class | graph/, sequence/ | Labeled datasets |
+| **SSL** | (N,C,T,V,M) | Feature embeddings | ssl/ | Label-scarce settings |
+| **Discovery** | (T,K,D) | Cluster/syllables | discovery/ | Behavior discovery |
 
 ### Model Zoo (30+)
 

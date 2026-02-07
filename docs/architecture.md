@@ -130,7 +130,7 @@ defaults:
 
 # Override via CLI:
 # python scripts/train.py model=stgcn training=fast_debug
-# python scripts/train.py model=bsoid   (unsupervised)
+# python scripts/train.py model=bsoid   (discovery)
 # python scripts/train.py model=stgcn_pyskl   (external)
 ```
 
@@ -189,7 +189,7 @@ ML Layer:           data/, models/, training/, evaluation/
   └── + torch, scikit-learn, hydra-core, einops
 
 Optional extras:
-  [clustering]  umap-learn              unsupervised/clustering
+  [clustering]  umap-learn              discovery/clustering
   [bsoid]       umap-learn, hdbscan     discovery/bsoid
   [moseq]       keypoint-moseq          discovery/moseq
   [subtle]      subtle                  discovery/subtle

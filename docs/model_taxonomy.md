@@ -45,14 +45,14 @@ models/
 
 | # | Model | Category | Dir | Paradigm | Input | Source | Reference |
 |---|-------|----------|-----|----------|-------|--------|-----------|
-| 1 | InfoGCN | Graph | graph_models | Supervised | (N,C,T,V,M) | Self | Chi+ CVPR'22 |
-| 2 | InfoGCN-Interaction | Graph | graph_models | Supervised | (N,C,T,V,M) | Self | Chi+ CVPR'22 |
-| 3 | STGCN | Graph | graph_models | Supervised | (N,C,T,V,M) | Self | Yan+ AAAI'18 |
-| 4 | AGCN | Graph | graph_models | Supervised | (N,C,T,V,M) | Self | Shi+ CVPR'19 |
-| 5 | MLP | Sequence | sequence_models | Supervised | (T,K*D) | Self | — |
-| 6 | LSTM | Sequence | sequence_models | Supervised | (T,K*D) | Self | — |
-| 7 | Transformer | Sequence | sequence_models | Supervised | (T,K*D) | Self | — |
-| 8 | RuleBased | Sequence | sequence_models | Supervised | (T,K*D) | Self | — |
+| 1 | InfoGCN | Graph | graph | Supervised | (N,C,T,V,M) | Self | Chi+ CVPR'22 |
+| 2 | InfoGCN-Interaction | Graph | graph | Supervised | (N,C,T,V,M) | Self | Chi+ CVPR'22 |
+| 3 | STGCN | Graph | graph | Supervised | (N,C,T,V,M) | Self | Yan+ AAAI'18 |
+| 4 | AGCN | Graph | graph | Supervised | (N,C,T,V,M) | Self | Shi+ CVPR'19 |
+| 5 | MLP | Sequence | sequence | Supervised | (T,K*D) | Self | — |
+| 6 | LSTM | Sequence | sequence | Supervised | (T,K*D) | Self | — |
+| 7 | Transformer | Sequence | sequence | Supervised | (T,K*D) | Self | — |
+| 8 | RuleBased | Sequence | sequence | Supervised | (T,K*D) | Self | — |
 | 9 | GCN-MAE | SSL | ssl | Self-Supervised | (N,C,T,V,M) | Self | He+ CVPR'22 |
 | 10 | GCN-JEPA | SSL | ssl | Self-Supervised | (N,C,T,V,M) | Self | Assran+ CVPR'23 |
 | 11 | GCN-DINO | SSL | ssl | Self-Supervised | (N,C,T,V,M) | Self | Caron+ ICCV'21 |
@@ -62,17 +62,17 @@ models/
 | 15 | Interaction-MAE | SSL | ssl | Self-Supervised | (N,C,T,V,M) | Self | — |
 | 16 | Interaction-JEPA | SSL | ssl | Self-Supervised | (N,C,T,V,M) | Self | — |
 | 17 | Interaction-DINO | SSL | ssl | Self-Supervised | (N,C,T,V,M) | Self | — |
-| 18 | PCA+UMAP+KMeans | Clustering | unsupervised | Unsupervised | (N,D) features | Self | — |
-| 19 | B-SOiD | Discovery | unsupervised | Unsupervised | (T,K,2) | Ext | Hsu+ NatComm'21 |
-| 20 | keypoint-MoSeq | Discovery | unsupervised | Unsupervised | (T,K,D) | Ext | Weinreb+ NatMeth'24 |
-| 21 | SUBTLE | Discovery | unsupervised | Unsupervised | (T,K,D) | Ext | Kwon+ IJCV'24 |
-| 22 | BehaveMAE | Discovery | unsupervised | Self-Supervised | (T,K,D) | Ext | Stoffl+ ECCV'24 |
-| 23 | ST-GCN++ (PySKL) | Graph | external | Supervised | (T,K,D)→auto | Ext | Duan+ ACMMM'22 |
-| 24 | CTR-GCN (PySKL) | Graph | external | Supervised | (T,K,D)→auto | Ext | Chen+ ICCV'21 |
-| 25 | MS-G3D (PySKL) | Graph | external | Supervised | (T,K,D)→auto | Ext | Liu+ CVPR'20 |
-| 26 | AAGCN (PySKL) | Graph | external | Supervised | (T,K,D)→auto | Ext | Shi+ TIP'20 |
-| 27 | DG-STGCN (PySKL) | Graph | external | Supervised | (T,K,D)→auto | Ext | — |
-| 28 | PoseConv3D (PySKL) | Conv3D | external | Supervised | (T,K,D)→auto | Ext | Duan+ CVPR'22 |
+| 18 | PCA+UMAP+KMeans | Clustering | discovery | Unsupervised | (N,D) features | Self | — |
+| 19 | B-SOiD | Discovery | discovery | Unsupervised | (T,K,2) | Ext | Hsu+ NatComm'21 |
+| 20 | keypoint-MoSeq | Discovery | discovery | Unsupervised | (T,K,D) | Ext | Weinreb+ NatMeth'24 |
+| 21 | SUBTLE | Discovery | discovery | Unsupervised | (T,K,D) | Ext | Kwon+ IJCV'24 |
+| 22 | BehaveMAE | Discovery | discovery | Self-Supervised | (T,K,D) | Ext | Stoffl+ ECCV'24 |
+| 23 | ST-GCN++ (PySKL) | Graph | graph | Supervised | (T,K,D)→auto | Ext | Duan+ ACMMM'22 |
+| 24 | CTR-GCN (PySKL) | Graph | graph | Supervised | (T,K,D)→auto | Ext | Chen+ ICCV'21 |
+| 25 | MS-G3D (PySKL) | Graph | graph | Supervised | (T,K,D)→auto | Ext | Liu+ CVPR'20 |
+| 26 | AAGCN (PySKL) | Graph | graph | Supervised | (T,K,D)→auto | Ext | Shi+ TIP'20 |
+| 27 | DG-STGCN (PySKL) | Graph | graph | Supervised | (T,K,D)→auto | Ext | — |
+| 28 | PoseConv3D (PySKL) | Conv3D | graph | Supervised | (T,K,D)→auto | Ext | Duan+ CVPR'22 |
 
 ---
 
@@ -238,7 +238,7 @@ model = get_model('behavemae', checkpoint_path='ckpt.pth', dataset='mabe22')
 # List all
 print(list_models())
 # {'graph': [...], 'sequence': [...], 'ssl': [...],
-#  'unsupervised': [...], 'external': [...]}
+#  'discovery': [...]}
 ```
 
 ---
