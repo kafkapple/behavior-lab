@@ -1,0 +1,16 @@
+name: keypoint_cleaning
+
+steps:
+  - _target_: behavior_lab.data.preprocessing.pipeline.ConfidenceFilter
+    threshold: 0.3
+  - _target_: behavior_lab.data.preprocessing.pipeline.Interpolator
+    max_gap: 10
+  - _target_: behavior_lab.data.preprocessing.pipeline.OutlierRemover
+    velocity_threshold: 50.0
+    replace_with: nan
+  - _target_: behavior_lab.data.preprocessing.pipeline.TemporalSmoother
+    window_size: 5
+    method: moving_average
+  - _target_: behavior_lab.data.preprocessing.pipeline.Normalizer
+    center_joint: 0
+    scale: true

@@ -1,0 +1,50 @@
+"""Dataset loaders with factory registry."""
+from __future__ import annotations
+
+from typing import Any
+
+from .calms21 import CalMS21Loader
+from .rat7m import Rat7MLoader
+from .ntu_rgbd import NTURGBDLoader
+
+LOADER_REGISTRY: dict[str, type] = {
+    "calms21": CalMS21Loader,
+    "calms21_mouse": CalMS21Loader,
+    "rat7m": Rat7MLoader,
+    "ntu": NTURGBDLoader,
+    "ntu_rgbd": NTURGBDLoader,
+    "ntu60": NTURGBDLoader,
+    "ntu120": NTURGBDLoader,
+}
+
+
+def get_loader(name: str, **kwargs: Any) -> CalMS21Loader | Rat7MLoader | NTURGBDLoader:
+    """Factory function to get a dataset loader by name.
+
+    Args:
+        name: Dataset identifier (e.g., 'calms21', 'rat7m', 'ntu')
+        **kwargs: Passed to the loader constructor
+
+    Returns:
+        Instantiated loader
+    """
+    key = name.lower()
+    if key not in LOADER_REGISTRY:
+        available = sorted(set(LOADER_REGISTRY.keys()))
+        raise ValueError(f"Unknown dataset: '{name}'. Available: {available}")
+    return LOADER_REGISTRY[key](**kwargs)
+
+
+def register_loader(name: str, loader_cls: type) -> None:
+    """Register a custom dataset loader."""
+    LOADER_REGISTRY[name.lower()] = loader_cls
+
+
+__all__ = [
+    "CalMS21Loader",
+    "Rat7MLoader",
+    "NTURGBDLoader",
+    "get_loader",
+    "register_loader",
+    "LOADER_REGISTRY",
+]

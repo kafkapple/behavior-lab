@@ -3,10 +3,15 @@
 Reference: Hsu & Yttri (2021), Nature Communications.
 Install: pip install umap-learn hdbscan
 """
+import pickle
+from pathlib import Path
+
 import numpy as np
 from typing import Dict, Optional
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
+
+from ...core.types import ClusteringResult
 
 
 def _compute_bsoid_features(data: np.ndarray, fps: int = 30) -> np.ndarray:
@@ -143,3 +148,49 @@ class BSOiD:
         if len(labels) < T:
             labels = np.pad(labels, (0, T - len(labels)), mode='edge')
         return labels[:T]
+
+    def fit_predict(self, data: np.ndarray) -> ClusteringResult:
+        """Fit and return structured ClusteringResult."""
+        result = self.fit(data)
+        return ClusteringResult(
+            labels=result['labels'],
+            embeddings=result['embedding_2d'],
+            n_clusters=result['n_clusters'],
+            features=result['features'],
+            metadata={"algorithm": "bsoid", "fps": self.fps},
+        )
+
+    def get_embeddings(self, data: np.ndarray) -> np.ndarray:
+        """Extract UMAP embeddings without clustering."""
+        from umap import UMAP
+
+        features = _compute_bsoid_features(data, self.fps)
+        if self.scaler is None:
+            self.scaler = StandardScaler()
+            features_sc = self.scaler.fit_transform(features)
+        else:
+            features_sc = self.scaler.transform(features)
+
+        return UMAP(**self.umap_params).fit_transform(features_sc)
+
+    def save(self, path: str) -> None:
+        """Save trained model (scaler + classifier) to file."""
+        state = {
+            "scaler": self.scaler,
+            "classifier": self.classifier,
+            "fps": self.fps,
+            "umap_params": self.umap_params,
+            "min_cluster_size": self.min_cluster_size,
+        }
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(state, f)
+
+    def load(self, path: str) -> None:
+        """Load trained model from file."""
+        with open(path, "rb") as f:
+            state = pickle.load(f)
+        self.scaler = state["scaler"]
+        self.classifier = state["classifier"]
+        self.fps = state.get("fps", self.fps)
+        self.umap_params = state.get("umap_params", self.umap_params)

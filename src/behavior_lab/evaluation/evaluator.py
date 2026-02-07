@@ -7,6 +7,8 @@ from sklearn.metrics import (
     accuracy_score, f1_score, confusion_matrix,
     normalized_mutual_info_score, adjusted_rand_score,
     silhouette_score, calinski_harabasz_score,
+    davies_bouldin_score, v_measure_score,
+    homogeneity_score, completeness_score,
 )
 from scipy.optimize import linear_sum_assignment
 
@@ -28,8 +30,30 @@ class ClusterMetrics:
     ari: float = 0.0
     silhouette: float = 0.0
     calinski_harabasz: float = 0.0
+    davies_bouldin: float = 0.0
+    v_measure: float = 0.0
+    homogeneity: float = 0.0
+    completeness: float = 0.0
     hungarian_accuracy: float = 0.0
     num_clusters: int = 0
+
+
+@dataclass
+class BehaviorMetrics:
+    """Behavior-specific metrics for temporal sequence analysis.
+
+    Attributes:
+        bout_durations: Per-class mean bout duration in seconds
+        transition_matrix: (C, C) transition probability matrix
+        temporal_consistency: Fraction of same-label consecutive pairs
+        num_bouts: Total number of behavioral bouts
+        entropy_rate: Entropy rate of the label sequence
+    """
+    bout_durations: Dict[int, float] = field(default_factory=dict)
+    transition_matrix: Optional[np.ndarray] = None
+    temporal_consistency: float = 0.0
+    num_bouts: int = 0
+    entropy_rate: float = 0.0
 
 
 def compute_classification_metrics(
@@ -72,11 +96,15 @@ def compute_cluster_metrics(
     if n_clusters > 1 and n_clusters < len(features):
         metrics.silhouette = silhouette_score(features, cluster_labels)
         metrics.calinski_harabasz = calinski_harabasz_score(features, cluster_labels)
+        metrics.davies_bouldin = davies_bouldin_score(features, cluster_labels)
 
     # External metrics (need labels)
     if true_labels is not None:
         metrics.nmi = normalized_mutual_info_score(true_labels, cluster_labels)
         metrics.ari = adjusted_rand_score(true_labels, cluster_labels)
+        metrics.v_measure = v_measure_score(true_labels, cluster_labels)
+        metrics.homogeneity = homogeneity_score(true_labels, cluster_labels)
+        metrics.completeness = completeness_score(true_labels, cluster_labels)
         metrics.hungarian_accuracy = _hungarian_accuracy(true_labels, cluster_labels)
 
     return metrics
@@ -100,6 +128,80 @@ def _hungarian_accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     mapping = {clusters[r]: classes[c] for r, c in zip(row_idx, col_idx)}
     mapped = np.array([mapping.get(p, -1) for p in y_pred])
     return accuracy_score(y_true, mapped)
+
+
+def compute_behavior_metrics(
+    labels: np.ndarray,
+    fps: float = 30.0,
+) -> BehaviorMetrics:
+    """Compute behavior-specific temporal metrics from label sequences.
+
+    Args:
+        labels: (T,) per-frame behavior labels
+        fps: Frames per second for duration calculation
+
+    Returns:
+        BehaviorMetrics with bout durations, transition matrix, etc.
+    """
+    T = len(labels)
+    if T == 0:
+        return BehaviorMetrics()
+
+    unique_labels = sorted(set(labels))
+    n_classes = len(unique_labels)
+    label_to_idx = {l: i for i, l in enumerate(unique_labels)}
+
+    # Bout analysis: consecutive runs of same label
+    bout_durations: Dict[int, list] = {l: [] for l in unique_labels}
+    current_label = labels[0]
+    current_length = 1
+
+    for t in range(1, T):
+        if labels[t] == current_label:
+            current_length += 1
+        else:
+            bout_durations[current_label].append(current_length / fps)
+            current_label = labels[t]
+            current_length = 1
+    bout_durations[current_label].append(current_length / fps)
+
+    mean_durations = {
+        l: float(np.mean(durs)) if durs else 0.0
+        for l, durs in bout_durations.items()
+    }
+    num_bouts = sum(len(durs) for durs in bout_durations.values())
+
+    # Transition matrix
+    trans = np.zeros((n_classes, n_classes))
+    for t in range(T - 1):
+        i = label_to_idx[labels[t]]
+        j = label_to_idx[labels[t + 1]]
+        trans[i, j] += 1
+
+    # Normalize rows to probabilities
+    row_sums = trans.sum(axis=1, keepdims=True)
+    row_sums[row_sums == 0] = 1
+    trans_prob = trans / row_sums
+
+    # Temporal consistency: fraction of same-label consecutive pairs
+    same_pairs = np.sum(labels[:-1] == labels[1:])
+    temporal_consistency = float(same_pairs / (T - 1)) if T > 1 else 1.0
+
+    # Entropy rate
+    entropy_rate = 0.0
+    for i in range(n_classes):
+        pi = trans[i].sum() / trans.sum() if trans.sum() > 0 else 0
+        for j in range(n_classes):
+            if trans_prob[i, j] > 0:
+                entropy_rate -= pi * trans_prob[i, j] * np.log2(trans_prob[i, j])
+
+    return BehaviorMetrics(
+        bout_durations=mean_durations,
+        transition_matrix=trans_prob,
+        temporal_consistency=temporal_consistency,
+        num_bouts=num_bouts,
+        entropy_rate=float(entropy_rate),
+    )
 
 
 def linear_probe(
@@ -141,6 +243,10 @@ class Evaluator:
             np.asarray(true_labels) if true_labels is not None else None
         )
 
+    def evaluate_behavior(self, labels: np.ndarray, fps: float = 30.0) -> BehaviorMetrics:
+        """Evaluate temporal behavior metrics."""
+        return compute_behavior_metrics(np.asarray(labels), fps)
+
     def evaluate_linear_probe(self, train_feat, train_labels, test_feat, test_labels) -> ClassificationMetrics:
         """Evaluate frozen features via linear probing."""
         return linear_probe(
@@ -161,7 +267,15 @@ class Evaluator:
             lines.append(f"ARI: {metrics.ari:.4f}")
             lines.append(f"Silhouette: {metrics.silhouette:.4f}")
             lines.append(f"Calinski-Harabasz: {metrics.calinski_harabasz:.1f}")
+            lines.append(f"Davies-Bouldin: {metrics.davies_bouldin:.4f}")
+            lines.append(f"V-Measure: {metrics.v_measure:.4f}")
             lines.append(f"Hungarian Accuracy: {metrics.hungarian_accuracy:.4f}")
+        elif isinstance(metrics, BehaviorMetrics):
+            lines.append(f"Num Bouts: {metrics.num_bouts}")
+            lines.append(f"Temporal Consistency: {metrics.temporal_consistency:.4f}")
+            lines.append(f"Entropy Rate: {metrics.entropy_rate:.4f}")
+            for label, dur in metrics.bout_durations.items():
+                lines.append(f"  Class {label}: mean bout = {dur:.2f}s")
         report = '\n'.join(lines)
         print(report)
         return report

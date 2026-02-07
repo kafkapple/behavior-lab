@@ -1,0 +1,5 @@
+name: rat7m
+_target_: behavior_lab.data.loaders.rat7m.Rat7MLoader
+data_dir: ${paths.data_dir}/rat7m
+skeleton_name: rat7m
+fps: 120.0

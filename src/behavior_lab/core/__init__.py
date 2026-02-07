@@ -17,7 +17,10 @@ from .skeleton import (
 )
 from .graph import Graph, get_graph
 from .tensor_format import graph_to_sequence, sequence_to_graph
-from .types import BehaviorSequence, ClassificationResult, ModelMetrics
+from .types import (
+    BehaviorSequence, ClassificationResult, ClusteringResult,
+    ModelMetrics, BehaviorClusterer,
+)
 
 __all__ = [
     "SkeletonDefinition",
@@ -32,5 +35,7 @@ __all__ = [
     "graph_to_sequence",
     "BehaviorSequence",
     "ClassificationResult",
+    "ClusteringResult",
     "ModelMetrics",
+    "BehaviorClusterer",
 ]

@@ -6,6 +6,8 @@ Install: pip install git+https://github.com/jeakwon/subtle.git
 import numpy as np
 from typing import Dict, List, Optional
 
+from ...core.types import ClusteringResult
+
 
 class SUBTLE:
     """Wrapper for SUBTLE library with behavior-lab (T, K, D) format.
@@ -100,3 +102,31 @@ class SUBTLE:
         self._mapper = subtle.Mapper()
         self._mapper.load(path)
         return self
+
+    def fit_predict(self, sequences: List[np.ndarray]) -> ClusteringResult:
+        """Fit and return structured ClusteringResult."""
+        result = self.fit(sequences)
+        subclusters = result.get("subclusters")
+        embeddings = result.get("embeddings")
+
+        labels = subclusters if subclusters is not None else np.zeros(0, dtype=int)
+        n_clusters = len(set(labels.flatten())) if hasattr(labels, 'flatten') else 0
+
+        return ClusteringResult(
+            labels=labels,
+            embeddings=embeddings,
+            n_clusters=n_clusters,
+            metadata={
+                "algorithm": "subtle",
+                "superclusters": result.get("superclusters"),
+                "transitions": result.get("transitions"),
+            },
+        )
+
+    def get_embeddings(self, sequences: List[np.ndarray]) -> np.ndarray:
+        """Extract UMAP embeddings from sequences."""
+        if self._mapper is None:
+            result = self.fit(sequences)
+        else:
+            result = self.predict(sequences)
+        return result.get("embeddings", np.zeros((0, 2)))

@@ -30,13 +30,18 @@ dlc = ["deeplabcut[modelzoo]>=3.0.0rc1"]
 web = ["fastapi>=0.100", "uvicorn>=0.23", "python-multipart>=0.0.6"]
 viz = ["matplotlib>=3.6", "seaborn>=0.12", "imageio>=2.25", "imageio-ffmpeg>=0.4"]
 clustering = ["umap-learn>=0.5"]
+# Dataset loaders
+loaders = ["h5py>=3.8"]
 # External model wrappers
 bsoid = ["umap-learn>=0.5", "hdbscan>=0.8"]
 moseq = ["keypoint-moseq>=0.4"]
+moseq-fallback = ["hmmlearn>=0.3"]
 subtle = ["subtle"]
 pyskl = ["pyskl", "mmcv>=2.0", "mmaction2>=1.0"]
+# Benchmark
+benchmark = ["joblib>=1.2"]
 external = ["behavior-lab[bsoid,moseq,subtle,pyskl]"]
-all = ["behavior-lab[torch,viz,clustering,bsoid]"]
+all = ["behavior-lab[torch,viz,clustering,bsoid,loaders,benchmark]"]
 dev = ["behavior-lab[all]", "pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.1", "mypy>=1.0"]
 
 [project.scripts]

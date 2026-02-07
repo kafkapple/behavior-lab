@@ -127,6 +127,45 @@ class ActionClassifier(Protocol):
     ) -> ModelMetrics: ...
 
 
+@dataclass
+class ClusteringResult:
+    """Output of an unsupervised behavior discovery algorithm.
+
+    Attributes:
+        labels: Per-frame cluster assignments, shape (T,)
+        embeddings: Low-dimensional embedding, shape (T, D_embed)
+        n_clusters: Number of discovered clusters (excluding noise=-1)
+        features: High-dimensional features used for clustering, shape (T, D_feat)
+        metadata: Arbitrary key-value metadata (e.g., algorithm params)
+    """
+    labels: np.ndarray  # (T,)
+    embeddings: np.ndarray | None = None  # (T, D_embed)
+    n_clusters: int = 0
+    features: np.ndarray | None = None  # (T, D_feat)
+    metadata: dict[str, object] = field(default_factory=dict)
+
+    @property
+    def num_frames(self) -> int:
+        return self.labels.shape[0]
+
+
+@runtime_checkable
+class BehaviorClusterer(Protocol):
+    """Protocol for unsupervised behavior discovery models."""
+
+    def fit(self, data: np.ndarray) -> ClusteringResult: ...
+
+    def predict(self, data: np.ndarray) -> np.ndarray: ...
+
+    def fit_predict(self, data: np.ndarray) -> ClusteringResult: ...
+
+    def get_embeddings(self, data: np.ndarray) -> np.ndarray: ...
+
+    def save(self, path: str) -> None: ...
+
+    def load(self, path: str) -> None: ...
+
+
 @runtime_checkable
 class PoseEstimator(Protocol):
     """Protocol for pose estimation backends."""

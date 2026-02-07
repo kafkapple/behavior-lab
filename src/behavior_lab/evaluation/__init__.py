@@ -1,5 +1,6 @@
 """Evaluation metrics and evaluator."""
 from .evaluator import (
-    Evaluator, ClassificationMetrics, ClusterMetrics,
-    compute_classification_metrics, compute_cluster_metrics, linear_probe,
+    Evaluator, ClassificationMetrics, ClusterMetrics, BehaviorMetrics,
+    compute_classification_metrics, compute_cluster_metrics,
+    compute_behavior_metrics, linear_probe,
 )

@@ -1,0 +1,5 @@
+name: calms21
+_target_: behavior_lab.data.loaders.calms21.CalMS21Loader
+data_dir: ${paths.data_dir}/calms21
+skeleton_name: calms21
+fps: 30.0

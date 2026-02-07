@@ -3,8 +3,14 @@
 Reference: Weinreb et al. (2024), Nature Methods.
 Install: pip install keypoint-moseq
 """
+import pickle
+from pathlib import Path
+
 import numpy as np
 from typing import Dict, List, Optional
+from sklearn.decomposition import PCA
+
+from ...core.types import ClusteringResult
 
 
 class KeypointMoSeq:
@@ -117,3 +123,104 @@ class KeypointMoSeq:
         results = kpms.apply_model(self._model, data, metadata,
                                    save_results=False, return_model=False)
         return results[recording_name]
+
+    def fit_predict(self, keypoints: np.ndarray) -> ClusteringResult:
+        """Fit and return structured ClusteringResult."""
+        self.fit(keypoints)
+        labels = self.predict(keypoints)
+        return ClusteringResult(
+            labels=labels,
+            n_clusters=len(set(labels)),
+            metadata={"algorithm": "moseq", "latent_dim": self.latent_dim},
+        )
+
+    def save(self, path: str) -> None:
+        """Save model state to file."""
+        state = {
+            "model": self._model,
+            "pca": self._pca,
+            "config": self._config,
+            "bodypart_names": self.bodypart_names,
+        }
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(state, f)
+
+    def load(self, path: str) -> None:
+        """Load model state from file."""
+        with open(path, "rb") as f:
+            state = pickle.load(f)
+        self._model = state["model"]
+        self._pca = state["pca"]
+        self._config = state.get("config", self._config)
+        self.bodypart_names = state.get("bodypart_names", self.bodypart_names)
+
+
+class _PCAHMMFallback:
+    """Lightweight PCA + HMM fallback when keypoint-moseq is not installed.
+
+    Uses PCA for dimensionality reduction and HMM for temporal segmentation.
+    Requires: pip install hmmlearn
+    """
+
+    def __init__(
+        self,
+        n_components: int = 10,
+        n_states: int = 20,
+        n_iter: int = 50,
+    ):
+        self.n_components = n_components
+        self.n_states = n_states
+        self.n_iter = n_iter
+        self._pca: PCA | None = None
+        self._hmm = None
+
+    def fit(self, keypoints: np.ndarray) -> "ClusteringResult":
+        """Fit PCA + HMM on (T, K, D) keypoint data."""
+        try:
+            from hmmlearn.hmm import GaussianHMM
+        except ImportError:
+            raise ImportError("Install hmmlearn: pip install hmmlearn")
+
+        T, K, D = keypoints.shape
+        flat = keypoints.reshape(T, K * D)
+
+        self._pca = PCA(n_components=min(self.n_components, flat.shape[1]))
+        reduced = self._pca.fit_transform(flat)
+
+        self._hmm = GaussianHMM(
+            n_components=self.n_states,
+            n_iter=self.n_iter,
+            covariance_type="diag",
+        )
+        self._hmm.fit(reduced)
+        labels = self._hmm.predict(reduced)
+
+        return ClusteringResult(
+            labels=labels,
+            embeddings=reduced[:, :2] if reduced.shape[1] >= 2 else reduced,
+            n_clusters=len(set(labels)),
+            features=reduced,
+            metadata={"algorithm": "pca_hmm_fallback", "n_states": self.n_states},
+        )
+
+    def predict(self, keypoints: np.ndarray) -> np.ndarray:
+        """Predict syllable labels."""
+        if self._hmm is None or self._pca is None:
+            raise RuntimeError("Call .fit() first")
+        T, K, D = keypoints.shape
+        flat = keypoints.reshape(T, K * D)
+        reduced = self._pca.transform(flat)
+        return self._hmm.predict(reduced)
+
+    def save(self, path: str) -> None:
+        state = {"pca": self._pca, "hmm": self._hmm}
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(state, f)
+
+    def load(self, path: str) -> None:
+        with open(path, "rb") as f:
+            state = pickle.load(f)
+        self._pca = state["pca"]
+        self._hmm = state["hmm"]
