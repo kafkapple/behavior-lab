@@ -1,0 +1,5 @@
+method: mae
+lr: 0.001
+embed_dim: 256
+mask_ratio: 0.4
+decoder_dim: 128

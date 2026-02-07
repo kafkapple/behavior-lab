@@ -1,0 +1,6 @@
+name: mars
+skeleton: mars_mouse7
+num_classes: 4
+class_names: [other, attack, mount, investigation]
+num_persons: 2
+window_size: 64

@@ -1,0 +1,7 @@
+name: infogcn
+_target_: behavior_lab.models.graph_models.infogcn.InfoGCN
+base_channel: 64
+num_heads: 3
+k: 1
+noise_ratio: 0.1
+num_layers: 9

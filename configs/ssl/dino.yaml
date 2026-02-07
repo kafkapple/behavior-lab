@@ -1,0 +1,7 @@
+method: dino
+lr: 0.001
+embed_dim: 256
+proj_dim: 128
+teacher_temp: 0.04
+student_temp: 0.1
+ema_momentum: 0.996

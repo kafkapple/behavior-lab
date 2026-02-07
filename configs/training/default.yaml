@@ -1,0 +1,15 @@
+name: default
+optimizer: sgd
+learning_rate: 0.1
+weight_decay: 0.0004
+batch_size: 64
+num_epoch: 110
+warmup_epochs: 5
+
+# LR schedule
+lr_decay_rate: 0.1
+lr_steps: [70, 80]
+
+# SGD specific
+nesterov: true
+momentum: 0.9

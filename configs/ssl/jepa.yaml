@@ -1,0 +1,6 @@
+method: jepa
+lr: 0.001
+embed_dim: 256
+predictor_dim: 128
+mask_ratio: 0.4
+ema_momentum: 0.996

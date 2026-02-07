@@ -1,0 +1,6 @@
+name: ntu60_xsub
+skeleton: ntu25
+num_classes: 60
+num_persons: 2
+window_size: 64
+num_channels: 3

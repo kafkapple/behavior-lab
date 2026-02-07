@@ -1,0 +1,13 @@
+name: fast_debug
+optimizer: sgd
+learning_rate: 0.1
+weight_decay: 0.0004
+batch_size: 16
+num_epoch: 5
+warmup_epochs: 1
+
+lr_decay_rate: 0.1
+lr_steps: [3, 4]
+
+nesterov: true
+momentum: 0.9

@@ -1,0 +1,25 @@
+defaults:
+  - _self_
+  - skeleton: mars_mouse7
+  - dataset: mars
+  - model: infogcn
+  - training: default
+
+# Paths
+paths:
+  data_dir: ${oc.env:BEHAVIOR_LAB_DATA,data}
+  output_dir: ${oc.env:BEHAVIOR_LAB_OUTPUT,outputs}
+  checkpoint_dir: ${paths.output_dir}/checkpoints
+
+# Experiment
+experiment:
+  name: ${model.name}_${dataset.name}
+  seed: 42
+
+# Hydra
+hydra:
+  run:
+    dir: ${paths.output_dir}/runs/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: ${paths.output_dir}/sweeps
+    subdir: ${hydra.job.num}

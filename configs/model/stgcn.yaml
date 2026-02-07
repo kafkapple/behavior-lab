@@ -1,0 +1,3 @@
+name: stgcn
+_target_: behavior_lab.models.graph_models.baselines.STGCN
+base_channel: 64
