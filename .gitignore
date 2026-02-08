@@ -18,9 +18,9 @@ env/
 *.swp
 *.swo
 
-# Data & outputs
-data/
-outputs/
+# Data & outputs (top-level only)
+/data/
+/outputs/
 checkpoints/
 wandb/
 mlruns/

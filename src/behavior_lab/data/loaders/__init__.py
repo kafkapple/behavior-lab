@@ -6,6 +6,7 @@ from typing import Any
 from .calms21 import CalMS21Loader
 from .rat7m import Rat7MLoader
 from .ntu_rgbd import NTURGBDLoader
+from .nwucla import NWUCLALoader
 
 LOADER_REGISTRY: dict[str, type] = {
     "calms21": CalMS21Loader,
@@ -15,14 +16,16 @@ LOADER_REGISTRY: dict[str, type] = {
     "ntu_rgbd": NTURGBDLoader,
     "ntu60": NTURGBDLoader,
     "ntu120": NTURGBDLoader,
+    "nwucla": NWUCLALoader,
+    "nw_ucla": NWUCLALoader,
 }
 
 
-def get_loader(name: str, **kwargs: Any) -> CalMS21Loader | Rat7MLoader | NTURGBDLoader:
+def get_loader(name: str, **kwargs: Any):
     """Factory function to get a dataset loader by name.
 
     Args:
-        name: Dataset identifier (e.g., 'calms21', 'rat7m', 'ntu')
+        name: Dataset identifier (e.g., 'calms21', 'rat7m', 'ntu', 'nwucla')
         **kwargs: Passed to the loader constructor
 
     Returns:
@@ -44,6 +47,7 @@ __all__ = [
     "CalMS21Loader",
     "Rat7MLoader",
     "NTURGBDLoader",
+    "NWUCLALoader",
     "get_loader",
     "register_loader",
     "LOADER_REGISTRY",

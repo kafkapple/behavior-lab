@@ -66,20 +66,41 @@ class NTURGBDLoader:
         self.fps = fps
         self.skeleton = get_skeleton(skeleton_name)
 
-    def load_npz(self, filepath: str | Path) -> list[BehaviorSequence]:
-        """Load pre-processed NPZ file with 'data' and 'label' arrays.
+    def load_npz(
+        self, filepath: str | Path, split: str | None = None
+    ) -> list[BehaviorSequence]:
+        """Load pre-processed NPZ file.
 
-        Expected arrays:
-            - data: (N, C, T, V, M) or (N, T, V*C)
-            - label: (N,) integer labels
+        Supports two key layouts:
+            - 'data'/'label': standard format (N, C, T, V, M) or (N, T, F)
+            - 'x_train'/'y_train'/'x_test'/'y_test': split-based format
+
+        Args:
+            filepath: Path to NPZ file
+            split: If set ('train'/'test'), load only that split from x_/y_ keys
         """
         filepath = Path(filepath)
         npz = np.load(filepath, allow_pickle=True)
 
-        data = npz["data"] if "data" in npz else npz["x_train"]
-        labels = npz.get("label", npz.get("y_train", None))
+        # Determine which keys to use
+        if split and f"x_{split}" in npz:
+            data = npz[f"x_{split}"]
+            labels = npz.get(f"y_{split}", None)
+        elif "data" in npz:
+            data = npz["data"]
+            labels = npz.get("label", None)
+        elif "x_train" in npz:
+            data = npz["x_train"]
+            labels = npz.get("y_train", None)
+        else:
+            raise ValueError(f"NPZ has no recognized keys: {npz.files[:10]}")
+
         if labels is not None:
-            labels = labels.flatten()
+            # Handle one-hot encoded labels: (N, C) -> argmax
+            if labels.ndim == 2 and labels.shape[1] > 1:
+                labels = labels.argmax(axis=1)
+            else:
+                labels = labels.flatten()
 
         sequences = []
         for i in range(data.shape[0]):
@@ -92,7 +113,7 @@ class NTURGBDLoader:
                 keypoints=keypoints.astype(np.float32),
                 labels=np.full(keypoints.shape[0], label) if label is not None else None,
                 skeleton_name=self.skeleton_name,
-                sample_id=f"{filepath.stem}_{i:05d}",
+                sample_id=f"{filepath.stem}_{split or ''}_{i:05d}",
                 fps=self.fps,
                 metadata={
                     "dataset": "ntu_rgbd",

@@ -62,6 +62,12 @@ get_model('name')
 | **[Cross-Species](theory/cross_species.md)** | Canonical 5-part skeleton, 종간 전이 | core/skeleton.py |
 | **[Evaluation](theory/evaluation.md)** | NMI/ARI/Silhouette, Hungarian matching | evaluation/ |
 
+### Verification
+
+| Document | 핵심 내용 | 관련 |
+|----------|----------|------|
+| **[E2E Verification](e2e_verification.md)** | 실데이터 파이프라인 검증: 로더→전처리→B-SOiD→평가→시각화 | all modules |
+
 ### Reference
 
 | Document | 내용 |
@@ -118,11 +124,11 @@ python scripts/train.py model=stgcn training=fast_debug
 
 ## Datasets
 
-| Dataset | Species | Joints | Classes | Sequences | Config |
-|---------|---------|--------|---------|-----------|--------|
-| CalMS21 (MARS) | Mouse | 7 | 4 | 19K | `dataset/mars` |
-| NTU RGB+D 60 | Human | 25 | 60 | 57K | `dataset/ntu60_xsub` |
-| NW-UCLA | Human | 20 | 10 | 1.5K | — |
+| Dataset | Species | Joints | Classes | Sequences | Verified |
+|---------|---------|--------|---------|-----------|----------|
+| CalMS21 (MARS) | Mouse | 7×2 mice | 4 | 19K train / 4.8K test | [E2E](e2e_verification.md#calms21--mouse-social-behavior) |
+| NTU RGB+D 60 | Human | 25×2 person | 60 | 500 demo | [E2E](e2e_verification.md#ntu-rgbd--human-action-recognition-demo) |
+| NW-UCLA | Human | 20 | 10 | 1.0K train / 464 test | [E2E](e2e_verification.md#nw-ucla--action-recognition) |
 
 ---
 
