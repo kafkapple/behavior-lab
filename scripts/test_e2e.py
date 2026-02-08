@@ -245,48 +245,44 @@ def test_calms21(report: dict, html_data: dict) -> None:
     print("\n  Generating analysis visualizations...")
 
     # Embedding plot
-    fig_emb = plot_embedding(
+    fig_emb, _ = plot_embedding(
         result.embeddings, result.labels,
         title="B-SOiD Embedding (Cluster Colors)",
         save_path=str(out / "bsoid_embedding.png"),
     )
-    if fig_emb is not None:
-        ds_html["figures"]["embedding"] = fig_to_base64(fig_emb)
+    ds_html["figures"]["embedding"] = fig_to_base64(fig_emb)
     plt.close("all")
     print("  Saved: bsoid_embedding.png")
 
     # Transition matrix
     if beh_metrics.transition_matrix is not None:
-        fig_trans = plot_transition_matrix(
+        fig_trans, _ = plot_transition_matrix(
             beh_metrics.transition_matrix,
             title="B-SOiD Behavior Transitions",
             save_path=str(out / "bsoid_transition_matrix.png"),
         )
-        if fig_trans is not None:
-            ds_html["figures"]["transition"] = fig_to_base64(fig_trans)
+        ds_html["figures"]["transition"] = fig_to_base64(fig_trans)
         plt.close("all")
         print("  Saved: bsoid_transition_matrix.png")
 
     # Bout duration
-    fig_bout = plot_bout_duration(
+    fig_bout, _ = plot_bout_duration(
         beh_metrics.bout_durations,
         title="B-SOiD Mean Bout Durations",
         save_path=str(out / "bsoid_bout_duration.png"),
     )
-    if fig_bout is not None:
-        ds_html["figures"]["bout_duration"] = fig_to_base64(fig_bout)
+    ds_html["figures"]["bout_duration"] = fig_to_base64(fig_bout)
     plt.close("all")
     print("  Saved: bsoid_bout_duration.png")
 
     # Ethogram (first 5 sequences)
     sample_labels = result.labels[:5000]
-    fig_eth = plot_temporal_raster(
+    fig_eth, _ = plot_temporal_raster(
         sample_labels, fps=10.0,
         title="B-SOiD Ethogram (First 5000 frames)",
         save_path=str(out / "bsoid_ethogram.png"),
     )
-    if fig_eth is not None:
-        ds_html["figures"]["ethogram"] = fig_to_base64(fig_eth)
+    ds_html["figures"]["ethogram"] = fig_to_base64(fig_eth)
     plt.close("all")
     print("  Saved: bsoid_ethogram.png")
 
