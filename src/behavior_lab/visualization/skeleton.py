@@ -8,8 +8,16 @@ from .colors import (
     get_limb_colors,
     get_person_colors,
     get_joint_labels,
+    get_joint_full_names,
     _FALLBACK_COLOR,
 )
+
+
+def _to_viz_coords(kp: np.ndarray) -> np.ndarray:
+    """Convert Y-up data coords to Z-up matplotlib coords: (x,y,z) → (x,z,y)."""
+    if kp.shape[-1] < 3:
+        return kp
+    return kp[..., [0, 2, 1]]
 
 
 def _adjust_color(hex_color: str, factor: float = 0.7) -> str:
@@ -62,6 +70,10 @@ def plot_skeleton(
 
     K, D = kp.shape
     is_3d = D >= 3
+
+    # Convert Y-up data to Z-up matplotlib coords for 3D
+    if is_3d:
+        kp = _to_viz_coords(kp)
 
     if ax is None:
         fig = plt.figure(figsize=figsize)
@@ -206,6 +218,25 @@ def plot_skeleton(
 
     ax.set_title(title or f"Frame {frame}")
     ax.set_aspect("equal")
+    if is_3d:
+        ax.set_xlabel("X")
+        ax.set_ylabel("Z")
+        ax.set_zlabel("Y (up)")
+
+    # Joint name legend (abbreviation: full name)
+    if show_labels and skeleton is not None:
+        abbrevs = get_joint_labels(skeleton)
+        full_names = get_joint_full_names(skeleton)
+        n_legend = jpn if num_persons > 1 else K
+        n_legend = min(n_legend, len(abbrevs), len(full_names))
+        legend_text = "\n".join(
+            f"{abbrevs[i]:>4s}: {full_names[i]}" for i in range(n_legend)
+        )
+        fig.text(
+            0.02, 0.02, legend_text, fontsize=5, family="monospace",
+            verticalalignment="bottom", alpha=0.7,
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.3),
+        )
 
     if save_path:
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -292,10 +323,11 @@ def animate_skeleton(
     else:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
 
-    # Compute bounds
+    # Compute bounds (using viz coords for 3D)
     margin = 0.1
-    mins = np.nanmin(keypoints, axis=(0, 1))
-    maxs = np.nanmax(keypoints, axis=(0, 1))
+    bounds_kp = _to_viz_coords(keypoints) if is_3d else keypoints
+    mins = np.nanmin(bounds_kp, axis=(0, 1))
+    maxs = np.nanmax(bounds_kp, axis=(0, 1))
     ranges = maxs - mins
     mins -= ranges * margin
     maxs += ranges * margin
@@ -303,6 +335,10 @@ def animate_skeleton(
     def update(frame):
         ax.clear()
         kp = keypoints[frame]
+
+        # Convert Y-up data to Z-up matplotlib coords for 3D
+        if is_3d:
+            kp = _to_viz_coords(kp)
 
         if multi:
             for p in range(num_persons):
@@ -382,6 +418,10 @@ def animate_skeleton(
 
         ax.set_title(f"{title} — Frame {frame}/{T}")
         ax.set_aspect("equal")
+        if is_3d:
+            ax.set_xlabel("X")
+            ax.set_ylabel("Z")
+            ax.set_zlabel("Y (up)")
 
     anim = FuncAnimation(fig, update, frames=T, interval=1000 / fps, blit=False)
 

@@ -1,11 +1,20 @@
 """Visualization utilities for behavior analysis."""
 from .embedding import plot_embedding, plot_embedding_3d
 from .skeleton import plot_skeleton, animate_skeleton, plot_skeleton_comparison
-from .analysis import plot_transition_matrix, plot_bout_duration, plot_temporal_raster
+from .analysis import (
+    plot_transition_matrix,
+    plot_bout_duration,
+    plot_temporal_raster,
+    plot_multiscale_ethogram,
+    plot_hierarchical_embeddings,
+    plot_behavior_dendrogram,
+)
 from .colors import (
     get_joint_colors,
     get_limb_colors,
     get_person_colors,
+    get_joint_labels,
+    get_joint_full_names,
     BODY_PART_COLORS,
     PERSON_COLORS,
 )
@@ -20,9 +29,14 @@ __all__ = [
     "plot_transition_matrix",
     "plot_bout_duration",
     "plot_temporal_raster",
+    "plot_multiscale_ethogram",
+    "plot_hierarchical_embeddings",
+    "plot_behavior_dendrogram",
     "get_joint_colors",
     "get_limb_colors",
     "get_person_colors",
+    "get_joint_labels",
+    "get_joint_full_names",
     "BODY_PART_COLORS",
     "PERSON_COLORS",
     "generate_pipeline_report",

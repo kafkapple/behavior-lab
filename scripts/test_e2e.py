@@ -37,12 +37,101 @@ from behavior_lab.visualization import (
     plot_embedding, plot_transition_matrix, plot_bout_duration,
     plot_temporal_raster, plot_skeleton, animate_skeleton,
     plot_skeleton_comparison, fig_to_base64,
+    plot_behavior_dendrogram,
 )
+from behavior_lab.visualization.colors import get_joint_labels, get_joint_full_names
 from behavior_lab.visualization.html_report import (
     generate_pipeline_report, image_to_base64,
 )
 
 OUT_DIR = ROOT / "outputs" / "e2e_test"
+
+
+def _build_joint_info(skeleton):
+    """Build joint info dict for HTML report."""
+    abbrevs = get_joint_labels(skeleton)
+    full_names = get_joint_full_names(skeleton)
+    j2p = {}
+    for part_name, indices in skeleton.body_parts.items():
+        for idx in indices:
+            if idx not in j2p:
+                j2p[idx] = part_name
+    return {
+        "rows": [
+            [i, abbrevs[i], full_names[i], j2p.get(i, "")]
+            for i in range(skeleton.num_joints)
+        ]
+    }
+
+
+def generate_per_class_animations(
+    sequences, class_names, skeleton, out_dir, fps=30.0, n_frames=60,
+    max_classes=None,
+):
+    """Generate one representative GIF per behavior class.
+
+    Returns list of dicts with 'label' and 'src' (base64) for HTML embedding.
+    """
+    from collections import defaultdict
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Group sequences by label
+    by_class = defaultdict(list)
+    for seq in sequences:
+        label = seq.metadata.get("action_label")
+        if label is not None:
+            by_class[label].append(seq)
+
+    # If no action_label in metadata, try frame-level labels
+    if not by_class:
+        for seq in sequences:
+            if seq.labels is not None and len(seq.labels) > 0:
+                from scipy.stats import mode as scipy_mode
+                majority = int(scipy_mode(seq.labels, keepdims=False).mode)
+                by_class[majority].append(seq)
+
+    if not by_class:
+        print("    No class labels found, skipping per-class GIFs")
+        return []
+
+    # Sort and optionally limit classes
+    sorted_classes = sorted(by_class.keys())
+    if max_classes is not None:
+        # Pick classes with most sequences
+        sorted_classes = sorted(
+            sorted_classes, key=lambda c: len(by_class[c]), reverse=True
+        )[:max_classes]
+        sorted_classes.sort()
+
+    gif_items = []
+    for label_idx in sorted_classes:
+        seqs = by_class[label_idx]
+        # Pick middle sequence
+        seq = seqs[len(seqs) // 2]
+        name = class_names[label_idx] if label_idx < len(class_names) else f"Class {label_idx}"
+        safe_name = name.replace(" ", "_").replace("/", "_").lower()
+        save_path = out_dir / f"class_{label_idx:02d}_{safe_name}.gif"
+
+        kp = seq.keypoints[:n_frames]
+        try:
+            anim = animate_skeleton(
+                kp, skeleton=skeleton,
+                fps=fps, title=f"Class {label_idx}: {name}",
+                save_path=str(save_path),
+            )
+            plt.close("all")
+            if save_path.exists():
+                gif_items.append({
+                    "label": f"Class {label_idx}: {name}",
+                    "src": image_to_base64(save_path),
+                })
+                print(f"    Saved: {save_path.name}")
+        except Exception as e:
+            print(f"    Warning: Failed to generate GIF for class {label_idx}: {e}")
+
+    return gif_items
 
 
 def safe_json(obj):
@@ -99,10 +188,20 @@ def test_calms21(report: dict, html_data: dict) -> None:
     report["calms21"] = {"data": data_summary}
     ds_html: dict = {"data": data_summary, "figures": {}}
 
+    # Model info for report
+    ds_html["model_info"] = {
+        "name": "B-SOiD",
+        "type": "Unsupervised Discovery",
+        "description": "UMAP embedding + HDBSCAN clustering + Random Forest classification",
+        "why": "Discovers behavioral motifs without requiring labels",
+    }
+
     # --- Skeleton Visualization ---
     print("\n  Generating skeleton visualizations...")
     skeleton = get_skeleton("calms21")
     sample_kp = train_seqs[0].keypoints
+
+    ds_html["joint_info"] = _build_joint_info(skeleton)
 
     # Static skeleton (colored, multi-person)
     fig_skel, _ = plot_skeleton(
@@ -115,11 +214,11 @@ def test_calms21(report: dict, html_data: dict) -> None:
     plt.close(fig_skel)
     print("  Saved: sample_skeleton.png")
 
-    # Animated skeleton (first 60 frames)
+    # Animated skeleton (first 60 frames at native framerate)
     n_anim = min(60, sample_kp.shape[0])
     anim = animate_skeleton(
         sample_kp[:n_anim], skeleton=skeleton,
-        fps=10.0, title="CalMS21 Mice",
+        fps=30.0, title="CalMS21 Mice",
         save_path=str(out / "sample_animation.gif"),
     )
     plt.close("all")
@@ -286,6 +385,36 @@ def test_calms21(report: dict, html_data: dict) -> None:
     plt.close("all")
     print("  Saved: bsoid_ethogram.png")
 
+    # Behavior dendrogram (cluster hierarchy)
+    if result.n_clusters >= 2 and result.embeddings is not None:
+        cluster_centers = np.array([
+            result.embeddings[result.labels == i].mean(axis=0)
+            for i in range(result.n_clusters)
+            if np.any(result.labels == i)
+        ])
+        cluster_ids = [
+            str(i) for i in range(result.n_clusters) if np.any(result.labels == i)
+        ]
+        fig_dend, _ = plot_behavior_dendrogram(
+            cluster_centers, cluster_names=cluster_ids,
+            title="B-SOiD Behavior Hierarchy",
+            save_path=str(out / "behavior_dendrogram.png"),
+        )
+        if fig_dend is not None:
+            ds_html["figures"]["dendrogram"] = fig_to_base64(fig_dend)
+            plt.close(fig_dend)
+            print("  Saved: behavior_dendrogram.png")
+
+    # --- Per-Class Representative GIFs ---
+    print("\n  Generating per-class representative animations...")
+    from behavior_lab.data.loaders.calms21 import CLASS_NAMES as CALMS21_CLASSES
+    per_class_items = generate_per_class_animations(
+        train_seqs[:500], CALMS21_CLASSES, skeleton,
+        out / "per_class", fps=30.0, n_frames=60,
+    )
+    if per_class_items:
+        ds_html["per_class_gifs"] = per_class_items
+
     html_data["datasets"]["calms21"] = ds_html
     print("\n  CalMS21 PASSED")
 
@@ -327,13 +456,23 @@ def test_ntu(report: dict, html_data: dict) -> None:
     report["ntu"] = {"data": data_summary}
     ds_html: dict = {"data": data_summary, "figures": {}}
 
+    ds_html["model_info"] = {
+        "name": "Linear Probe (LogisticRegression)",
+        "type": "Supervised Baseline",
+        "description": "Mean-pooled keypoints → linear classifier. Intentionally naive.",
+        "why": "Measures discriminative power of raw spatial features",
+    }
+
     # --- Skeleton Visualization ---
     print("\n  Generating skeleton visualizations...")
     skeleton = get_skeleton("ntu")
 
+    ds_html["joint_info"] = _build_joint_info(skeleton)
+
     # NTU has 2 persons: (T, 50, 3) = 2*25 joints
+    sample_kp = train_seqs[0].keypoints
     fig_skel, _ = plot_skeleton(
-        train_seqs[0].keypoints, skeleton=skeleton, frame=0,
+        sample_kp, skeleton=skeleton, frame=0,
         title="NTU RGB+D — Skeleton (Frame 0)",
         show_labels=True,
         save_path=str(out / "sample_skeleton.png"),
@@ -341,6 +480,19 @@ def test_ntu(report: dict, html_data: dict) -> None:
     ds_html["figures"]["skeleton_static"] = fig_to_base64(fig_skel)
     plt.close(fig_skel)
     print("  Saved: sample_skeleton.png")
+
+    # Animated skeleton (first 60 frames)
+    n_anim = min(60, sample_kp.shape[0])
+    anim = animate_skeleton(
+        sample_kp[:n_anim], skeleton=skeleton,
+        fps=10.0, title="NTU RGB+D Skeleton",
+        save_path=str(out / "sample_animation.gif"),
+    )
+    plt.close("all")
+    gif_path = out / "sample_animation.gif"
+    if gif_path.exists():
+        ds_html["figures"]["skeleton_gif"] = image_to_base64(gif_path)
+    print("  Saved: sample_animation.gif")
 
     # --- Linear Probe ---
     print("\n  Linear probe (raw features)...")
@@ -373,6 +525,16 @@ def test_ntu(report: dict, html_data: dict) -> None:
         ds_html["figures"]["confusion_matrix"] = fig_to_base64(fig_cm)
         plt.close(fig_cm)
         print("  Saved: linear_probe_confusion.png")
+
+    # --- Per-Class Representative GIFs (top 10 most frequent) ---
+    print("\n  Generating per-class representative animations...")
+    from behavior_lab.data.loaders.ntu_rgbd import NTU60_CLASSES
+    per_class_items = generate_per_class_animations(
+        train_seqs, NTU60_CLASSES, skeleton,
+        out / "per_class", fps=10.0, n_frames=60, max_classes=10,
+    )
+    if per_class_items:
+        ds_html["per_class_gifs"] = per_class_items
 
     html_data["datasets"]["ntu"] = ds_html
     print("\n  NTU PASSED")
@@ -412,9 +574,18 @@ def test_nwucla(report: dict, html_data: dict) -> None:
     report["nwucla"] = {"data": data_summary}
     ds_html: dict = {"data": data_summary, "figures": {}}
 
+    ds_html["model_info"] = {
+        "name": "Linear Probe + LSTM/Transformer (quick test)",
+        "type": "Supervised Baseline + Sequence Models",
+        "description": "Linear probe on mean-pooled features, plus 2-epoch LSTM and Transformer.",
+        "why": "Verifies supervised pipeline end-to-end with multiple model types",
+    }
+
     # --- Skeleton Visualization ---
     print("\n  Generating skeleton visualizations...")
     skeleton = get_skeleton("nwucla")
+
+    ds_html["joint_info"] = _build_joint_info(skeleton)
 
     fig_skel, _ = plot_skeleton(
         train_seqs[0].keypoints, skeleton=skeleton, frame=0,
@@ -474,6 +645,64 @@ def test_nwucla(report: dict, html_data: dict) -> None:
         plt.close(fig_cm)
         print("  Saved: linear_probe_confusion.png")
 
+    # --- Supervised Model Quick Tests ---
+    print("\n  Supervised model quick tests...")
+    supervised_results = {}
+    input_dim = train_seqs[0].num_joints * train_seqs[0].num_channels  # 20*3=60
+
+    # Flatten: (T, K, D) → mean-pool → (K*D,) per sequence for MLP
+    # For LSTM/Transformer: (T, K*D) per sequence, use full temporal data
+    for model_name, config in [
+        ("lstm", {"epochs": 2, "seq_len": 32, "hidden_dim": 64, "num_layers": 1}),
+        ("transformer", {"epochs": 2, "seq_len": 32, "d_model": 64, "nhead": 2, "num_layers": 1}),
+    ]:
+        try:
+            from behavior_lab.models.sequence import get_action_classifier
+
+            # Prepare sequence data: concatenate all frames with labels
+            all_train_kp = np.concatenate(
+                [s.keypoints.reshape(s.num_frames, -1) for s in train_seqs], axis=0
+            )
+            all_train_labels = np.concatenate([
+                np.full(s.num_frames, s.metadata["action_label"])
+                for s in train_seqs
+            ])
+            all_test_kp = np.concatenate(
+                [s.keypoints.reshape(s.num_frames, -1) for s in test_seqs], axis=0
+            )
+            all_test_labels = np.concatenate([
+                np.full(s.num_frames, s.metadata["action_label"])
+                for s in test_seqs
+            ])
+
+            clf = get_action_classifier(
+                model_name, num_classes=n_classes, input_dim=input_dim,
+                class_names=UCLA_CLASSES[:n_classes], **config,
+            )
+            clf.fit(all_train_kp, all_train_labels)
+            metrics = clf.evaluate(all_test_kp, all_test_labels)
+            supervised_results[model_name] = {
+                "accuracy": float(metrics.accuracy),
+                "f1_macro": float(metrics.f1_macro),
+            }
+            print(f"    {model_name}: acc={metrics.accuracy:.4f}, f1={metrics.f1_macro:.4f}")
+        except Exception as e:
+            print(f"    {model_name}: SKIPPED ({e})")
+            supervised_results[model_name] = {"error": str(e)}
+
+    if supervised_results:
+        report["nwucla"]["supervised_models"] = supervised_results
+        ds_html["supervised_models"] = supervised_results
+
+    # --- Per-Class Representative GIFs ---
+    print("\n  Generating per-class representative animations...")
+    per_class_items = generate_per_class_animations(
+        train_seqs, UCLA_CLASSES, skeleton,
+        out / "per_class", fps=10.0, n_frames=60,
+    )
+    if per_class_items:
+        ds_html["per_class_gifs"] = per_class_items
+
     html_data["datasets"]["nwucla"] = ds_html
     print("\n  NW-UCLA PASSED")
 
@@ -504,6 +733,11 @@ def generate_report(report: dict) -> None:
             f"- Train: **{c['data']['n_train']}** sequences",
             f"- Test: **{c['data']['n_test']}** sequences",
             f"- Shape: `({', '.join(map(str, c['data']['shape']))})`",
+            "",
+            "### Analysis Method",
+            "- **Model**: B-SOiD (Unsupervised Discovery)",
+            "- **Why**: Discovers behavioral motifs without requiring labels",
+            "- **Method**: UMAP embedding + HDBSCAN clustering + Random Forest",
             "",
             "### Skeleton Visualization",
             "",
@@ -554,6 +788,11 @@ def generate_report(report: dict) -> None:
             f"- Shape: `({', '.join(map(str, n['data']['shape']))})`",
             f"- Classes: {n['data']['n_classes']}",
             "",
+            "### Analysis Method",
+            "- **Model**: Linear Probe (LogisticRegression)",
+            "- **Why**: Measures discriminative power of raw spatial features",
+            "- **Method**: Mean-pooled keypoints → linear classifier (intentionally naive)",
+            "",
             "### Skeleton",
             "",
             "![Skeleton](ntu/sample_skeleton.png)",
@@ -578,6 +817,10 @@ def generate_report(report: dict) -> None:
             "",
             f"- Train: **{u['data']['n_train']}**, Test: **{u['data']['n_test']}**",
             f"- Shape: `({', '.join(map(str, u['data']['shape']))})`",
+            "",
+            "### Analysis Method",
+            "- **Model**: Linear Probe + LSTM/Transformer (2-epoch quick test)",
+            "- **Why**: Verifies supervised pipeline end-to-end",
             "",
             "### Skeleton",
             "",

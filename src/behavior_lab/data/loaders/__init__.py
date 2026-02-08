@@ -7,6 +7,8 @@ from .calms21 import CalMS21Loader
 from .rat7m import Rat7MLoader
 from .ntu_rgbd import NTURGBDLoader
 from .nwucla import NWUCLALoader
+from .subtle import SUBTLELoader
+from .shank3ko import Shank3KOLoader
 
 LOADER_REGISTRY: dict[str, type] = {
     "calms21": CalMS21Loader,
@@ -18,6 +20,10 @@ LOADER_REGISTRY: dict[str, type] = {
     "ntu120": NTURGBDLoader,
     "nwucla": NWUCLALoader,
     "nw_ucla": NWUCLALoader,
+    "subtle": SUBTLELoader,
+    "subtle_mouse": SUBTLELoader,
+    "shank3ko": Shank3KOLoader,
+    "shank3ko_mouse": Shank3KOLoader,
 }
 
 
@@ -48,6 +54,8 @@ __all__ = [
     "Rat7MLoader",
     "NTURGBDLoader",
     "NWUCLALoader",
+    "SUBTLELoader",
+    "Shank3KOLoader",
     "get_loader",
     "register_loader",
     "LOADER_REGISTRY",

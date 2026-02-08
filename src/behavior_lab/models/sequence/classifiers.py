@@ -56,7 +56,7 @@ class BaseActionClassifier(ABC):
 
         return ModelMetrics(
             accuracy=accuracy, f1_macro=float(np.mean(f1_scores)),
-            per_class_metrics=f1_per_class, confusion_matrix=cm)
+            per_class_accuracy=f1_per_class, confusion_matrix=cm)
 
 
 class RuleBasedClassifier(BaseActionClassifier):

@@ -113,6 +113,14 @@ def get_person_colors(n_persons: int) -> list[str]:
     return [PERSON_COLORS[i % len(PERSON_COLORS)] for i in range(n_persons)]
 
 
+def get_joint_full_names(skeleton: SkeletonDefinition) -> list[str]:
+    """Return full joint names formatted for display.
+
+    'left_shoulder' -> 'Left Shoulder', 'tail_base' -> 'Tail Base'
+    """
+    return [name.replace("_", " ").title() for name in skeleton.joint_names]
+
+
 def get_joint_labels(skeleton: SkeletonDefinition) -> list[str]:
     """Return abbreviated joint labels for overlay display.
 

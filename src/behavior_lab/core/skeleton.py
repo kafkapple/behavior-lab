@@ -361,6 +361,127 @@ CALMS21_MOUSE_SKELETON = SkeletonDefinition(
 
 
 # =============================================================================
+# 3D Rodent Skeleton Definitions
+# =============================================================================
+
+RAT7M_SKELETON = SkeletonDefinition(
+    name="rat7m",
+    num_joints=20,
+    joint_names=[
+        "nose_tip", "head_top", "left_ear", "right_ear",
+        "neck", "left_shoulder", "right_shoulder", "left_elbow",
+        "right_elbow", "left_wrist", "right_wrist", "spine_mid",
+        "left_hip", "right_hip", "left_knee", "right_knee",
+        "left_ankle", "right_ankle", "tail_base", "tail_mid",
+    ],
+    joint_parents=[
+        4, 4, 4, 4,
+        -1,
+        4, 4,
+        5, 6,
+        7, 8,
+        4,
+        11, 11,
+        12, 13,
+        14, 15,
+        11, 18,
+    ],
+    edges=[
+        (0, 4), (1, 4), (2, 4), (3, 4),
+        (4, 5), (4, 6),
+        (5, 7), (6, 8),
+        (7, 9), (8, 10),
+        (4, 11),
+        (11, 12), (11, 13),
+        (12, 14), (13, 15),
+        (14, 16), (15, 17),
+        (11, 18), (18, 19),
+    ],
+    symmetric_pairs=[
+        (2, 3), (5, 6), (7, 8), (9, 10),
+        (12, 13), (14, 15), (16, 17),
+    ],
+    num_channels=3,
+    coordinate_system="xyz",
+    body_parts={
+        "head": [0, 1, 2, 3],
+        "torso": [4, 5, 6, 11],
+        "left_arm": [5, 7, 9],
+        "right_arm": [6, 8, 10],
+        "left_leg": [12, 14, 16],
+        "right_leg": [13, 15, 17],
+        "tail": [18, 19],
+    },
+    center_joint=4,
+)
+
+
+SUBTLE_MOUSE_SKELETON = SkeletonDefinition(
+    name="subtle_mouse",
+    num_joints=9,
+    joint_names=[
+        "nose", "head", "neck", "body_center", "hip_left",
+        "hip_right", "tail_base", "tail_mid", "tail_tip",
+    ],
+    joint_parents=[1, 2, -1, 2, 3, 3, 3, 6, 7],
+    edges=[
+        (0, 1), (1, 2), (2, 3), (3, 4), (3, 5),
+        (3, 6), (6, 7), (7, 8),
+    ],
+    symmetric_pairs=[(4, 5)],
+    num_channels=3,
+    coordinate_system="xyz",
+    body_parts={
+        "head": [0, 1, 2],
+        "body": [3, 4, 5],
+        "tail": [6, 7, 8],
+    },
+    center_joint=3,
+)
+
+
+SHANK3KO_MOUSE_SKELETON = SkeletonDefinition(
+    name="shank3ko_mouse",
+    num_joints=16,
+    joint_names=[
+        "nose", "left_ear", "right_ear", "neck",
+        "left_front_limb", "right_front_limb",
+        "left_hind_limb", "right_hind_limb",
+        "left_front_claw", "right_front_claw",
+        "left_hind_claw", "right_hind_claw",
+        "back", "root_tail", "middle_tail", "tip_tail",
+    ],
+    joint_parents=[
+        3, 3, 3, -1,    # nose, ears -> neck
+        12, 12, 12, 12,  # limbs -> back
+        4, 5, 6, 7,      # claws -> limbs
+        3, 12, 13, 14,   # back -> neck, tail chain
+    ],
+    edges=[
+        (0, 3), (1, 3), (2, 3), (3, 12),
+        (12, 4), (12, 5), (12, 6), (12, 7),
+        (4, 8), (5, 9), (6, 10), (7, 11),
+        (12, 13), (13, 14), (14, 15),
+    ],
+    symmetric_pairs=[
+        (1, 2), (4, 5), (6, 7), (8, 9), (10, 11),
+    ],
+    num_channels=3,
+    coordinate_system="xyz",
+    body_parts={
+        "head": [0, 1, 2, 3],
+        "body": [12],
+        "left_front_leg": [4, 8],
+        "right_front_leg": [5, 9],
+        "left_back_leg": [6, 10],
+        "right_back_leg": [7, 11],
+        "tail": [13, 14, 15],
+    },
+    center_joint=3,
+)
+
+
+# =============================================================================
 # DLC SuperAnimal Skeleton Definitions
 # =============================================================================
 
@@ -601,6 +722,13 @@ SKELETON_REGISTRY: dict[str, SkeletonDefinition] = {
     "mars_mouse": MARS_MOUSE_SKELETON,
     "calms21": CALMS21_MOUSE_SKELETON,
     "calms21_mouse": CALMS21_MOUSE_SKELETON,
+    # 3D Rodent
+    "rat7m": RAT7M_SKELETON,
+    "rat7m_20": RAT7M_SKELETON,
+    "subtle": SUBTLE_MOUSE_SKELETON,
+    "subtle_mouse": SUBTLE_MOUSE_SKELETON,
+    "shank3ko": SHANK3KO_MOUSE_SKELETON,
+    "shank3ko_mouse": SHANK3KO_MOUSE_SKELETON,
     # DLC
     "dlc_topviewmouse": DLC_TOPVIEWMOUSE_SKELETON,
     "dlc_topviewmouse27": DLC_TOPVIEWMOUSE_SKELETON,

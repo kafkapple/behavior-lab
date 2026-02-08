@@ -98,6 +98,27 @@ def _render_dataset_tab(name: str, ds: dict) -> str:
         rows = [[k, str(v)] for k, v in data.items()]
         sections.append(f"<h3>Data Summary</h3>{_render_table(['Field', 'Value'], rows)}")
 
+    # Joint info table
+    joint_info = ds.get("joint_info", {})
+    if joint_info:
+        ji_rows = joint_info.get("rows", [])
+        if ji_rows:
+            sections.append(
+                f"<h3>Joint Names</h3>"
+                f"{_render_table(['#', 'Abbrev', 'Full Name', 'Body Part'], ji_rows)}"
+            )
+
+    # Model info card
+    model_info = ds.get("model_info", {})
+    if model_info:
+        mi_html = f"""<div class="stat-card" style="margin:12px 0;">
+  <h4>{_escape(model_info.get('name', 'Model'))}</h4>
+  <p><strong>Type:</strong> {_escape(model_info.get('type', ''))}</p>
+  <p>{_escape(model_info.get('description', ''))}</p>
+  <p><em>Why: {_escape(model_info.get('why', ''))}</em></p>
+</div>"""
+        sections.append(f"<h3>Analysis Method</h3>{mi_html}")
+
     # Figures
     figures = ds.get("figures", {})
     for fig_name, fig_src in figures.items():
@@ -132,6 +153,24 @@ def _render_dataset_tab(name: str, ds: dict) -> str:
     if probe:
         cards = "".join(_render_metric_card(k, v) for k, v in probe.items())
         sections.append(f"<h3>Linear Probe</h3><div class='metrics-grid'>{cards}</div>")
+
+    # Per-class GIF grid
+    per_class = ds.get("per_class_gifs", [])
+    if per_class:
+        gif_cards = []
+        for item in per_class:
+            gif_cards.append(
+                f'<div style="text-align:center;margin:4px;">'
+                f'<img src="{item["src"]}" alt="{_escape(item["label"])}" '
+                f'style="max-width:200px;border-radius:6px;border:1px solid var(--border);">'
+                f'<p style="font-size:0.8em;margin-top:4px;">{_escape(item["label"])}</p>'
+                f'</div>'
+            )
+        sections.append(
+            f"<h3>Per-Class Representative Behaviors</h3>"
+            f'<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">'
+            f'{"".join(gif_cards)}</div>'
+        )
 
     return "\n".join(sections)
 

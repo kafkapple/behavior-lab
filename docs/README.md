@@ -62,12 +62,19 @@ get_model('name')
 | **[Cross-Species](theory/cross_species.md)** | Canonical 5-part skeleton, 종간 전이 | core/skeleton.py |
 | **[Evaluation](theory/evaluation.md)** | NMI/ARI/Silhouette, Hungarian matching | evaluation/ |
 
-### Verification & Guides
+### Data & Verification
 
 | Document | 핵심 내용 | 관련 |
 |----------|----------|------|
+| **[Dataset Catalog](datasets.md)** | 전체 데이터셋 사양: joints, classes, formats, skeletons | core, loaders |
 | **[E2E Verification](e2e_verification.md)** | 실데이터 파이프라인 검증: 로더→전처리→B-SOiD→평가→시각화 | all modules |
+
+### Guides
+
+| Document | 핵심 내용 | 관련 |
+|----------|----------|------|
 | **[Quick Start Guide](guides/quickstart.md)** | 설치, 데이터셋 설명, 전처리, 행동 분석, 리포트 생성 실행법 | all modules |
+| **[Benchmark Guide](guides/benchmark_guide.md)** | 멀티모델 벤치마크: Supervised/SSL/Discovery 비교 방법 | models/ |
 
 ### Reference
 
@@ -78,7 +85,7 @@ get_model('name')
 
 ---
 
-## Skeleton Registry (7 Species)
+## Skeleton Registry (10 Species/Variants)
 
 | Name | Joints | Dims | Species | Use Case |
 |------|--------|------|---------|----------|
@@ -86,6 +93,9 @@ get_model('name')
 | `ucla` | 20 | 3D | Human | N-UCLA |
 | `coco` | 17 | 2D | Human | 2D pose estimation |
 | `mars` / `calms21` | 7 | 2D | Mouse | Social behavior (top-view) |
+| `subtle` | 9 | 3D | Mouse | Spontaneous behavior (3D) |
+| `shank3ko` | 16 | 3D | Mouse | Knockout behavior (3D) |
+| `rat7m` | 20 | 3D | Rat | Motion capture (3D) |
 | `dlc_topviewmouse` | 27 | 2D | Mouse | DLC SuperAnimal (full) |
 | `dlc_quadruped` | 39 | 2D | Quadruped | DLC SuperAnimal |
 
@@ -126,11 +136,16 @@ python scripts/train.py model=stgcn training=fast_debug
 
 ## Datasets
 
-| Dataset | Species | Joints | Classes | Sequences | Verified |
-|---------|---------|--------|---------|-----------|----------|
-| CalMS21 (MARS) | Mouse | 7×2 mice | 4 | 19K train / 4.8K test | [E2E](e2e_verification.md#calms21--mouse-social-behavior) |
-| NTU RGB+D 60 | Human | 25×2 person | 60 | 500 demo | [E2E](e2e_verification.md#ntu-rgbd--human-action-recognition-demo) |
-| NW-UCLA | Human | 20 | 10 | 1.0K train / 464 test | [E2E](e2e_verification.md#nw-ucla--action-recognition) |
+| Dataset | Species | Joints | Classes | Format | Status |
+|---------|---------|--------|---------|--------|--------|
+| CalMS21 (MARS) | Mouse | 7×2 | 4 | HDF5 | E2E verified |
+| NTU RGB+D 60 | Human | 25×2 | 60 | NPZ | E2E verified |
+| NW-UCLA | Human | 20 | 10 | NPY | E2E verified |
+| SUBTLE | Mouse | 9 | 4 | CSV | Loader ready |
+| Rat7M | Rat | 20 | unlabeled | MAT/HDF5 | Loader ready |
+| Shank3KO | Mouse | 16 | 11 | MAT | Loader ready |
+
+> **상세**: [Dataset Catalog](datasets.md) — 전체 사양, joint names, class names
 
 ---
 

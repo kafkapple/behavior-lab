@@ -1,4 +1,6 @@
-"""Analysis visualization — transition matrices, bout durations, temporal rasters."""
+"""Analysis visualization — transition matrices, bout durations, temporal rasters,
+and hierarchical behavior analysis (dendrogram, multiscale ethogram, embeddings).
+"""
 from __future__ import annotations
 
 from typing import Optional, Sequence
@@ -163,6 +165,161 @@ def plot_temporal_raster(
                 color=cmap_obj(label_to_color[l]), label=name
             ))
         ax.legend(handles=patches, loc="upper right", fontsize=7, ncol=min(len(unique), 5))
+
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    return fig, ax
+
+
+def plot_multiscale_ethogram(
+    labels_dict: dict[str, np.ndarray],
+    fps: float = 30.0,
+    title: str = "Multi-scale Ethogram",
+    figsize: tuple[int, int] | None = None,
+    cmap: str = "tab20",
+    save_path: str | None = None,
+):
+    """Stacked temporal rasters at multiple granularity levels.
+
+    Args:
+        labels_dict: {"Fine": labels_fine, "Coarse": labels_coarse}
+        fps: Frames per second for x-axis
+        title: Plot title
+        figsize: Figure size (auto if None)
+        cmap: Colormap
+        save_path: If set, save figure
+    """
+    import matplotlib.pyplot as plt
+
+    n_levels = len(labels_dict)
+    if figsize is None:
+        figsize = (14, 2 * n_levels)
+
+    fig, axes = plt.subplots(n_levels, 1, figsize=figsize, sharex=True)
+    if n_levels == 1:
+        axes = [axes]
+
+    for ax, (level_name, labels) in zip(axes, labels_dict.items()):
+        T = len(labels)
+        time_sec = np.arange(T) / fps
+        unique = sorted(set(labels))
+        n_unique = len(unique)
+        cmap_obj = plt.cm.get_cmap(cmap, max(n_unique, 2))
+        label_map = {l: i for i, l in enumerate(unique)}
+        colors = np.array([label_map[l] for l in labels])
+
+        ax.imshow(
+            colors.reshape(1, -1), aspect="auto", cmap=cmap_obj,
+            extent=[time_sec[0], time_sec[-1], 0, 1],
+            interpolation="nearest",
+        )
+        ax.set_yticks([0.5])
+        ax.set_yticklabels([level_name], fontsize=9)
+        ax.tick_params(axis="y", length=0)
+
+    axes[-1].set_xlabel("Time (s)")
+    fig.suptitle(title, fontsize=12)
+    fig.tight_layout()
+
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    return fig, axes
+
+
+def plot_hierarchical_embeddings(
+    embeddings_dict: dict[str, np.ndarray],
+    labels_dict: dict[str, np.ndarray] | None = None,
+    title: str = "Hierarchical Embeddings",
+    figsize: tuple[int, int] | None = None,
+    save_path: str | None = None,
+):
+    """Side-by-side UMAP embeddings at different hierarchy levels.
+
+    Args:
+        embeddings_dict: {"level_0": emb_0, "level_1": emb_1, ...}
+        labels_dict: Optional per-level color labels
+        title: Plot title
+        figsize: Figure size (auto if None)
+        save_path: If set, save figure
+    """
+    import matplotlib.pyplot as plt
+
+    try:
+        from umap import UMAP
+    except ImportError:
+        print("Warning: umap-learn not installed, skipping hierarchical embeddings")
+        return None, None
+
+    n_levels = len(embeddings_dict)
+    if figsize is None:
+        figsize = (5 * n_levels, 5)
+
+    fig, axes = plt.subplots(1, n_levels, figsize=figsize)
+    if n_levels == 1:
+        axes = [axes]
+
+    for ax, (level, emb) in zip(axes, embeddings_dict.items()):
+        if emb.shape[1] > 2:
+            reduced = UMAP(n_components=2, random_state=42).fit_transform(emb)
+        else:
+            reduced = emb
+
+        colors = None
+        if labels_dict and level in labels_dict:
+            colors = labels_dict[level]
+
+        ax.scatter(
+            reduced[:, 0], reduced[:, 1],
+            c=colors, s=1, alpha=0.3, cmap="tab20",
+        )
+        ax.set_title(level, fontsize=10)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    fig.suptitle(title, fontsize=12)
+    fig.tight_layout()
+
+    if save_path:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+
+    return fig, axes
+
+
+def plot_behavior_dendrogram(
+    cluster_centers: np.ndarray,
+    cluster_names: list[str] | None = None,
+    title: str = "Behavior Hierarchy",
+    figsize: tuple[int, int] = (10, 6),
+    save_path: str | None = None,
+):
+    """Dendrogram showing hierarchical relationships between behavior clusters.
+
+    Args:
+        cluster_centers: (n_clusters, D) array of cluster centroids
+        cluster_names: Optional names for each cluster
+        title: Plot title
+        figsize: Figure size
+        save_path: If set, save figure
+    """
+    import matplotlib.pyplot as plt
+    from scipy.cluster.hierarchy import dendrogram, linkage
+
+    if cluster_centers.shape[0] < 2:
+        print("Warning: Need at least 2 clusters for dendrogram")
+        return None, None
+
+    Z = linkage(cluster_centers, method="ward")
+
+    fig, ax = plt.subplots(figsize=figsize)
+    dendrogram(
+        Z, labels=cluster_names, ax=ax,
+        leaf_rotation=45, leaf_font_size=8,
+    )
+    ax.set_title(title)
+    ax.set_ylabel("Distance")
+    fig.tight_layout()
 
     if save_path:
         fig.savefig(save_path, dpi=150, bbox_inches="tight")
