@@ -169,9 +169,51 @@ class Rat7MLoader:
                 f"No recognized data key in {filepath}. Found: {list(f.keys())}"
             )
 
+    def load_preprocessed(self, filepath: str | Path) -> list[BehaviorSequence]:
+        """Load from preprocessed .npz file.
+
+        Args:
+            filepath: Path to .npz with 'keypoints' (T, 20, 3)
+
+        Returns:
+            List of BehaviorSequence
+        """
+        filepath = Path(filepath)
+        npz = np.load(filepath, allow_pickle=True)
+        keypoints = npz["keypoints"].astype(np.float32)
+
+        if keypoints.ndim == 3:
+            return [BehaviorSequence(
+                keypoints=keypoints,
+                skeleton_name=self.skeleton_name,
+                sample_id=filepath.stem,
+                fps=self.fps,
+                metadata={"dataset": "rat7m", "source_file": str(filepath)},
+            )]
+
+        sequences = []
+        for i in range(keypoints.shape[0]):
+            sequences.append(BehaviorSequence(
+                keypoints=keypoints[i],
+                skeleton_name=self.skeleton_name,
+                sample_id=f"{filepath.stem}_{i:05d}",
+                fps=self.fps,
+                metadata={"dataset": "rat7m", "source_file": str(filepath)},
+            ))
+        return sequences
+
     def load_all(self) -> list[BehaviorSequence]:
         """Load all session files from data_dir."""
         sequences = []
+        # Try preprocessed .npz first
+        for fp in sorted(self.data_dir.glob("*.npz")):
+            try:
+                sequences.extend(self.load_preprocessed(fp))
+            except Exception as e:
+                print(f"Warning: Could not load {fp}: {e}")
+        if sequences:
+            return sequences
+        # Fallback to raw files
         for ext in ("*.npy", "*.mat", "*.h5", "*.hdf5"):
             for fp in sorted(self.data_dir.glob(ext)):
                 sequences.append(self.load_session(fp))

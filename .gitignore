@@ -25,6 +25,9 @@ checkpoints/
 wandb/
 mlruns/
 
+# External submodules (tracked by .gitmodules)
+/external/
+
 # OS
 .DS_Store
 Thumbs.db

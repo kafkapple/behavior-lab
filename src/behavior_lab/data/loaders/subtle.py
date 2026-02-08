@@ -90,9 +90,50 @@ class SUBTLELoader:
             metadata={"dataset": "subtle", "source_file": str(filepath)},
         )
 
+    def load_preprocessed(self, filepath: str | Path) -> list[BehaviorSequence]:
+        """Load from preprocessed .npz file (keypoints: (T, 9, 3) or batch).
+
+        Args:
+            filepath: Path to .npz file with 'keypoints' key
+
+        Returns:
+            List of BehaviorSequence
+        """
+        filepath = Path(filepath)
+        npz = np.load(filepath, allow_pickle=True)
+        keypoints = npz["keypoints"].astype(np.float32)
+
+        if keypoints.ndim == 3:
+            # Single sequence (T, K, D)
+            return [BehaviorSequence(
+                keypoints=keypoints,
+                skeleton_name=self.skeleton_name,
+                sample_id=filepath.stem,
+                fps=self.fps,
+                metadata={"dataset": "subtle", "source_file": str(filepath)},
+            )]
+
+        # Batch: (N, T, K, D)
+        sequences = []
+        for i in range(keypoints.shape[0]):
+            sequences.append(BehaviorSequence(
+                keypoints=keypoints[i],
+                skeleton_name=self.skeleton_name,
+                sample_id=f"{filepath.stem}_{i:05d}",
+                fps=self.fps,
+                metadata={"dataset": "subtle", "source_file": str(filepath)},
+            ))
+        return sequences
+
     def load_all(self) -> list[BehaviorSequence]:
         """Load all data files from data_dir."""
         sequences = []
+        # Try preprocessed .npz first
+        for fp in sorted(self.data_dir.glob("*.npz")):
+            sequences.extend(self.load_preprocessed(fp))
+        if sequences:
+            return sequences
+        # Fallback to raw files
         for fp in sorted(self.data_dir.glob("*.csv")):
             sequences.append(self.load_csv(fp))
         for fp in sorted(self.data_dir.glob("*.npy")):

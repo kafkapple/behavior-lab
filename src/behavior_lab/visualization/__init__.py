@@ -1,6 +1,9 @@
 """Visualization utilities for behavior analysis."""
 from .embedding import plot_embedding, plot_embedding_3d
-from .skeleton import plot_skeleton, animate_skeleton, plot_skeleton_comparison
+from .skeleton import (
+    plot_skeleton, animate_skeleton, plot_skeleton_comparison,
+    strip_zero_frames, strip_zero_persons,
+)
 from .analysis import (
     plot_transition_matrix,
     plot_bout_duration,
@@ -26,6 +29,8 @@ __all__ = [
     "plot_skeleton",
     "animate_skeleton",
     "plot_skeleton_comparison",
+    "strip_zero_frames",
+    "strip_zero_persons",
     "plot_transition_matrix",
     "plot_bout_duration",
     "plot_temporal_raster",

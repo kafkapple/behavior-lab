@@ -20,6 +20,70 @@ def _to_viz_coords(kp: np.ndarray) -> np.ndarray:
     return kp[..., [0, 2, 1]]
 
 
+def strip_zero_frames(keypoints: np.ndarray) -> np.ndarray:
+    """Remove frames where ALL joints are zero (zero-padding).
+
+    Args:
+        keypoints: (T, K, D) array
+
+    Returns:
+        Filtered (T', K, D) array with zero-padded frames removed.
+        Returns at least 1 frame even if all are zero.
+    """
+    flat = keypoints.reshape(keypoints.shape[0], -1)
+    nonzero_mask = np.any(flat != 0, axis=1)
+    if not np.any(nonzero_mask):
+        return keypoints[:1]  # At least 1 frame
+    return keypoints[nonzero_mask]
+
+
+def strip_zero_persons(keypoints: np.ndarray, skeleton) -> np.ndarray:
+    """Remove zero-valued person slots from multi-person keypoints.
+
+    For datasets like NTU where person 2 may be all zeros (single-person action),
+    this strips the empty person to avoid bounding box distortion.
+
+    Args:
+        keypoints: (T, K_total, D) where K_total = num_persons * joints_per_person
+        skeleton: SkeletonDefinition with num_persons and num_joints
+
+    Returns:
+        (T, K_active, D) with only non-zero persons retained.
+    """
+    if skeleton is None or skeleton.num_persons <= 1:
+        return keypoints
+
+    T, K_total, D = keypoints.shape
+    jpn = skeleton.num_joints
+    num_persons = skeleton.num_persons
+
+    if K_total < jpn * num_persons:
+        return keypoints
+
+    # Check each person slot for all-zero
+    active_persons = []
+    for p in range(num_persons):
+        start = p * jpn
+        end = start + jpn
+        person_data = keypoints[:, start:end, :]
+        if not np.allclose(person_data, 0):
+            active_persons.append(p)
+
+    if not active_persons:
+        return keypoints[:, :jpn, :]  # Fallback: first person
+
+    if len(active_persons) == num_persons:
+        return keypoints  # All persons are active
+
+    # Concatenate only active person slots
+    parts = []
+    for p in active_persons:
+        start = p * jpn
+        end = start + jpn
+        parts.append(keypoints[:, start:end, :])
+    return np.concatenate(parts, axis=1)
+
+
 def _adjust_color(hex_color: str, factor: float = 0.7) -> str:
     """Darken or lighten a hex color. factor < 1 darkens, > 1 lightens."""
     hex_color = hex_color.lstrip("#")
@@ -323,12 +387,21 @@ def animate_skeleton(
     else:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
 
-    # Compute bounds (using viz coords for 3D)
+    # Compute bounds (using viz coords for 3D), excluding zero-valued joints
     margin = 0.1
     bounds_kp = _to_viz_coords(keypoints) if is_3d else keypoints
-    mins = np.nanmin(bounds_kp, axis=(0, 1))
-    maxs = np.nanmax(bounds_kp, axis=(0, 1))
+    # Mask out zero joints to avoid bbox distortion from padding
+    nonzero_mask = np.any(bounds_kp != 0, axis=-1)  # (T, K) boolean
+    if np.any(nonzero_mask):
+        active_kp = bounds_kp.copy()
+        active_kp[~nonzero_mask] = np.nan
+        mins = np.nanmin(active_kp, axis=(0, 1))
+        maxs = np.nanmax(active_kp, axis=(0, 1))
+    else:
+        mins = np.nanmin(bounds_kp, axis=(0, 1))
+        maxs = np.nanmax(bounds_kp, axis=(0, 1))
     ranges = maxs - mins
+    ranges = np.where(ranges < 1e-6, 1.0, ranges)  # Avoid zero-range
     mins -= ranges * margin
     maxs += ranges * margin
 

@@ -2,11 +2,20 @@
 
 Reference: Stoffl et al. (ECCV 2024), "Elucidating the Hierarchical Nature of Behavior
            with Masked Autoencoders."
-Install: Clone https://github.com/amathislab/BehaveMAE
+
+Setup (one of):
+    1. Git submodule: git submodule add https://github.com/amathislab/BehaveMAE external/BehaveMAE
+    2. Clone + PYTHONPATH: git clone ... && export PYTHONPATH=$PYTHONPATH:BehaveMAE
 """
+import sys
 import numpy as np
 from typing import Dict, Optional, Tuple
 from pathlib import Path
+
+# Auto-add submodule path if it exists
+_SUBMODULE_PATH = Path(__file__).resolve().parents[4] / "external" / "BehaveMAE"
+if _SUBMODULE_PATH.exists() and str(_SUBMODULE_PATH) not in sys.path:
+    sys.path.insert(0, str(_SUBMODULE_PATH))
 
 
 def pose_to_behavemae_input(data: np.ndarray, target_frames: int = 400) -> 'torch.Tensor':
@@ -63,6 +72,13 @@ class BehaveMAE:
             init_num_heads=2, stages=(2, 3, 4), out_embed_dims=(78, 128, 256),
             q_strides=[(2, 1, 4), (2, 1, 6)], mask_unit_attn=(True, False, False),
             patch_kernel=(2, 1, 3), patch_stride=(2, 1, 3), patch_padding=(0, 0, 0),
+            decoder_embed_dim=128, decoder_depth=1, decoder_num_heads=1,
+        ),
+        'calms21': dict(
+            input_size=(400, 1, 28), in_chans=1, init_embed_dim=96,
+            init_num_heads=2, stages=(2, 3, 4), out_embed_dims=(78, 128, 256),
+            q_strides=[(2, 1, 4), (2, 1, 7)], mask_unit_attn=(True, False, False),
+            patch_kernel=(2, 1, 4), patch_stride=(2, 1, 4), patch_padding=(0, 0, 0),
             decoder_embed_dim=128, decoder_depth=1, decoder_num_heads=1,
         ),
     }

@@ -440,6 +440,44 @@ SUBTLE_MOUSE_SKELETON = SkeletonDefinition(
 )
 
 
+MABE22_MOUSE_SKELETON = SkeletonDefinition(
+    name="mabe22_mouse",
+    num_joints=12,
+    joint_names=[
+        "nose",              # 0
+        "left_ear",          # 1
+        "right_ear",         # 2
+        "neck",              # 3
+        "left_forepaw",      # 4
+        "right_forepaw",     # 5
+        "center_back",       # 6
+        "left_hindpaw",      # 7
+        "right_hindpaw",     # 8
+        "tail_base",         # 9
+        "tail_middle",       # 10
+        "tail_tip",          # 11
+    ],
+    joint_parents=[3, 3, 3, -1, 6, 6, 3, 6, 6, 6, 9, 10],
+    edges=[
+        (0, 3), (1, 3), (2, 3), (3, 6),
+        (6, 4), (6, 5), (6, 7), (6, 8),
+        (6, 9), (9, 10), (10, 11),
+    ],
+    symmetric_pairs=[(1, 2), (4, 5), (7, 8)],
+    num_channels=2,
+    coordinate_system="xy",
+    body_parts={
+        "head": [0, 1, 2, 3],
+        "body": [6],
+        "front_paws": [4, 5],
+        "hind_paws": [7, 8],
+        "tail": [9, 10, 11],
+    },
+    center_joint=6,
+    num_persons=3,
+)
+
+
 SHANK3KO_MOUSE_SKELETON = SkeletonDefinition(
     name="shank3ko_mouse",
     num_joints=16,
@@ -727,6 +765,9 @@ SKELETON_REGISTRY: dict[str, SkeletonDefinition] = {
     "rat7m_20": RAT7M_SKELETON,
     "subtle": SUBTLE_MOUSE_SKELETON,
     "subtle_mouse": SUBTLE_MOUSE_SKELETON,
+    "mabe22": MABE22_MOUSE_SKELETON,
+    "mabe22_mouse": MABE22_MOUSE_SKELETON,
+    "mabe": MABE22_MOUSE_SKELETON,
     "shank3ko": SHANK3KO_MOUSE_SKELETON,
     "shank3ko_mouse": SHANK3KO_MOUSE_SKELETON,
     # DLC
