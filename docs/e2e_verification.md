@@ -3,6 +3,7 @@
 > Full pipeline verification on real data: loader → preprocessing → discovery → evaluation → visualization.
 >
 > **Date**: 2026-02-08 | **Script**: `scripts/test_e2e.py` | **Outputs**: `outputs/e2e_test/`
+> **Status**: ALL TESTS PASSED | **Detailed Report**: [`outputs/e2e_test/report.md`](../outputs/e2e_test/report.md) | **Interactive**: [`report.html`](../outputs/e2e_test/report.html)
 
 ---
 
@@ -40,7 +41,7 @@ PreprocessingPipeline([
 
 ### B-SOiD Discovery (1000 samples)
 
-- Time: ~55s (64K frames concatenated)
+- Time: ~62s (64K frames concatenated)
 - Clusters: 2 (+ noise)
 
 | Metric | Value |
