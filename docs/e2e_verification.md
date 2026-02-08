@@ -56,9 +56,17 @@ PreprocessingPipeline([
 
 **Note**: Low NMI/ARI is expected — B-SOiD discovers *behavioral motifs* (movement patterns) rather than replicating the 4-class CalMS21 annotation. The high silhouette (0.59) confirms well-separated clusters in feature space.
 
-### Visualizations
+### Skeleton Visualization
 
-- `calms21/preprocessing_comparison.png` — Before/after keypoint trajectory
+- `calms21/sample_skeleton.png` — Body-part colored 2-mice skeleton (multi-person auto-detection)
+- `calms21/sample_animation.gif` — 60-frame animated GIF with per-mouse color distinction
+- `calms21/skeleton_comparison.png` — Raw vs preprocessed side-by-side comparison
+
+Color system: head=red, body=blue, tail=gray. Mouse 0 = teal scheme, Mouse 1 = red scheme (darkened).
+
+### Analysis Visualizations
+
+- `calms21/preprocessing_comparison.png` — Before/after keypoint trajectory (joint 0, x/y)
 - `calms21/bsoid_embedding.png` — UMAP 2D scatter (cluster colors)
 - `calms21/bsoid_transition_matrix.png` — Behavior transition heatmap
 - `calms21/bsoid_bout_duration.png` — Mean bout duration per cluster
@@ -73,6 +81,11 @@ PreprocessingPipeline([
 - Demo subset: 500 train, 100 test (full dataset: 57K)
 - NPZ format: `x_train (500, 300, 150)` with `F=150 = 50 joints × 3D`
 - One-hot `y_train (500, 60)` → `argmax` → 60 action classes
+
+### Skeleton Visualization
+
+- `ntu/sample_skeleton.png` — Body-part colored 3D skeleton (torso=blue, head=red, left_arm=green, right_arm=orange, left_leg=purple, right_leg=dark orange)
+- Multi-person: NTU data has 50 joints (25×2 persons). When both are present, each person rendered with distinct color scheme.
 
 ### Linear Probe
 
@@ -99,6 +112,24 @@ The low accuracy confirms that raw mean-pooled features lack discriminative powe
 
 Better than NTU due to fewer classes and simpler actions. Still confirms need for temporal modeling.
 
+### Skeleton Visualization
+
+- `nwucla/sample_skeleton.png` — 20-joint colored skeleton (3D)
+- `nwucla/sample_animation.gif` — 60-frame animated GIF with body-part coloring
+
+---
+
+## HTML Report
+
+A self-contained HTML report is generated at `outputs/e2e_test/report.html`:
+
+- **Tab navigation**: Overview + CalMS21 / NTU / NW-UCLA tabs
+- **All images base64-embedded**: PNG and GIF inline, no external file dependencies
+- **Metric cards**: Hover-interactive display of cluster and behavior metrics
+- **Responsive CSS**: Works on desktop and mobile browsers
+
+Open with: `open outputs/e2e_test/report.html` (macOS) or any browser.
+
 ---
 
 ## Data-Loader Fixes Applied
@@ -120,4 +151,4 @@ Better than NTU due to fewer classes and simpler actions. Still confirms need fo
 
 ---
 
-*behavior-lab v0.1 | E2E Verification | 2026-02-08*
+*behavior-lab v0.1 | E2E Verification | Updated: 2026-02-08*

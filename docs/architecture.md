@@ -29,7 +29,12 @@ behavior-lab/
 ├── training/          Trainer + SSL trainer
 ├── evaluation/        Classification + Cluster + LinearProbe metrics
 ├── pose/              [dlc] DLC SuperAnimal + YOLO wrappers
-├── visualization/     [viz] Skeleton, trajectory, attention plots
+├── visualization/     [viz] Skeleton (colored, multi-person), HTML report
+│   ├── colors         Body-part palette + multi-person distinction
+│   ├── skeleton       plot/animate/compare (auto body-part coloring)
+│   ├── embedding      UMAP/t-SNE scatter plots
+│   ├── analysis       Transition matrix, bout duration, ethogram
+│   └── html_report    Self-contained HTML report generator
 └── app/               [web] FastAPI + React (optional)
 ```
 
@@ -203,4 +208,31 @@ Optional extras:
 
 > [← MoC](README.md) | [Overview](overview.md) | [Model Taxonomy](model_taxonomy.md) | [Theory →](theory/)
 
-*behavior-lab v0.1 | Updated: 2026-02-07*
+## Visualization System
+
+### Color Pipeline
+
+```
+skeleton.body_parts → get_joint_colors(skeleton) → per-joint hex colors
+                    → get_limb_colors(skeleton)  → per-edge hex colors
+
+skeleton.num_persons > 1 → get_person_colors(n) → distinct person palette
+```
+
+**Body-part palette** (`BODY_PART_COLORS`): head=red, torso=blue, left_arm=green, right_arm=orange, left_leg=purple, right_leg=dark orange, tail=gray.
+
+**Multi-person**: Automatic detection when `K >= num_joints * num_persons`. Each person rendered with a distinct base color (teal, red, blue, orange).
+
+### HTML Report
+
+```python
+generate_pipeline_report(report_data, "report.html")
+```
+
+Structure: Header → Tab navigation (Overview + per-dataset) → Metric cards + embedded images (base64 PNG/GIF). Single HTML file, no external dependencies.
+
+---
+
+> [← MoC](README.md) | [Overview](overview.md) | [Model Taxonomy](model_taxonomy.md) | [Theory →](theory/)
+
+*behavior-lab v0.1 | Updated: 2026-02-08*

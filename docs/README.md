@@ -62,17 +62,19 @@ get_model('name')
 | **[Cross-Species](theory/cross_species.md)** | Canonical 5-part skeleton, 종간 전이 | core/skeleton.py |
 | **[Evaluation](theory/evaluation.md)** | NMI/ARI/Silhouette, Hungarian matching | evaluation/ |
 
-### Verification
+### Verification & Guides
 
 | Document | 핵심 내용 | 관련 |
 |----------|----------|------|
 | **[E2E Verification](e2e_verification.md)** | 실데이터 파이프라인 검증: 로더→전처리→B-SOiD→평가→시각화 | all modules |
+| **[Quick Start Guide](guides/quickstart.md)** | 설치, 데이터셋 설명, 전처리, 행동 분석, 리포트 생성 실행법 | all modules |
 
 ### Reference
 
 | Document | 내용 |
 |----------|------|
 | **[Integration Plan](INTEGRATION_PLAN.md)** | 3-repo 통합 히스토리, Phase 1-7 |
+| **[Visualization Plan](guides/260208_visualization_improvement_plan.md)** | Multi-person color + HTML report 개선 계획 (완료) |
 
 ---
 
@@ -142,4 +144,4 @@ python scripts/train.py model=stgcn training=fast_debug
 
 ---
 
-*behavior-lab v0.1 | Created: 2026-02-07*
+*behavior-lab v0.1 | Updated: 2026-02-08*

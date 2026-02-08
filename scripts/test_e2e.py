@@ -13,7 +13,6 @@ import json
 import sys
 import time
 import warnings
-from dataclasses import asdict
 from pathlib import Path
 
 import matplotlib
@@ -25,6 +24,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from behavior_lab.core.skeleton import get_skeleton
 from behavior_lab.data.loaders import get_loader
 from behavior_lab.data.preprocessing.pipeline import (
     PreprocessingPipeline, Interpolator, OutlierRemover,
@@ -35,7 +35,11 @@ from behavior_lab.evaluation import (
 )
 from behavior_lab.visualization import (
     plot_embedding, plot_transition_matrix, plot_bout_duration,
-    plot_temporal_raster,
+    plot_temporal_raster, plot_skeleton, animate_skeleton,
+    plot_skeleton_comparison, fig_to_base64,
+)
+from behavior_lab.visualization.html_report import (
+    generate_pipeline_report, image_to_base64,
 )
 
 OUT_DIR = ROOT / "outputs" / "e2e_test"
@@ -56,7 +60,7 @@ def safe_json(obj):
     return obj
 
 
-def test_calms21(report: dict) -> None:
+def test_calms21(report: dict, html_data: dict) -> None:
     """Test CalMS21 data loading, preprocessing, B-SOiD, metrics, and viz."""
     print("\n" + "=" * 60)
     print("CalMS21: Mouse Social Behavior")
@@ -93,6 +97,36 @@ def test_calms21(report: dict) -> None:
     (out / "data_summary.json").write_text(json.dumps(safe_json(data_summary), indent=2))
 
     report["calms21"] = {"data": data_summary}
+    ds_html: dict = {"data": data_summary, "figures": {}}
+
+    # --- Skeleton Visualization ---
+    print("\n  Generating skeleton visualizations...")
+    skeleton = get_skeleton("calms21")
+    sample_kp = train_seqs[0].keypoints
+
+    # Static skeleton (colored, multi-person)
+    fig_skel, _ = plot_skeleton(
+        sample_kp, skeleton=skeleton, frame=0,
+        title="CalMS21 — 2 Mice Skeleton (Frame 0)",
+        show_labels=True,
+        save_path=str(out / "sample_skeleton.png"),
+    )
+    ds_html["figures"]["skeleton_static"] = fig_to_base64(fig_skel)
+    plt.close(fig_skel)
+    print("  Saved: sample_skeleton.png")
+
+    # Animated skeleton (first 60 frames)
+    n_anim = min(60, sample_kp.shape[0])
+    anim = animate_skeleton(
+        sample_kp[:n_anim], skeleton=skeleton,
+        fps=10.0, title="CalMS21 Mice",
+        save_path=str(out / "sample_animation.gif"),
+    )
+    plt.close("all")
+    gif_path = out / "sample_animation.gif"
+    if gif_path.exists():
+        ds_html["figures"]["skeleton_gif"] = image_to_base64(gif_path)
+    print("  Saved: sample_animation.gif")
 
     # --- Preprocessing ---
     print("\n  Preprocessing pipeline...")
@@ -102,16 +136,16 @@ def test_calms21(report: dict) -> None:
         TemporalSmoother(window_size=5),
         Normalizer(center_joint=0),
     ])
-    sample_kp = train_seqs[0].keypoints.copy()
-    cleaned_kp = pipeline(sample_kp)
-    print(f"  Before: range [{sample_kp.min():.2f}, {sample_kp.max():.2f}], NaN={np.isnan(sample_kp).sum()}")
+    raw_kp = train_seqs[0].keypoints.copy()
+    cleaned_kp = pipeline(raw_kp)
+    print(f"  Before: range [{raw_kp.min():.2f}, {raw_kp.max():.2f}], NaN={np.isnan(raw_kp).sum()}")
     print(f"  After:  range [{cleaned_kp.min():.4f}, {cleaned_kp.max():.4f}], NaN={np.isnan(cleaned_kp).sum()}")
 
     # Preprocessing comparison plot
-    fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
+    fig_pre, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
     joint_idx = 0
-    axes[0].plot(sample_kp[:, joint_idx, 0], label="x", alpha=0.7)
-    axes[0].plot(sample_kp[:, joint_idx, 1], label="y", alpha=0.7)
+    axes[0].plot(raw_kp[:, joint_idx, 0], label="x", alpha=0.7)
+    axes[0].plot(raw_kp[:, joint_idx, 1], label="y", alpha=0.7)
     axes[0].set_title("Before Preprocessing")
     axes[0].legend()
     axes[1].plot(cleaned_kp[:, joint_idx, 0], label="x", alpha=0.7)
@@ -119,11 +153,23 @@ def test_calms21(report: dict) -> None:
     axes[1].set_title("After Preprocessing")
     axes[1].legend()
     axes[1].set_xlabel("Frame")
-    fig.suptitle("CalMS21: Preprocessing Comparison (Joint 0)")
-    fig.tight_layout()
-    fig.savefig(out / "preprocessing_comparison.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
+    fig_pre.suptitle("CalMS21: Preprocessing Comparison (Joint 0)")
+    fig_pre.tight_layout()
+    fig_pre.savefig(out / "preprocessing_comparison.png", dpi=150, bbox_inches="tight")
+    ds_html["figures"]["preprocessing"] = fig_to_base64(fig_pre)
+    plt.close(fig_pre)
     print("  Saved: preprocessing_comparison.png")
+
+    # Skeleton comparison (raw vs preprocessed)
+    fig_cmp, _ = plot_skeleton_comparison(
+        [raw_kp, cleaned_kp],
+        ["Raw", "Preprocessed"],
+        skeleton=skeleton, frame=0,
+        save_path=str(out / "skeleton_comparison.png"),
+    )
+    ds_html["figures"]["skeleton_comparison"] = fig_to_base64(fig_cmp)
+    plt.close(fig_cmp)
+    print("  Saved: skeleton_comparison.png")
 
     # --- B-SOiD Discovery ---
     print("\n  B-SOiD discovery (1000 samples)...")
@@ -149,16 +195,12 @@ def test_calms21(report: dict) -> None:
 
     # --- Cluster Metrics ---
     print("\n  Computing cluster metrics...")
-    # B-SOiD bins features to 10fps (bin_size = fps//10 = 3), then drops last partial bin.
-    # Also _compute_bsoid_features uses diff (T-1). Align GT labels to match.
     bin_size = max(1, 30 // 10)  # =3
     gt_trimmed = all_gt[:-1]  # diff removes 1 frame
     n_bins = len(gt_trimmed) // bin_size
     gt_binned = gt_trimmed[:n_bins * bin_size].reshape(n_bins, bin_size)
-    # Use majority vote per bin
     from scipy.stats import mode as scipy_mode
     gt_binned_labels = scipy_mode(gt_binned, axis=1, keepdims=False).mode.flatten()
-    # Trim to match B-SOiD output length
     n_bsoid = len(result.labels)
     gt_aligned = gt_binned_labels[:n_bsoid]
 
@@ -196,52 +238,63 @@ def test_calms21(report: dict) -> None:
     report["calms21"]["cluster_metrics"] = cm_dict
     report["calms21"]["behavior_metrics"] = beh_dict
     report["calms21"]["bsoid_time_sec"] = round(elapsed, 1)
+    ds_html["cluster_metrics"] = cm_dict
+    ds_html["behavior_metrics"] = beh_dict
 
     # --- Visualization ---
-    print("\n  Generating visualizations...")
+    print("\n  Generating analysis visualizations...")
 
     # Embedding plot
-    plot_embedding(
+    fig_emb = plot_embedding(
         result.embeddings, result.labels,
         title="B-SOiD Embedding (Cluster Colors)",
         save_path=str(out / "bsoid_embedding.png"),
     )
+    if fig_emb is not None:
+        ds_html["figures"]["embedding"] = fig_to_base64(fig_emb)
     plt.close("all")
     print("  Saved: bsoid_embedding.png")
 
     # Transition matrix
     if beh_metrics.transition_matrix is not None:
-        plot_transition_matrix(
+        fig_trans = plot_transition_matrix(
             beh_metrics.transition_matrix,
             title="B-SOiD Behavior Transitions",
             save_path=str(out / "bsoid_transition_matrix.png"),
         )
+        if fig_trans is not None:
+            ds_html["figures"]["transition"] = fig_to_base64(fig_trans)
         plt.close("all")
         print("  Saved: bsoid_transition_matrix.png")
 
     # Bout duration
-    plot_bout_duration(
+    fig_bout = plot_bout_duration(
         beh_metrics.bout_durations,
         title="B-SOiD Mean Bout Durations",
         save_path=str(out / "bsoid_bout_duration.png"),
     )
+    if fig_bout is not None:
+        ds_html["figures"]["bout_duration"] = fig_to_base64(fig_bout)
     plt.close("all")
     print("  Saved: bsoid_bout_duration.png")
 
     # Ethogram (first 5 sequences)
     sample_labels = result.labels[:5000]
-    plot_temporal_raster(
+    fig_eth = plot_temporal_raster(
         sample_labels, fps=10.0,
         title="B-SOiD Ethogram (First 5000 frames)",
         save_path=str(out / "bsoid_ethogram.png"),
     )
+    if fig_eth is not None:
+        ds_html["figures"]["ethogram"] = fig_to_base64(fig_eth)
     plt.close("all")
     print("  Saved: bsoid_ethogram.png")
 
+    html_data["datasets"]["calms21"] = ds_html
     print("\n  CalMS21 PASSED")
 
 
-def test_ntu(report: dict) -> None:
+def test_ntu(report: dict, html_data: dict) -> None:
     """Test NTU RGB+D demo data loading and linear probe."""
     print("\n" + "=" * 60)
     print("NTU RGB+D: Human Action Recognition (Demo)")
@@ -276,6 +329,22 @@ def test_ntu(report: dict) -> None:
     }
     (out / "data_summary.json").write_text(json.dumps(safe_json(data_summary), indent=2))
     report["ntu"] = {"data": data_summary}
+    ds_html: dict = {"data": data_summary, "figures": {}}
+
+    # --- Skeleton Visualization ---
+    print("\n  Generating skeleton visualizations...")
+    skeleton = get_skeleton("ntu")
+
+    # NTU has 2 persons: (T, 50, 3) = 2*25 joints
+    fig_skel, _ = plot_skeleton(
+        train_seqs[0].keypoints, skeleton=skeleton, frame=0,
+        title="NTU RGB+D — Skeleton (Frame 0)",
+        show_labels=True,
+        save_path=str(out / "sample_skeleton.png"),
+    )
+    ds_html["figures"]["skeleton_static"] = fig_to_base64(fig_skel)
+    plt.close(fig_skel)
+    print("  Saved: sample_skeleton.png")
 
     # --- Linear Probe ---
     print("\n  Linear probe (raw features)...")
@@ -294,23 +363,26 @@ def test_ntu(report: dict) -> None:
         "n_test": len(test_labels),
     }
     report["ntu"]["linear_probe"] = probe_dict
+    ds_html["linear_probe"] = probe_dict
 
     # Confusion matrix plot
     if probe_result.confusion is not None:
-        fig, ax = plt.subplots(figsize=(10, 8))
+        fig_cm, ax = plt.subplots(figsize=(10, 8))
         im = ax.imshow(probe_result.confusion, cmap="Blues", aspect="auto")
-        fig.colorbar(im, ax=ax)
+        fig_cm.colorbar(im, ax=ax)
         ax.set_title(f"NTU Linear Probe Confusion (Acc={probe_result.accuracy:.3f})")
         ax.set_xlabel("Predicted")
         ax.set_ylabel("True")
-        fig.savefig(out / "linear_probe_confusion.png", dpi=150, bbox_inches="tight")
-        plt.close(fig)
+        fig_cm.savefig(out / "linear_probe_confusion.png", dpi=150, bbox_inches="tight")
+        ds_html["figures"]["confusion_matrix"] = fig_to_base64(fig_cm)
+        plt.close(fig_cm)
         print("  Saved: linear_probe_confusion.png")
 
+    html_data["datasets"]["ntu"] = ds_html
     print("\n  NTU PASSED")
 
 
-def test_nwucla(report: dict) -> None:
+def test_nwucla(report: dict, html_data: dict) -> None:
     """Test NW-UCLA data loading and linear probe."""
     print("\n" + "=" * 60)
     print("NW-UCLA: Northwestern-UCLA Action Recognition")
@@ -342,6 +414,35 @@ def test_nwucla(report: dict) -> None:
     }
     (out / "data_summary.json").write_text(json.dumps(safe_json(data_summary), indent=2))
     report["nwucla"] = {"data": data_summary}
+    ds_html: dict = {"data": data_summary, "figures": {}}
+
+    # --- Skeleton Visualization ---
+    print("\n  Generating skeleton visualizations...")
+    skeleton = get_skeleton("nwucla")
+
+    fig_skel, _ = plot_skeleton(
+        train_seqs[0].keypoints, skeleton=skeleton, frame=0,
+        title="NW-UCLA — Skeleton (Frame 0)",
+        show_labels=True,
+        save_path=str(out / "sample_skeleton.png"),
+    )
+    ds_html["figures"]["skeleton_static"] = fig_to_base64(fig_skel)
+    plt.close(fig_skel)
+    print("  Saved: sample_skeleton.png")
+
+    # Animated skeleton (first 60 frames)
+    sample_kp = train_seqs[0].keypoints
+    n_anim = min(60, sample_kp.shape[0])
+    anim = animate_skeleton(
+        sample_kp[:n_anim], skeleton=skeleton,
+        fps=10.0, title="NW-UCLA Skeleton",
+        save_path=str(out / "sample_animation.gif"),
+    )
+    plt.close("all")
+    gif_path = out / "sample_animation.gif"
+    if gif_path.exists():
+        ds_html["figures"]["skeleton_gif"] = image_to_base64(gif_path)
+    print("  Saved: sample_animation.gif")
 
     # --- Linear Probe ---
     print("\n  Linear probe (raw features)...")
@@ -357,13 +458,14 @@ def test_nwucla(report: dict) -> None:
         "f1_macro": float(probe_result.f1_macro),
     }
     report["nwucla"]["linear_probe"] = probe_dict
+    ds_html["linear_probe"] = probe_dict
 
     # Confusion matrix plot
     from behavior_lab.data.loaders.nwucla import UCLA_CLASSES
     if probe_result.confusion is not None:
-        fig, ax = plt.subplots(figsize=(8, 7))
+        fig_cm, ax = plt.subplots(figsize=(8, 7))
         im = ax.imshow(probe_result.confusion, cmap="Blues", aspect="auto")
-        fig.colorbar(im, ax=ax)
+        fig_cm.colorbar(im, ax=ax)
         ax.set_xticks(range(n_classes))
         ax.set_yticks(range(n_classes))
         ax.set_xticklabels(UCLA_CLASSES[:n_classes], rotation=45, ha="right", fontsize=7)
@@ -371,10 +473,12 @@ def test_nwucla(report: dict) -> None:
         ax.set_title(f"NW-UCLA Linear Probe (Acc={probe_result.accuracy:.3f})")
         ax.set_xlabel("Predicted")
         ax.set_ylabel("True")
-        fig.savefig(out / "linear_probe_confusion.png", dpi=150, bbox_inches="tight")
-        plt.close(fig)
+        fig_cm.savefig(out / "linear_probe_confusion.png", dpi=150, bbox_inches="tight")
+        ds_html["figures"]["confusion_matrix"] = fig_to_base64(fig_cm)
+        plt.close(fig_cm)
         print("  Saved: linear_probe_confusion.png")
 
+    html_data["datasets"]["nwucla"] = ds_html
     print("\n  NW-UCLA PASSED")
 
 
@@ -405,6 +509,10 @@ def generate_report(report: dict) -> None:
             f"- Test: **{c['data']['n_test']}** sequences",
             f"- Shape: `({', '.join(map(str, c['data']['shape']))})`",
             "",
+            "### Skeleton Visualization",
+            "",
+            "![Skeleton](calms21/sample_skeleton.png)",
+            "",
             "### B-SOiD Discovery",
             f"- Time: {c.get('bsoid_time_sec', 'N/A')}s",
             "",
@@ -432,6 +540,7 @@ def generate_report(report: dict) -> None:
             "### Visualizations",
             "",
             "![Preprocessing](calms21/preprocessing_comparison.png)",
+            "![Comparison](calms21/skeleton_comparison.png)",
             "![Embedding](calms21/bsoid_embedding.png)",
             "![Transitions](calms21/bsoid_transition_matrix.png)",
             "![Bout Duration](calms21/bsoid_bout_duration.png)",
@@ -448,6 +557,10 @@ def generate_report(report: dict) -> None:
             f"- Train: **{n['data']['n_train']}**, Test: **{n['data']['n_test']}**",
             f"- Shape: `({', '.join(map(str, n['data']['shape']))})`",
             f"- Classes: {n['data']['n_classes']}",
+            "",
+            "### Skeleton",
+            "",
+            "![Skeleton](ntu/sample_skeleton.png)",
             "",
         ]
         if "linear_probe" in n:
@@ -469,6 +582,10 @@ def generate_report(report: dict) -> None:
             "",
             f"- Train: **{u['data']['n_train']}**, Test: **{u['data']['n_test']}**",
             f"- Shape: `({', '.join(map(str, u['data']['shape']))})`",
+            "",
+            "### Skeleton",
+            "",
+            "![Skeleton](nwucla/sample_skeleton.png)",
             "",
         ]
         if "linear_probe" in u:
@@ -496,11 +613,24 @@ def main():
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     report: dict = {}
+    html_data: dict = {
+        "title": "behavior-lab E2E Verification Report",
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "datasets": {},
+    }
 
-    test_calms21(report)
-    test_ntu(report)
-    test_nwucla(report)
+    test_calms21(report, html_data)
+    test_ntu(report, html_data)
+    test_nwucla(report, html_data)
     generate_report(report)
+
+    # HTML report
+    html_path = generate_pipeline_report(
+        html_data,
+        OUT_DIR / "report.html",
+        title="behavior-lab E2E Verification Report",
+    )
+    print(f"  Saved: {html_path}")
 
     print("\n" + "=" * 60)
     print("ALL TESTS PASSED")
