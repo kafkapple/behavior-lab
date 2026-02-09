@@ -51,6 +51,7 @@ Previous wrapper had `(400, 1, 72)` — completely wrong. Fixed to match checkpo
 |---------|-------|--------|-----------------|
 | CalMS21 | (128K, 7, 2) | 4-class GT | 2D mouse pair, 30fps |
 | SUBTLE fly | (12K, 9, 3) | None | 3D fly, 20fps |
+| Shank3KO | (50K, 16, 3) | KO/WT genotype | 3D mouse, 30fps, 5 recordings |
 | MABe22 | (20K, 3, 12, 2) | None | 2D 3-mouse, 30fps |
 
 ## 4. Quantitative Results
@@ -58,20 +59,24 @@ Previous wrapper had `(400, 1, 72)` — completely wrong. Fixed to match checkpo
 ```
 Model            Dataset      Clusters     Silh      ARI      NMI     Time
 ────────────────────────────────────────────────────────────────────────────
-Clustering       CalMS21             8   -0.017    0.003    0.106   118.6s
-B-SOiD           CalMS21             3    0.354        —        —   162.9s
-MoSeq (HMM)      CalMS21            15    0.084        —        —    13.2s
-SUBTLE           CalMS21            76        —        —        —    52.0s
+Clustering       CalMS21             8   -0.025    0.003    0.106   126.5s
+B-SOiD           CalMS21             3    0.484        —        —   176.1s
+MoSeq (HMM)      CalMS21            15    0.161        —        —    14.5s
+SUBTLE           CalMS21            75        —        —        —    56.9s
 
-Clustering       SUBTLE              8   -0.019        —        —     6.7s
-MoSeq (HMM)      SUBTLE             15    0.041        —        —     4.2s
-SUBTLE           SUBTLE             46        —        —        —    69.0s
+Clustering       SUBTLE              8   -0.021        —        —     6.6s
+MoSeq (HMM)      SUBTLE             15   -0.045        —        —     7.5s
+SUBTLE           SUBTLE             46        —        —        —    68.2s
 
-Clustering       MABe22              8    0.311        —        —    13.0s
-B-SOiD           MABe22             34    0.204        —        —    69.5s
-MoSeq (HMM)      MABe22             15    0.231        —        —    10.4s
-SUBTLE           MABe22            117        —        —        —   211.3s
-hBehaveMAE       MABe22              8    0.256        —        —    11.5s
+Clustering       Shank3KO            8    0.070    0.071    0.079    29.5s
+MoSeq (HMM)      Shank3KO           15    0.124        —        —     8.9s
+SUBTLE           Shank3KO           69        —        —        —   134.4s
+
+Clustering       MABe22              8    0.319        —        —    13.4s
+B-SOiD           MABe22             34    0.204        —        —    71.6s
+MoSeq (HMM)      MABe22             15    0.329        —        —    10.3s
+SUBTLE           MABe22            121        —        —        —   203.1s
+hBehaveMAE       MABe22              8    0.256        —        —    12.7s
 ```
 
 ## 5. Visualization Analysis
@@ -91,12 +96,18 @@ hBehaveMAE       MABe22              8    0.256        —        —    11.5s
 - **MoSeq HMM**: 15 states, frequent syllable transitions. Diagonal block structure in transitions.
 - **SUBTLE**: Native dataset, optimal performance. 46 subclusters well-separated. CWT captures fast wing-beat/grooming frequencies.
 
+### Shank3KO (3 models — new)
+
+- **Clustering**: GT-colored (KO=blue/WT=orange) shows complete overlap in UMAP (ARI 0.071, NMI 0.079). Genotype does not cleanly separate at behavior level — expected for subtle phenotypic differences. Transition matrix shows cluster 0 and 7 as dominant hubs.
+- **MoSeq HMM**: Sil 0.124 (best on this dataset). Large segments in ethogram (green state dominant ~frames 900-1700). Diagonal block structure reveals syllable groupings.
+- **SUBTLE**: 69 subclusters, well-separated islands in UMAP. 3D 16-joint mouse skeleton provides rich CWT spectrograms for fine-grained behavior decomposition.
+
 ### MABe22 (5 models — including BehaveMAE)
 
-- **Clustering**: Best Silhouette (0.311). 36-joint × 2D = 72 features provide rich signal. Cluster 0 acts as hub in transitions.
+- **Clustering**: Sil 0.319. 36-joint × 2D = 72 features provide rich signal. Cluster 0 acts as hub in transitions.
 - **B-SOiD**: 34 clusters, scattered distribution. HDBSCAN finds many small density peaks.
-- **MoSeq HMM**: State 0 dominates early frames, diverse syllables emerge later. Temporal grouping visible.
-- **SUBTLE**: 117 subclusters — most fine-grained. CWT extracts spectral info from all 72 channels.
+- **MoSeq HMM**: Sil 0.329 (best on MABe22). State 0 dominates early frames, diverse syllables emerge later.
+- **SUBTLE**: 121 subclusters — most fine-grained. CWT extracts spectral info from all 72 channels.
 - **hBehaveMAE**: 150 windows × 256D → 8 clusters. Sparse UMAP but meaningful transition structure (cluster 0↔3, 4↔7 bidirectional). Hierarchical attention captures behavioral sequence structure.
 
 ## 6. Model Characteristics Summary
