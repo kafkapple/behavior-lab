@@ -536,19 +536,26 @@ def animate_skeleton(
                 end = start + jpn
                 pkp = kp[start:end]
 
-                if is_3d:
-                    ax.scatter(pkp[:, 0], pkp[:, 1], pkp[:, 2],
-                               c=person_jc[p], s=30, zorder=5,
-                               edgecolors="white", linewidths=0.3)
-                else:
-                    ax.scatter(pkp[:, 0], pkp[:, 1],
-                               c=person_jc[p], s=30, zorder=5,
-                               edgecolors="white", linewidths=0.3)
+                # Skip zero-valued joints (absent person or padding)
+                nonzero = np.any(pkp != 0, axis=-1)  # (jpn,)
+                valid_idx = np.where(nonzero)[0]
+
+                if len(valid_idx) > 0:
+                    vpkp = pkp[valid_idx]
+                    vjc = [person_jc[p][vi] for vi in valid_idx] if person_jc[p] is not None else None
+                    if is_3d:
+                        ax.scatter(vpkp[:, 0], vpkp[:, 1], vpkp[:, 2],
+                                   c=vjc, s=30, zorder=5,
+                                   edgecolors="white", linewidths=0.3)
+                    else:
+                        ax.scatter(vpkp[:, 0], vpkp[:, 1],
+                                   c=vjc, s=30, zorder=5,
+                                   edgecolors="white", linewidths=0.3)
 
                 if skeleton is not None:
                     plc = person_lc[p]
                     for ei, (i, j) in enumerate(skeleton.edges):
-                        if i < jpn and j < jpn:
+                        if i < jpn and j < jpn and nonzero[i] and nonzero[j]:
                             ec = plc[ei] if plc and ei < len(plc) else person_base[p]
                             if is_3d:
                                 ax.plot([pkp[i, 0], pkp[j, 0]],
@@ -560,24 +567,25 @@ def animate_skeleton(
                                         [pkp[i, 1], pkp[j, 1]],
                                         linewidth=1.5, color=ec, alpha=0.8)
         else:
-            if is_3d:
-                if jc is not None:
-                    ax.scatter(kp[:, 0], kp[:, 1], kp[:, 2],
-                               c=jc[:K], s=30, zorder=5,
+            # Skip zero-valued joints (absent or padding)
+            nonzero = np.any(kp[:K] != 0, axis=-1)  # (K,)
+            valid_idx = np.where(nonzero)[0]
+
+            if len(valid_idx) > 0:
+                vkp = kp[valid_idx]
+                vjc = [jc[vi] for vi in valid_idx] if jc is not None else None
+                if is_3d:
+                    ax.scatter(vkp[:, 0], vkp[:, 1], vkp[:, 2],
+                               c=vjc, s=30, zorder=5,
                                edgecolors="white", linewidths=0.3)
                 else:
-                    ax.scatter(kp[:, 0], kp[:, 1], kp[:, 2], s=30, zorder=5)
-            else:
-                if jc is not None:
-                    ax.scatter(kp[:, 0], kp[:, 1],
-                               c=jc[:K], s=30, zorder=5,
+                    ax.scatter(vkp[:, 0], vkp[:, 1],
+                               c=vjc, s=30, zorder=5,
                                edgecolors="white", linewidths=0.3)
-                else:
-                    ax.scatter(kp[:, 0], kp[:, 1], s=30, zorder=5)
 
             if skeleton is not None:
                 for ei, (i, j) in enumerate(skeleton.edges):
-                    if i < K and j < K:
+                    if i < K and j < K and nonzero[i] and nonzero[j]:
                         ec = lc[ei] if lc and ei < len(lc) else "gray"
                         if is_3d:
                             ax.plot([kp[i, 0], kp[j, 0]],

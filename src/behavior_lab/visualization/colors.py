@@ -30,7 +30,7 @@ BODY_PART_COLORS: dict[str, str] = {
     # Animal sides
     "left_side": "#2ECC71",
     "right_side": "#F39C12",
-    "tail": "#95A5A6",
+    "tail": "#D4AC0D",
     # Quadruped legs
     "left_front_leg": "#2ECC71",
     "right_front_leg": "#F39C12",
@@ -56,6 +56,16 @@ PERSON_COLORS: list[str] = [
     "#9B59B6",  # Purple
     "#2ECC71",  # Green
 ]
+
+
+def hex_to_bgr(hex_color: str) -> tuple[int, int, int]:
+    """Convert hex color string to BGR tuple for OpenCV.
+
+    '#E74C3C' -> (60, 76, 231)
+    """
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return (b, g, r)
 
 
 def _joint_to_part(skeleton: SkeletonDefinition) -> dict[int, str]:

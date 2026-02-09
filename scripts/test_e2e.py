@@ -52,12 +52,12 @@ OUT_DIR = ROOT / "outputs" / "e2e_test"
 # =============================================================================
 VIZ_CONFIG = {
     # GIF settings
-    "gif_n_frames": 240,       # Number of frames per GIF (default 240 @ 15fps = 16s)
+    "gif_n_frames": 480,       # Number of frames per GIF (480 @ 15fps = 32s)
     "gif_fps_playback": 15.0,  # Playback speed in fps
     "gif_fps_record": 30.0,    # Original recording fps (for per-class time calc)
 
     # Per-class / per-cluster GIF settings
-    "per_class_n_frames": 240,  # Frames per class/cluster GIF (2x previous default)
+    "per_class_n_frames": 480,  # Frames per class/cluster GIF (480 @ 15fps = 32s)
     "per_class_max": 8,         # Maximum number of classes/clusters to animate
 
     # Outlier clipping
@@ -148,6 +148,9 @@ def generate_per_class_animations(
         # Strip zero-padding and zero-persons for clean animations
         kp = strip_zero_frames(seq.keypoints)
         kp = strip_zero_persons(kp, skeleton)
+        # Outlier clipping for 3D data (consistent with cluster GIFs)
+        if kp.shape[-1] >= 3:
+            kp = clip_outlier_joints(kp, per_joint=True, iqr_factor=3.0)
         kp = kp[:n_frames]
         try:
             anim = animate_skeleton(
