@@ -1,0 +1,3 @@
+[submodule "external/BehaveMAE"]
+	path = external/BehaveMAE
+	url = https://github.com/amathislab/BehaveMAE.git

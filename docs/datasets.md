@@ -55,7 +55,7 @@
 | Species | Human |
 | Subjects | 1-2 persons per scene |
 | Joints | 25 per person (50 max) |
-| Dimensions | 3D (depth sensor) |
+| Dimensions | 3D (Y-up, Kinect v2 depth sensor) |
 | Classes | 60 action categories |
 | Format | NPZ (pre-aligned) |
 | Sequences | 500 demo subset |
@@ -94,8 +94,10 @@
 | 12-15 | left_hip/knee/ankle/foot | left_leg |
 | 16-19 | right_hip/knee/ankle/foot | right_leg |
 | 20 | spine (shoulder center) | torso |
-| 21-22 | left_thumb/tip | left_arm |
-| 23-24 | right_thumb/tip | right_arm |
+| 21 | left_hand_tip (HandTipLeft) | left_arm |
+| 22 | left_thumb (ThumbLeft) | left_arm |
+| 23 | right_hand_tip (HandTipRight) | right_arm |
+| 24 | right_thumb (ThumbRight) | right_arm |
 
 #### Analysis Model
 - **Linear Probe** (Supervised Baseline): Mean-pooled keypoints → LogisticRegression
@@ -109,7 +111,7 @@
 | Species | Human |
 | Subjects | 1 person |
 | Joints | 20 (Kinect v1) |
-| Dimensions | 3D |
+| Dimensions | 3D (Y-up, Kinect v1) |
 | Classes | 10 action categories |
 | Format | NPY |
 | Sequences | ~1.0K train / ~464 test |
@@ -145,26 +147,76 @@
 |-------|-------|
 | Species | Mouse |
 | Joints | 9 |
-| Dimensions | 3D |
+| Dimensions | 3D (Z-up) |
 | Classes | 4: walking, grooming, rearing, standing |
-| Format | CSV / NPY |
+| Format | CSV (27 cols = 9 joints × 3D) |
+| FPS | 20 Hz |
 | Skeleton Name | `subtle`, `subtle_mouse` |
 | Reference | Kwon et al. (2022), bioRxiv |
 | Source | [GitHub](https://github.com/jeakwon/subtle) |
 
 #### Joint Names
 
+Column order from `kinematics.py` `avatar_configs['nodes']`:
+
+| # | Name (code) | Original (kinematics.py) | Body Part |
+|---|-------------|--------------------------|-----------|
+| 0 | nose | nose | head |
+| 1 | neck | neck | head |
+| 2 | tail_base | anus | body |
+| 3 | mid_back | chest | body |
+| 4 | right_hindpaw | rfoot | right_back_leg |
+| 5 | left_hindpaw | lfoot | left_back_leg |
+| 6 | right_forepaw | rhand | right_front_leg |
+| 7 | left_forepaw | lhand | left_front_leg |
+| 8 | tail_tip | tip | tail |
+
+#### Edge Topology (from `kinematics.py` `avatar_configs['edges']`)
+
+```
+nose→neck→mid_back(chest)→tail_base(anus)→tail_tip
+                   ├─left_forepaw
+                   └─right_forepaw
+          tail_base├─left_hindpaw
+                   └─right_hindpaw
+```
+
+---
+
+### MABe22 — Mouse Triplet Social Behavior (2D)
+
+| Field | Value |
+|-------|-------|
+| Species | Mouse |
+| Subjects | 3 mice per scene (triplet) |
+| Joints | 12 per mouse (36 total) |
+| Dimensions | 2D (top-view) |
+| Data Shape | (N, T, 36, 2) where 36 = 3 mice × 12 joints |
+| Format | NPY |
+| FPS | 30 Hz |
+| Skeleton Name | `mabe22`, `mabe22_mouse`, `mabe` |
+| Reference | Sun et al. (2023), ICML Vol. 202, pp. 32936-32990 |
+| Download | [Caltech Data](https://data.caltech.edu/records/s0vdx-0k302) |
+
+#### Joint Names (12 per mouse)
+
 | # | Name | Body Part |
 |---|------|-----------|
 | 0 | nose | head |
-| 1 | head | head |
-| 2 | neck | head |
-| 3 | body_center | body |
-| 4 | hip_left | body |
-| 5 | hip_right | body |
-| 6 | tail_base | tail |
-| 7 | tail_mid | tail |
-| 8 | tail_tip | tail |
+| 1 | left_ear | head |
+| 2 | right_ear | head |
+| 3 | neck | head |
+| 4 | left_forepaw | front_paws |
+| 5 | right_forepaw | front_paws |
+| 6 | center_back | body |
+| 7 | left_hindpaw | hind_paws |
+| 8 | right_hindpaw | hind_paws |
+| 9 | tail_base | tail |
+| 10 | tail_middle | tail |
+| 11 | tail_tip | tail |
+
+#### Analysis Model
+- **BehaveMAE** (Hierarchical MAE): 3-level moveme/action/activity discovery
 
 ---
 
@@ -174,7 +226,7 @@
 |-------|-------|
 | Species | Rat (Rattus norvegicus) |
 | Joints | 20 |
-| Dimensions | 3D |
+| Dimensions | 3D (Z-up) |
 | Classes | Unlabeled (discovery target) |
 | Format | MAT / HDF5 / NPY |
 | FPS | 120 Hz |
@@ -202,10 +254,10 @@
 |-------|-------|
 | Species | Mouse (Shank3 knockout) |
 | Joints | 16 |
-| Dimensions | 3D |
+| Dimensions | 3D (Z-up) |
 | Classes | 11 movement types |
 | Format | MAT / NPY |
-| FPS | 60 Hz |
+| FPS | 30 Hz |
 | Skeleton Name | `shank3ko`, `shank3ko_mouse` |
 | Reference | Huang et al. (2021), Nature Communications |
 | Source | [Zenodo](https://doi.org/10.5281/zenodo.4629544) |
@@ -226,7 +278,74 @@
 | 9 | left_turning |
 | 10 | walking |
 
-**Note**: Raw Zenodo data is video + MATLAB. 3D keypoints may need reconstruction preprocessing.
+#### Joint Names (from raw .mat `Body_name` field)
+
+| # | Name | Body Part |
+|---|------|-----------|
+| 0 | nose | head |
+| 1 | left_ear | head |
+| 2 | right_ear | head |
+| 3 | neck | head |
+| 4-5 | left/right_front_limb | front_leg |
+| 6-7 | left/right_hind_limb | back_leg |
+| 8-9 | left/right_front_claw | front_leg |
+| 10-11 | left/right_hind_claw | back_leg |
+| 12 | back | body |
+| 13 | root_tail | tail |
+| 14 | mid_tail | tail |
+| 15 | tip_tail | tail |
+
+**Note**: Raw Zenodo data is MATLAB (.mat). `Fs=30` Hz confirmed from raw data field.
+
+---
+
+## Coordinate Systems & Preprocessing
+
+### Coordinate Conventions
+
+| Dataset | Up Axis | System | Unit |
+|---------|---------|--------|------|
+| NTU RGB+D | Y-up | Kinect v2 (depth sensor) | meters |
+| NW-UCLA | Y-up | Kinect v1 (depth sensor) | meters |
+| CalMS21 | N/A (2D) | DLC top-view | pixels |
+| MABe22 | N/A (2D) | DLC top-view | pixels |
+| SUBTLE | Z-up | 3D motion capture | mm |
+| Shank3KO | Z-up | 3D SLEAP tracking | mm |
+| Rat7M | Z-up | Marker-based mocap | mm |
+
+Visualization converts all 3D data to matplotlib's Z-up convention
+(`_to_viz_coords` in `visualization/skeleton.py`).
+
+### Outlier Clipping Strategy
+
+Raw keypoint tracking data often contains outliers from:
+- Occlusion-related jumps (e.g., Shank3KO `tip_tail` spikes to Z=-2476mm)
+- Marker swap events
+- Detection failures
+
+**Two modes** (`clip_outlier_joints` in `visualization/skeleton.py`):
+
+| Mode | Method | When to Use |
+|------|--------|-------------|
+| **Global percentile** | Clip all coords to [p, 100-p] range | 2D data, uniform distributions |
+| **Per-joint IQR** | Tukey's fences per joint (Q1-k×IQR, Q3+k×IQR) | 3D data with per-joint tracking errors |
+
+**Literature basis**:
+- **Tukey (1977)**: k=1.5 for "outlier", k=3.0 for "far out" fences
+- **DeepLabCut** (Mathis et al., 2018): Median filtering + likelihood thresholding
+- **SLEAP** (Pereira et al., 2022): Confidence-based NaN replacement
+- **Our default**: k=3.0 (conservative, preserves genuine behavioral extremes)
+
+**Configuration** (in `scripts/test_e2e.py` `VIZ_CONFIG`):
+```python
+VIZ_CONFIG = {
+    "clip_per_joint": True,     # Per-joint IQR mode
+    "clip_iqr_factor": 3.0,    # Tukey's "far out" fence
+    "clip_percentile": 1.0,    # Global mode fallback
+    "gif_n_frames": 240,       # 2x previous default (120)
+    "per_class_n_frames": 240,  # Per-class/cluster GIF length
+}
+```
 
 ---
 
@@ -265,4 +384,4 @@
 
 ---
 
-*behavior-lab v0.1 | Updated: 2026-02-08*
+*behavior-lab v0.1 | Updated: 2026-02-09*

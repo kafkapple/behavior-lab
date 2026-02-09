@@ -40,6 +40,9 @@ BODY_PART_COLORS: dict[str, str] = {
     "front_right": "#F39C12",
     "hind_left": "#9B59B6",
     "hind_right": "#E67E22",
+    # Paws (MABe22-style naming)
+    "front_paws": "#1ABC9C",
+    "hind_paws": "#8E44AD",
 }
 
 _FALLBACK_COLOR = "#7F8C8D"

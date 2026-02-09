@@ -13,11 +13,112 @@ from .colors import (
 )
 
 
-def _to_viz_coords(kp: np.ndarray) -> np.ndarray:
-    """Convert Y-up data coords to Z-up matplotlib coords: (x,y,z) → (x,z,y)."""
+def _to_viz_coords(kp: np.ndarray, coord_up: str = "y") -> np.ndarray:
+    """Convert data coords to matplotlib 3D coords (Z-up display).
+
+    Args:
+        kp: keypoint array with last dim >= 3
+        coord_up: which axis is "up" in the source data.
+            "y" → Y-up (NTU, NW-UCLA, Shank3KO): swap (x,y,z) → (x,z,y)
+            "z" → Z-up (SUBTLE): no swap needed, already matplotlib convention
+    """
     if kp.shape[-1] < 3:
         return kp
+    if coord_up == "z":
+        return kp  # Already Z-up, matplotlib native
+    # Default Y-up → Z-up: (x,y,z) → (x,z,y)
     return kp[..., [0, 2, 1]]
+
+
+def _infer_coord_up(skeleton) -> str:
+    """Infer which axis is 'up' from skeleton metadata.
+
+    Known Z-up datasets: SUBTLE (motion capture), Shank3KO (3D tracking).
+    Default: Y-up (Kinect, DLC, most 3D pose systems).
+    """
+    if skeleton is None:
+        return "y"
+    name = getattr(skeleton, "name", "").lower()
+    # Z-up datasets: SUBTLE, Shank3KO, Rat7M (3D animal tracking)
+    if any(tag in name for tag in ("subtle", "shank3ko", "rat7m")):
+        return "z"
+    return "y"
+
+
+def _set_uniform_3d_axes(ax, mins: np.ndarray, maxs: np.ndarray):
+    """Set uniform aspect ratio for 3D axes so XYZ scales match."""
+    ranges = maxs - mins
+    max_range = ranges.max()
+    centers = (mins + maxs) / 2
+    ax.set_xlim(centers[0] - max_range / 2, centers[0] + max_range / 2)
+    ax.set_ylim(centers[1] - max_range / 2, centers[1] + max_range / 2)
+    ax.set_zlim(centers[2] - max_range / 2, centers[2] + max_range / 2)
+    # set_box_aspect for true equal aspect (matplotlib 3.3+)
+    try:
+        ax.set_box_aspect([1, 1, 1])
+    except AttributeError:
+        pass
+
+
+def clip_outlier_joints(
+    keypoints: np.ndarray,
+    percentile: float = 1.0,
+    per_joint: bool = False,
+    iqr_factor: float = 3.0,
+) -> np.ndarray:
+    """Clip outlier joint positions using percentile or per-joint IQR.
+
+    Two modes:
+    - Global (default): clip all coordinates to [p, 100-p] percentile range.
+      Simple but misses single-joint outliers (e.g., Shank3KO tip_tail at Z=-2476).
+    - Per-joint IQR: clip each joint independently using Tukey's fences
+      (Q1 - factor*IQR, Q3 + factor*IQR). Catches per-joint tracking errors.
+
+    Literature basis:
+    - Tukey (1977) fences: 1.5*IQR = "outlier", 3*IQR = "far out"
+    - DLC (Mathis et al., 2018): median filtering + likelihood thresholding
+    - SLEAP (Pereira et al., 2022): confidence-based NaN replacement
+    - We use 3*IQR (conservative) to preserve genuine behavioral extremes
+      while catching tracking failures (e.g., -2476mm tip_tail spikes).
+
+    Args:
+        keypoints: (T, K, D) array
+        percentile: Lower/upper percentile for global mode (default 1st/99th)
+        per_joint: If True, use per-joint IQR clipping instead of global
+        iqr_factor: IQR multiplier for per-joint mode (default 3.0 = "far out")
+
+    Returns:
+        Clipped (T, K, D) array
+    """
+    T, K, D = keypoints.shape
+    kp = keypoints.copy()
+
+    if per_joint:
+        # Per-joint IQR clipping (Tukey's fences)
+        for j in range(K):
+            for d in range(D):
+                vals = kp[:, j, d]
+                nonzero = vals[vals != 0]
+                if len(nonzero) < 10:
+                    continue
+                q1, q3 = np.percentile(nonzero, [25, 75])
+                iqr = q3 - q1
+                lo = q1 - iqr_factor * iqr
+                hi = q3 + iqr_factor * iqr
+                mask = vals != 0
+                kp[:, j, d] = np.where(mask, np.clip(vals, lo, hi), vals)
+    else:
+        # Global percentile clipping
+        for d in range(D):
+            vals = kp[:, :, d]
+            nonzero = vals[vals != 0]
+            if len(nonzero) == 0:
+                continue
+            lo = np.percentile(nonzero, percentile)
+            hi = np.percentile(nonzero, 100 - percentile)
+            mask = vals != 0
+            kp[:, :, d] = np.where(mask, np.clip(vals, lo, hi), vals)
+    return kp
 
 
 def strip_zero_frames(keypoints: np.ndarray) -> np.ndarray:
@@ -135,9 +236,10 @@ def plot_skeleton(
     K, D = kp.shape
     is_3d = D >= 3
 
-    # Convert Y-up data to Z-up matplotlib coords for 3D
+    # Detect coordinate system and convert to matplotlib Z-up
+    coord_up = _infer_coord_up(skeleton)
     if is_3d:
-        kp = _to_viz_coords(kp)
+        kp = _to_viz_coords(kp, coord_up)
 
     if ax is None:
         fig = plt.figure(figsize=figsize)
@@ -281,11 +383,23 @@ def plot_skeleton(
                             f" {labels[li]}", fontsize=6, alpha=0.7)
 
     ax.set_title(title or f"Frame {frame}")
-    ax.set_aspect("equal")
     if is_3d:
-        ax.set_xlabel("X")
-        ax.set_ylabel("Z")
-        ax.set_zlabel("Y (up)")
+        # Uniform 3D axis scaling
+        kp_valid = kp[~np.all(kp == 0, axis=-1)] if kp.ndim == 2 else kp
+        if len(kp_valid) > 0:
+            mins_3d = kp_valid.min(axis=0)
+            maxs_3d = kp_valid.max(axis=0)
+            _set_uniform_3d_axes(ax, mins_3d, maxs_3d)
+        if coord_up == "z":
+            ax.set_xlabel("X")
+            ax.set_ylabel("Y")
+            ax.set_zlabel("Z (up)")
+        else:
+            ax.set_xlabel("X")
+            ax.set_ylabel("Z")
+            ax.set_zlabel("Y (up)")
+    else:
+        ax.set_aspect("equal")
 
     # Joint name legend (abbreviation: full name)
     if show_labels and skeleton is not None:
@@ -387,9 +501,12 @@ def animate_skeleton(
     else:
         fig, ax = plt.subplots(1, 1, figsize=figsize)
 
+    # Detect coordinate system
+    coord_up = _infer_coord_up(skeleton)
+
     # Compute bounds (using viz coords for 3D), excluding zero-valued joints
     margin = 0.1
-    bounds_kp = _to_viz_coords(keypoints) if is_3d else keypoints
+    bounds_kp = _to_viz_coords(keypoints, coord_up) if is_3d else keypoints
     # Mask out zero joints to avoid bbox distortion from padding
     nonzero_mask = np.any(bounds_kp != 0, axis=-1)  # (T, K) boolean
     if np.any(nonzero_mask):
@@ -409,9 +526,9 @@ def animate_skeleton(
         ax.clear()
         kp = keypoints[frame]
 
-        # Convert Y-up data to Z-up matplotlib coords for 3D
+        # Convert data coords to matplotlib Z-up display
         if is_3d:
-            kp = _to_viz_coords(kp)
+            kp = _to_viz_coords(kp, coord_up)
 
         if multi:
             for p in range(num_persons):
@@ -482,19 +599,21 @@ def animate_skeleton(
                                 f" {labels[li]}", fontsize=5, alpha=0.6)
 
         if is_3d:
-            ax.set_xlim(mins[0], maxs[0])
-            ax.set_ylim(mins[1], maxs[1])
-            ax.set_zlim(mins[2], maxs[2])
+            _set_uniform_3d_axes(ax, mins, maxs)
+            if coord_up == "z":
+                ax.set_xlabel("X")
+                ax.set_ylabel("Y")
+                ax.set_zlabel("Z (up)")
+            else:
+                ax.set_xlabel("X")
+                ax.set_ylabel("Z")
+                ax.set_zlabel("Y (up)")
         else:
             ax.set_xlim(mins[0], maxs[0])
             ax.set_ylim(mins[1], maxs[1])
+            ax.set_aspect("equal")
 
         ax.set_title(f"{title} — Frame {frame}/{T}")
-        ax.set_aspect("equal")
-        if is_3d:
-            ax.set_xlabel("X")
-            ax.set_ylabel("Z")
-            ax.set_zlabel("Y (up)")
 
     anim = FuncAnimation(fig, update, frames=T, interval=1000 / fps, blit=False)
 

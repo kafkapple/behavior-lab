@@ -311,13 +311,26 @@ def generate_pipeline_report(
     overview_cards = []
     for ds_name, ds in datasets.items():
         data = ds.get("data", {})
-        shape = data.get("shape", "N/A")
-        n_train = data.get("n_train", "?")
-        n_test = data.get("n_test", "?")
+        shape = data.get("shape", data.get("shape_per_frame", "N/A"))
+        # Flexible data size display
+        n_train = data.get("n_train")
+        n_test = data.get("n_test")
+        n_seqs = data.get("n_sequences")
+        total_frames = data.get("total_frames")
+
+        if n_train is not None:
+            size_line = f"Train: <strong>{n_train}</strong> | Test: <strong>{n_test or '?'}</strong>"
+        elif n_seqs is not None:
+            size_line = f"Sequences: <strong>{n_seqs}</strong>"
+            if total_frames:
+                size_line += f" | Frames: <strong>{total_frames:,}</strong>"
+        else:
+            size_line = "N/A"
+
         overview_cards.append(
             f"""<div class="stat-card">
   <h4>{_escape(ds_name.upper())}</h4>
-  <p>Train: <strong>{n_train}</strong> | Test: <strong>{n_test}</strong></p>
+  <p>{size_line}</p>
   <p>Shape: <code>{_escape(str(shape))}</code></p>
 </div>"""
         )

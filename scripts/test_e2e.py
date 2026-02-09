@@ -39,13 +39,35 @@ from behavior_lab.visualization import (
     plot_skeleton_comparison, fig_to_base64,
     plot_behavior_dendrogram,
 )
-from behavior_lab.visualization.skeleton import strip_zero_frames, strip_zero_persons
+from behavior_lab.visualization.skeleton import strip_zero_frames, strip_zero_persons, clip_outlier_joints
 from behavior_lab.visualization.colors import get_joint_labels, get_joint_full_names
 from behavior_lab.visualization.html_report import (
     generate_pipeline_report, image_to_base64,
 )
 
 OUT_DIR = ROOT / "outputs" / "e2e_test"
+
+# =============================================================================
+# Visualization Config — adjust GIF duration, outlier clipping, etc.
+# =============================================================================
+VIZ_CONFIG = {
+    # GIF settings
+    "gif_n_frames": 240,       # Number of frames per GIF (default 240 @ 15fps = 16s)
+    "gif_fps_playback": 15.0,  # Playback speed in fps
+    "gif_fps_record": 30.0,    # Original recording fps (for per-class time calc)
+
+    # Per-class / per-cluster GIF settings
+    "per_class_n_frames": 240,  # Frames per class/cluster GIF (2x previous default)
+    "per_class_max": 8,         # Maximum number of classes/clusters to animate
+
+    # Outlier clipping
+    "clip_per_joint": True,     # Per-joint IQR clipping (recommended for 3D tracking)
+    "clip_iqr_factor": 3.0,    # Tukey's "far out" fence (3.0 = conservative)
+    "clip_percentile": 1.0,    # Global mode fallback percentile
+
+    # Axis scaling
+    "axis_padding": 0.1,       # Extra padding around skeleton (fraction of range)
+}
 
 
 def _build_joint_info(skeleton):
@@ -109,8 +131,16 @@ def generate_per_class_animations(
     gif_items = []
     for label_idx in sorted_classes:
         seqs = by_class[label_idx]
-        # Pick middle sequence
-        seq = seqs[len(seqs) // 2]
+        # Pick the most dynamic sequence (highest keypoint variance)
+        def _motion_var(s):
+            kp = s.keypoints
+            flat = kp.reshape(kp.shape[0], -1)
+            nonzero = np.any(flat != 0, axis=1)
+            if nonzero.sum() < 2:
+                return 0.0
+            return float(kp[nonzero].var())
+        seqs_sorted = sorted(seqs, key=_motion_var, reverse=True)
+        seq = seqs_sorted[0]
         name = class_names[label_idx] if label_idx < len(class_names) else f"Class {label_idx}"
         safe_name = name.replace(" ", "_").replace("/", "_").lower()
         save_path = out_dir / f"class_{label_idx:02d}_{safe_name}.gif"
@@ -134,6 +164,130 @@ def generate_per_class_animations(
                 print(f"    Saved: {save_path.name} ({kp.shape[0]} frames)")
         except Exception as e:
             print(f"    Warning: Failed to generate GIF for class {label_idx}: {e}")
+
+    return gif_items
+
+
+def generate_cluster_animations(
+    keypoints: np.ndarray,
+    labels: np.ndarray,
+    skeleton,
+    out_dir,
+    sample_indices: np.ndarray | None = None,
+    n_frames: int | None = None,
+    fps: float | None = None,
+    max_clusters: int | None = None,
+):
+    """Generate one representative GIF per cluster for unsupervised datasets.
+
+    Finds the longest contiguous bout for each cluster label and animates it.
+
+    Args:
+        keypoints: (T_total, K, D) — full concatenated keypoint array
+        labels: (N,) — cluster labels from KMeans (may be subsampled)
+        skeleton: SkeletonDefinition
+        out_dir: Directory for saving GIF files
+        sample_indices: If labels were computed on subsampled frames,
+            provide the frame indices so we can map back to keypoints.
+            If None, assumes labels[i] corresponds to keypoints[i].
+        n_frames: Frames per GIF (default from VIZ_CONFIG)
+        fps: Playback fps (default from VIZ_CONFIG)
+        max_clusters: Max clusters to animate (default from VIZ_CONFIG)
+
+    Returns:
+        List of dicts with 'label' and 'src' (base64) for HTML embedding.
+    """
+    n_frames = n_frames or VIZ_CONFIG["per_class_n_frames"]
+    fps = fps or VIZ_CONFIG["gif_fps_playback"]
+    max_clusters = max_clusters or VIZ_CONFIG["per_class_max"]
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Map labels back to original frame indices
+    if sample_indices is not None:
+        frame_labels = np.full(len(keypoints), -1, dtype=int)
+        frame_labels[sample_indices] = labels
+    else:
+        frame_labels = labels.copy()
+
+    unique_labels = sorted(set(labels))
+    if len(unique_labels) > max_clusters:
+        unique_labels = unique_labels[:max_clusters]
+
+    gif_items = []
+    print(f"\n  Generating per-cluster representative animations...")
+
+    for cid in unique_labels:
+        # Find contiguous bouts of this cluster
+        mask = frame_labels == cid
+        if mask.sum() < 10:
+            continue
+
+        # Find runs of True in mask
+        diffs = np.diff(mask.astype(int))
+        starts = np.where(diffs == 1)[0] + 1
+        ends = np.where(diffs == -1)[0] + 1
+        if mask[0]:
+            starts = np.concatenate([[0], starts])
+        if mask[-1]:
+            ends = np.concatenate([ends, [len(mask)]])
+
+        if len(starts) == 0 or len(ends) == 0:
+            continue
+
+        # Pick the longest bout
+        bout_lens = ends[:len(starts)] - starts[:len(ends)]
+        best_idx = np.argmax(bout_lens)
+        bout_start = starts[best_idx]
+        bout_end = ends[best_idx]
+        bout_len = bout_end - bout_start
+
+        # Extract frames — use at least n_frames, extending if bout is shorter
+        if bout_len >= n_frames:
+            kp_segment = keypoints[bout_start:bout_start + n_frames]
+        else:
+            # Concatenate multiple bouts to reach n_frames
+            segments = []
+            remaining = n_frames
+            # Sort bouts by length (longest first)
+            order = np.argsort(-bout_lens)
+            for bi in order:
+                bs, be = starts[bi], ends[bi]
+                take = min(be - bs, remaining)
+                segments.append(keypoints[bs:bs + take])
+                remaining -= take
+                if remaining <= 0:
+                    break
+            kp_segment = np.concatenate(segments, axis=0)[:n_frames]
+
+        save_path = out_dir / f"cluster_{cid:02d}.gif"
+        title = f"Cluster {cid} ({kp_segment.shape[0]}f, {bout_lens.sum()} total)"
+
+        try:
+            # Apply outlier clipping for 3D data
+            kp_viz = kp_segment
+            if kp_segment.shape[-1] >= 3 and VIZ_CONFIG["clip_per_joint"]:
+                kp_viz = clip_outlier_joints(
+                    kp_segment,
+                    per_joint=True,
+                    iqr_factor=VIZ_CONFIG["clip_iqr_factor"],
+                )
+
+            anim = animate_skeleton(
+                kp_viz, skeleton=skeleton,
+                fps=fps, title=title,
+                save_path=str(save_path),
+            )
+            plt.close("all")
+            if save_path.exists():
+                gif_items.append({
+                    "label": f"Cluster {cid}",
+                    "src": image_to_base64(save_path),
+                })
+                print(f"    Saved: {save_path.name} ({kp_segment.shape[0]} frames)")
+        except Exception as e:
+            print(f"    Warning: Failed GIF for cluster {cid}: {e}")
 
     return gif_items
 
@@ -223,7 +377,7 @@ def test_calms21(report: dict, html_data: dict) -> None:
     n_anim = sample_kp.shape[0]
     anim = animate_skeleton(
         sample_kp[:n_anim], skeleton=skeleton,
-        fps=15.0, title="CalMS21 Mice",
+        fps=VIZ_CONFIG["gif_fps_playback"], title="CalMS21 Mice",
         save_path=str(out / "sample_animation.gif"),
     )
     plt.close("all")
@@ -415,7 +569,8 @@ def test_calms21(report: dict, html_data: dict) -> None:
     from behavior_lab.data.loaders.calms21 import CLASS_NAMES as CALMS21_CLASSES
     per_class_items = generate_per_class_animations(
         train_seqs[:500], CALMS21_CLASSES, skeleton,
-        out / "per_class", fps=30.0, n_frames=60,
+        out / "per_class", fps=VIZ_CONFIG["gif_fps_playback"],
+        n_frames=VIZ_CONFIG["per_class_n_frames"],
     )
     if per_class_items:
         ds_html["per_class_gifs"] = per_class_items
@@ -433,7 +588,12 @@ def test_ntu(report: dict, html_data: dict) -> None:
     out = OUT_DIR / "ntu"
     out.mkdir(parents=True, exist_ok=True)
 
-    npz_path = ROOT / "data" / "ntu" / "demo_CS_aligned.npz"
+    # Prefer raw demo (real 3D coordinates) over center-aligned (normalized)
+    raw_path = ROOT / "data" / "ntu" / "demo_raw.npz"
+    aligned_path = ROOT / "data" / "ntu" / "demo_CS_aligned.npz"
+    npz_path = raw_path if raw_path.exists() else aligned_path
+    data_note = "raw 3D" if npz_path == raw_path else "center-aligned (subtle motion)"
+    print(f"  Data: {npz_path.name} ({data_note})")
     loader = get_loader("ntu", data_dir=ROOT / "data" / "ntu")
 
     train_seqs = loader.load_npz(npz_path, split="train")
@@ -491,11 +651,11 @@ def test_ntu(report: dict, html_data: dict) -> None:
     plt.close(fig_skel)
     print("  Saved: sample_skeleton.png")
 
-    # Animated skeleton — show 150 frames for visible motion (NTU data is [-0.7, 0.66])
-    n_anim = min(150, sample_kp_clean.shape[0])
+    # Animated skeleton (use VIZ_CONFIG frame count)
+    n_anim = min(VIZ_CONFIG["gif_n_frames"], sample_kp_clean.shape[0])
     anim = animate_skeleton(
         sample_kp_clean[:n_anim], skeleton=skeleton,
-        fps=15.0, title=f"NTU RGB+D ({n_active_persons}P)",
+        fps=VIZ_CONFIG["gif_fps_playback"], title=f"NTU RGB+D ({n_active_persons}P)",
         save_path=str(out / "sample_animation.gif"),
     )
     plt.close("all")
@@ -539,9 +699,16 @@ def test_ntu(report: dict, html_data: dict) -> None:
     # --- Per-Class Representative GIFs (top 10 most frequent) ---
     print("\n  Generating per-class representative animations...")
     from behavior_lab.data.loaders.ntu_rgbd import NTU60_CLASSES
+    # demo_raw.npz has 10 classes remapped to 0-9 from NTU60 actions
+    RAW_DEMO_CLASSES = [
+        "pick up", "sit down", "clapping", "hand waving", "jump up",
+        "pointing to something", "salute", "falling down", "punch/slap", "writing",
+    ]
+    class_names = RAW_DEMO_CLASSES if "raw" in npz_path.name else NTU60_CLASSES
     per_class_items = generate_per_class_animations(
-        train_seqs, NTU60_CLASSES, skeleton,
-        out / "per_class", fps=15.0, n_frames=150, max_classes=10,
+        train_seqs, class_names, skeleton,
+        out / "per_class", fps=VIZ_CONFIG["gif_fps_playback"],
+        n_frames=VIZ_CONFIG["per_class_n_frames"], max_classes=10,
     )
     if per_class_items:
         ds_html["per_class_gifs"] = per_class_items
@@ -616,7 +783,7 @@ def test_nwucla(report: dict, html_data: dict) -> None:
     # Animated skeleton — show all valid frames for full action visibility
     anim = animate_skeleton(
         sample_kp, skeleton=skeleton,
-        fps=15.0, title=f"NW-UCLA Skeleton ({n_valid}f)",
+        fps=VIZ_CONFIG["gif_fps_playback"], title=f"NW-UCLA Skeleton ({n_valid}f)",
         save_path=str(out / "sample_animation.gif"),
     )
     plt.close("all")
@@ -712,7 +879,8 @@ def test_nwucla(report: dict, html_data: dict) -> None:
     print("\n  Generating per-class representative animations...")
     per_class_items = generate_per_class_animations(
         train_seqs, UCLA_CLASSES, skeleton,
-        out / "per_class", fps=15.0, n_frames=120,
+        out / "per_class", fps=VIZ_CONFIG["gif_fps_playback"],
+        n_frames=VIZ_CONFIG["per_class_n_frames"],
     )
     if per_class_items:
         ds_html["per_class_gifs"] = per_class_items
@@ -841,9 +1009,11 @@ def test_ntu_gcn(report: dict, html_data: dict) -> None:
         print(f"  SKIPPED: {e}")
         return
 
-    npz_path = ROOT / "data" / "ntu" / "demo_CS_aligned.npz"
+    raw_path = ROOT / "data" / "ntu" / "demo_raw.npz"
+    aligned_path = ROOT / "data" / "ntu" / "demo_CS_aligned.npz"
+    npz_path = raw_path if raw_path.exists() else aligned_path
     if not npz_path.exists():
-        print(f"  SKIPPED: {npz_path} not found")
+        print(f"  SKIPPED: no NTU demo data found")
         return
 
     loader = get_loader("ntu", data_dir=ROOT / "data" / "ntu")
@@ -975,7 +1145,7 @@ def test_calms21_kmeans(report: dict, html_data: dict) -> None:
 # =============================================================================
 
 def test_subtle(report: dict, html_data: dict) -> None:
-    """Test SUBTLE CSV → B-SOiD + KMeans."""
+    """Test SUBTLE CSV → KMeans + visualizations."""
     print("\n" + "=" * 60)
     print("SUBTLE: Mouse Spontaneous Behavior (3D)")
     print("=" * 60)
@@ -1013,42 +1183,99 @@ def test_subtle(report: dict, html_data: dict) -> None:
         "shape_per_frame": [int(s0.num_joints), int(s0.num_channels)],
     }
     report["subtle"] = {"data": data_summary}
+    ds_html: dict = {"data": data_summary, "figures": {}}
 
-    # KMeans clustering
+    ds_html["model_info"] = {
+        "name": "KMeans Clustering",
+        "type": "Unsupervised Discovery",
+        "description": "KMeans on flattened per-frame keypoint features",
+        "why": "Baseline unsupervised segmentation for 3D mouse behavior",
+    }
+
+    # --- Skeleton Visualization ---
+    print("\n  Generating skeleton visualizations...")
+    skeleton = get_skeleton("subtle")
+    ds_html["joint_info"] = _build_joint_info(skeleton)
+
+    sample_kp = sequences[0].keypoints
+    fig_skel, _ = plot_skeleton(
+        sample_kp, skeleton=skeleton, frame=0,
+        title="SUBTLE — 9-Joint Mouse (Frame 0)",
+        show_labels=True,
+        save_path=str(out / "sample_skeleton.png"),
+    )
+    ds_html["figures"]["skeleton_static"] = fig_to_base64(fig_skel)
+    plt.close(fig_skel)
+    print("  Saved: sample_skeleton.png")
+
+    # Animated skeleton (use VIZ_CONFIG frame count)
+    n_anim = min(VIZ_CONFIG["gif_n_frames"], sample_kp.shape[0])
+    anim = animate_skeleton(
+        sample_kp[:n_anim], skeleton=skeleton,
+        fps=VIZ_CONFIG["gif_fps_playback"], title="SUBTLE Mouse (3D)",
+        save_path=str(out / "sample_animation.gif"),
+    )
+    plt.close("all")
+    gif_path = out / "sample_animation.gif"
+    if gif_path.exists():
+        ds_html["figures"]["skeleton_gif"] = image_to_base64(gif_path)
+    print(f"  Saved: sample_animation.gif ({n_anim} frames)")
+
+    # --- KMeans clustering ---
     from behavior_lab.models.discovery.clustering import cluster_features
 
-    # Use temporal features: flatten (K, D) per frame, subsample
     step = max(1, len(all_kp) // 5000)
-    features = all_kp[::step].reshape(-1, s0.num_joints * s0.num_channels)
+    sample_indices = np.arange(0, len(all_kp), step)
+    features = all_kp[sample_indices].reshape(-1, s0.num_joints * s0.num_channels)
     print(f"  Feature matrix: {features.shape}")
 
     result = cluster_features(features, n_clusters=4, use_umap=False)
     labels = result["labels"]
 
-    report["subtle"]["kmeans"] = {
+    kmeans_dict = {
         "n_clusters": int(result["n_clusters"]),
         "n_samples": int(len(labels)),
     }
-    print(f"  KMeans: {result['n_clusters']} clusters")
+    report["subtle"]["kmeans"] = kmeans_dict
+    ds_html["cluster_metrics"] = kmeans_dict
 
-    # B-SOiD if available
+    # PCA embedding plot for clusters
+    from sklearn.decomposition import PCA
+    pca = PCA(n_components=2)
+    emb_2d = pca.fit_transform(features)
+    fig_emb, _ = plot_embedding(
+        emb_2d, labels,
+        title=f"SUBTLE KMeans (PCA, {result['n_clusters']} clusters)",
+        save_path=str(out / "kmeans_embedding.png"),
+    )
+    ds_html["figures"]["embedding"] = fig_to_base64(fig_emb)
+    plt.close("all")
+    print(f"  Saved: kmeans_embedding.png ({result['n_clusters']} clusters)")
+
+    # Per-cluster representative GIFs
+    cluster_gifs = generate_cluster_animations(
+        all_kp, labels, skeleton, out / "clusters",
+        sample_indices=sample_indices,
+    )
+    if cluster_gifs:
+        ds_html["per_class_gifs"] = cluster_gifs
+
+    # B-SOiD (2D only — SUBTLE is 3D, expect skip)
     try:
         from behavior_lab.models.discovery.bsoid import BSOiD
-
         bsoid = BSOiD(fps=30, min_cluster_size=30)
         bsoid_result = bsoid.fit_predict(all_kp[:5000])
-        report["subtle"]["bsoid"] = {
-            "n_clusters": int(bsoid_result.n_clusters),
-        }
+        report["subtle"]["bsoid"] = {"n_clusters": int(bsoid_result.n_clusters)}
         print(f"  B-SOiD: {bsoid_result.n_clusters} clusters")
     except Exception as e:
         print(f"  B-SOiD: SKIPPED ({e})")
 
+    html_data["datasets"]["subtle"] = ds_html
     print("\n  SUBTLE PASSED")
 
 
 def test_shank3ko(report: dict, html_data: dict) -> None:
-    """Test Shank3KO .mat → B-SOiD + KMeans."""
+    """Test Shank3KO .mat → KMeans + visualizations."""
     print("\n" + "=" * 60)
     print("Shank3KO: Knockout Mouse Behavior (3D)")
     print("=" * 60)
@@ -1076,6 +1303,12 @@ def test_shank3ko(report: dict, html_data: dict) -> None:
     s0.validate()
     print(f"  Shape: ({s0.num_frames}, {s0.num_joints}, {s0.num_channels})")
 
+    # Genotype distribution
+    genotypes = [s.metadata.get("genotype", "?") for s in sequences]
+    from collections import Counter
+    geno_dist = dict(Counter(genotypes))
+    print(f"  Genotypes: {geno_dist}")
+
     all_kp = np.concatenate([s.keypoints for s in sequences], axis=0)
     print(f"  Total frames: {all_kp.shape[0]}")
 
@@ -1083,42 +1316,143 @@ def test_shank3ko(report: dict, html_data: dict) -> None:
         "n_sequences": len(sequences),
         "total_frames": int(all_kp.shape[0]),
         "shape_per_frame": [int(s0.num_joints), int(s0.num_channels)],
+        "genotypes": geno_dist,
     }
     report["shank3ko"] = {"data": data_summary}
+    ds_html: dict = {"data": data_summary, "figures": {}}
 
-    # KMeans clustering
+    ds_html["model_info"] = {
+        "name": "KMeans Clustering",
+        "type": "Unsupervised Discovery",
+        "description": "KMeans on flattened per-frame 16-joint 3D keypoints",
+        "why": "Compare behavioral profiles between Shank3 KO and WT mice",
+    }
+
+    # --- Skeleton Visualization ---
+    print("\n  Generating skeleton visualizations...")
+    skeleton = get_skeleton("shank3ko")
+    ds_html["joint_info"] = _build_joint_info(skeleton)
+
+    sample_kp = sequences[0].keypoints
+    # Per-joint IQR clipping (Shank3KO tip_tail has extreme tracking spikes)
+    sample_kp = clip_outlier_joints(
+        sample_kp, per_joint=VIZ_CONFIG["clip_per_joint"],
+        iqr_factor=VIZ_CONFIG["clip_iqr_factor"],
+    )
+    geno = sequences[0].metadata.get("genotype", "?")
+    fig_skel, _ = plot_skeleton(
+        sample_kp, skeleton=skeleton, frame=0,
+        title=f"Shank3KO — 16-Joint Mouse ({geno}, Frame 0)",
+        show_labels=True,
+        save_path=str(out / "sample_skeleton.png"),
+    )
+    ds_html["figures"]["skeleton_static"] = fig_to_base64(fig_skel)
+    plt.close(fig_skel)
+    print("  Saved: sample_skeleton.png")
+
+    # Animated skeleton (use VIZ_CONFIG frame count)
+    n_anim = min(VIZ_CONFIG["gif_n_frames"], sample_kp.shape[0])
+    anim = animate_skeleton(
+        clip_outlier_joints(
+            sample_kp[:n_anim],
+            per_joint=VIZ_CONFIG["clip_per_joint"],
+            iqr_factor=VIZ_CONFIG["clip_iqr_factor"],
+        ),
+        skeleton=skeleton,
+        fps=VIZ_CONFIG["gif_fps_playback"], title=f"Shank3KO Mouse ({geno})",
+        save_path=str(out / "sample_animation.gif"),
+    )
+    plt.close("all")
+    gif_path = out / "sample_animation.gif"
+    if gif_path.exists():
+        ds_html["figures"]["skeleton_gif"] = image_to_base64(gif_path)
+    print(f"  Saved: sample_animation.gif ({n_anim} frames)")
+
+    # --- KMeans clustering ---
     from behavior_lab.models.discovery.clustering import cluster_features
 
     step = max(1, len(all_kp) // 5000)
-    features = all_kp[::step].reshape(-1, s0.num_joints * s0.num_channels)
+    sample_indices = np.arange(0, len(all_kp), step)
+    features = all_kp[sample_indices].reshape(-1, s0.num_joints * s0.num_channels)
     print(f"  Feature matrix: {features.shape}")
 
     result = cluster_features(features, n_clusters=5, use_umap=False)
-    report["shank3ko"]["kmeans"] = {
-        "n_clusters": int(result["n_clusters"]),
-        "n_samples": int(len(result["labels"])),
-    }
-    print(f"  KMeans: {result['n_clusters']} clusters")
+    labels = result["labels"]
 
-    # B-SOiD
+    kmeans_dict = {
+        "n_clusters": int(result["n_clusters"]),
+        "n_samples": int(len(labels)),
+    }
+    report["shank3ko"]["kmeans"] = kmeans_dict
+    ds_html["cluster_metrics"] = kmeans_dict
+
+    # PCA embedding plot
+    from sklearn.decomposition import PCA
+    pca = PCA(n_components=2)
+    emb_2d = pca.fit_transform(features)
+    fig_emb, _ = plot_embedding(
+        emb_2d, labels,
+        title=f"Shank3KO KMeans (PCA, {result['n_clusters']} clusters)",
+        save_path=str(out / "kmeans_embedding.png"),
+    )
+    ds_html["figures"]["embedding"] = fig_to_base64(fig_emb)
+    plt.close("all")
+    print(f"  Saved: kmeans_embedding.png ({result['n_clusters']} clusters)")
+
+    # Per-cluster representative GIFs
+    cluster_gifs = generate_cluster_animations(
+        all_kp, labels, skeleton, out / "clusters",
+        sample_indices=sample_indices,
+    )
+    if cluster_gifs:
+        ds_html["per_class_gifs"] = cluster_gifs
+
+    # Genotype-colored PCA (KO vs WT)
+    if len(geno_dist) > 1:
+        try:
+            # Sample frames per mouse, track genotype
+            geno_labels = []
+            geno_features = []
+            for seq in sequences:
+                kp = seq.keypoints
+                step_s = max(1, len(kp) // 250)
+                feat = kp[::step_s].reshape(-1, s0.num_joints * s0.num_channels)
+                g = 0 if seq.metadata.get("genotype") == "KO" else 1
+                geno_labels.extend([g] * len(feat))
+                geno_features.append(feat)
+            geno_features = np.concatenate(geno_features, axis=0)
+            geno_labels = np.array(geno_labels)
+            pca2 = PCA(n_components=2)
+            emb_geno = pca2.fit_transform(geno_features)
+            fig_geno, _ = plot_embedding(
+                emb_geno, geno_labels,
+                title="Shank3KO: KO (0) vs WT (1)",
+                save_path=str(out / "genotype_embedding.png"),
+            )
+            ds_html["figures"]["genotype_pca"] = fig_to_base64(fig_geno)
+            plt.close("all")
+            print("  Saved: genotype_embedding.png")
+        except Exception as e:
+            print(f"  Genotype PCA: SKIPPED ({e})")
+
+    # B-SOiD (3D → expect skip)
     try:
         from behavior_lab.models.discovery.bsoid import BSOiD
         bsoid = BSOiD(fps=60, min_cluster_size=30)
         bsoid_result = bsoid.fit_predict(all_kp[:5000])
-        report["shank3ko"]["bsoid"] = {
-            "n_clusters": int(bsoid_result.n_clusters),
-        }
+        report["shank3ko"]["bsoid"] = {"n_clusters": int(bsoid_result.n_clusters)}
         print(f"  B-SOiD: {bsoid_result.n_clusters} clusters")
     except Exception as e:
         print(f"  B-SOiD: SKIPPED ({e})")
 
+    html_data["datasets"]["shank3ko"] = ds_html
     print("\n  Shank3KO PASSED")
 
 
 def test_mabe22_behavemae(report: dict, html_data: dict) -> None:
-    """Test MABe22 → BehaveMAE 3-level hierarchical analysis."""
+    """Test MABe22 → KMeans + BehaveMAE + visualizations."""
     print("\n" + "=" * 60)
-    print("MABe22: BehaveMAE Hierarchical Analysis")
+    print("MABe22: Mouse Triplet Behavior Analysis")
     print("=" * 60)
 
     out = OUT_DIR / "mabe22"
@@ -1154,26 +1488,113 @@ def test_mabe22_behavemae(report: dict, html_data: dict) -> None:
         "shape": [int(s0.num_frames), int(s0.num_joints), int(s0.num_channels)],
     }
     report["mabe22"] = {"data": data_summary}
+    ds_html: dict = {"data": data_summary, "figures": {}}
 
-    # KMeans on mean-pooled features
+    ds_html["model_info"] = {
+        "name": "KMeans + BehaveMAE",
+        "type": "Unsupervised Discovery",
+        "description": "KMeans on mean-pooled features; BehaveMAE hierarchical encoding (if available)",
+        "why": "Multi-mouse social behavior analysis with 3 mice x 12 keypoints",
+    }
+
+    # --- Skeleton Visualization ---
+    print("\n  Generating skeleton visualizations...")
+    skeleton = get_skeleton("mabe22")
+    ds_html["joint_info"] = _build_joint_info(skeleton)
+
+    # MABe22 is 2D: (T, 36, 2) — 3 mice x 12 joints
+    sample_kp = sequences[0].keypoints
+    fig_skel, _ = plot_skeleton(
+        sample_kp, skeleton=skeleton, frame=0,
+        title="MABe22 — 3 Mice x 12 Joints (Frame 0)",
+        show_labels=True,
+        save_path=str(out / "sample_skeleton.png"),
+    )
+    ds_html["figures"]["skeleton_static"] = fig_to_base64(fig_skel)
+    plt.close(fig_skel)
+    print("  Saved: sample_skeleton.png")
+
+    # Animated skeleton (use VIZ_CONFIG frame count)
+    n_anim = min(VIZ_CONFIG["gif_n_frames"], sample_kp.shape[0])
+    anim = animate_skeleton(
+        sample_kp[:n_anim], skeleton=skeleton,
+        fps=VIZ_CONFIG["gif_fps_playback"], title="MABe22 Mice Triplet",
+        save_path=str(out / "sample_animation.gif"),
+    )
+    plt.close("all")
+    gif_path = out / "sample_animation.gif"
+    if gif_path.exists():
+        ds_html["figures"]["skeleton_gif"] = image_to_base64(gif_path)
+    print(f"  Saved: sample_animation.gif ({n_anim} frames)")
+
+    # --- KMeans on mean-pooled features ---
     from behavior_lab.models.discovery.clustering import cluster_features
 
     n_sub = min(500, len(sequences))
     features = np.array([s.keypoints.mean(axis=0).flatten() for s in sequences[:n_sub]])
     result = cluster_features(features, n_clusters=5, use_umap=False)
-    report["mabe22"]["kmeans"] = {
+    labels = result["labels"]
+
+    kmeans_dict = {
         "n_clusters": int(result["n_clusters"]),
-        "n_samples": int(len(result["labels"])),
+        "n_samples": int(len(labels)),
     }
+    report["mabe22"]["kmeans"] = kmeans_dict
+    ds_html["cluster_metrics"] = kmeans_dict
     print(f"  KMeans: {result['n_clusters']} clusters on {n_sub} sequences")
 
-    # BehaveMAE hierarchical encoding (if available)
+    # PCA embedding plot
+    from sklearn.decomposition import PCA
+    pca = PCA(n_components=2)
+    emb_2d = pca.fit_transform(features)
+    fig_emb, _ = plot_embedding(
+        emb_2d, labels,
+        title=f"MABe22 KMeans (PCA, {result['n_clusters']} clusters)",
+        save_path=str(out / "kmeans_embedding.png"),
+    )
+    ds_html["figures"]["embedding"] = fig_to_base64(fig_emb)
+    plt.close("all")
+    print(f"  Saved: kmeans_embedding.png")
+
+    # Per-cluster representative GIFs (sequence-level: pick representative sequence per cluster)
+    cluster_seq_gifs = []
+    for cid in sorted(set(labels)):
+        cluster_seqs = [sequences[i] for i, l in enumerate(labels) if l == cid]
+        if not cluster_seqs:
+            continue
+        # Pick most dynamic sequence
+        def _seq_var(s):
+            return float(s.keypoints.var())
+        best_seq = max(cluster_seqs, key=_seq_var)
+        kp = best_seq.keypoints
+        nf = min(VIZ_CONFIG["per_class_n_frames"], kp.shape[0])
+        save_path = out / "clusters" / f"cluster_{cid:02d}.gif"
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            anim = animate_skeleton(
+                kp[:nf], skeleton=skeleton,
+                fps=VIZ_CONFIG["gif_fps_playback"],
+                title=f"Cluster {cid} ({nf}f)",
+                save_path=str(save_path),
+            )
+            plt.close("all")
+            if save_path.exists():
+                cluster_seq_gifs.append({
+                    "label": f"Cluster {cid}",
+                    "src": image_to_base64(save_path),
+                })
+                print(f"    Saved: {save_path.name} ({nf} frames)")
+        except Exception as e:
+            print(f"    Warning: cluster {cid} GIF failed: {e}")
+    if cluster_seq_gifs:
+        ds_html["per_class_gifs"] = cluster_seq_gifs
+
+    # --- BehaveMAE hierarchical encoding ---
     try:
         from behavior_lab.models.discovery.behavemae import BehaveMAE, pose_to_behavemae_input
 
-        # Test input conversion only (no pretrained model needed)
-        sample_kp = sequences[0].keypoints[:400]  # (T, 36, 2)
-        tensor = pose_to_behavemae_input(sample_kp, target_frames=400)
+        sample_kp_slice = sequences[0].keypoints[:400]  # (T, 36, 2)
+        tensor = pose_to_behavemae_input(sample_kp_slice, target_frames=400)
         print(f"  BehaveMAE input tensor: {tuple(tensor.shape)}")
 
         report["mabe22"]["behavemae"] = {
@@ -1181,18 +1602,17 @@ def test_mabe22_behavemae(report: dict, html_data: dict) -> None:
             "status": "input_conversion_ok",
         }
 
-        # Try loading model if checkpoint exists
         ckpt_dir = ROOT / "checkpoints" / "behavemae"
         if ckpt_dir.exists():
             ckpts = list(ckpt_dir.glob("*.pth"))
             if ckpts:
                 model = BehaveMAE.from_pretrained(str(ckpts[0]), dataset='mabe22')
-                features = model.encode_hierarchical(sample_kp)
-                print(f"  Hierarchical levels: {list(features.keys())}")
-                for k, v in features.items():
+                hier_features = model.encode_hierarchical(sample_kp_slice)
+                print(f"  Hierarchical levels: {list(hier_features.keys())}")
+                for k, v in hier_features.items():
                     print(f"    {k}: {v.shape}")
                 report["mabe22"]["behavemae"]["hierarchical"] = {
-                    k: list(v.shape) for k, v in features.items()
+                    k: list(v.shape) for k, v in hier_features.items()
                 }
         else:
             print("  BehaveMAE model: no checkpoint found (input conversion tested)")
@@ -1202,6 +1622,7 @@ def test_mabe22_behavemae(report: dict, html_data: dict) -> None:
     except Exception as e:
         print(f"  BehaveMAE: SKIPPED ({e})")
 
+    html_data["datasets"]["mabe22"] = ds_html
     print("\n  MABe22 PASSED")
 
 

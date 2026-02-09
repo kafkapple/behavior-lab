@@ -158,6 +158,11 @@ class SkeletonDefinition:
 NTU_SKELETON = SkeletonDefinition(
     name="ntu_rgbd",
     num_joints=25,
+    # 25 joints from Kinect V2 body tracking (0-indexed)
+    # Coordinate system: Y-up (Kinect: X=horizontal, Y=vertical, Z=depth)
+    # Edges match ST-GCN (Yan et al., AAAI 2018) ntu_rgb_d graph definition
+    # Reference: Shahroudy et al., "NTU RGB+D" (CVPR 2016), 60 action classes
+    #            Liu et al., "NTU RGB+D 120" (TPAMI 2020), 120 action classes
     joint_names=[
         "base_spine",      # 0
         "mid_spine",       # 1
@@ -179,11 +184,11 @@ NTU_SKELETON = SkeletonDefinition(
         "right_knee",      # 17
         "right_ankle",     # 18
         "right_foot",      # 19
-        "spine",           # 20 (shoulder center)
-        "left_thumb",      # 21
-        "left_tip",        # 22
-        "right_thumb",     # 23
-        "right_tip",       # 24
+        "spine",           # 20 (shoulder center / SpineShoulder)
+        "left_hand_tip",   # 21 (HandTipLeft)
+        "left_thumb",      # 22 (ThumbLeft)
+        "right_hand_tip",  # 23 (HandTipRight)
+        "right_thumb",     # 24 (ThumbRight)
     ],
     joint_parents=[
         -1, 0, 20, 2, 20, 4, 5, 6, 20, 8, 9, 10,
@@ -219,6 +224,10 @@ NTU_SKELETON = SkeletonDefinition(
 UCLA_SKELETON = SkeletonDefinition(
     name="nw_ucla",
     num_joints=20,
+    # 20 joints from Kinect V1 body tracking (0-indexed)
+    # Coordinate system: Y-up (Kinect SDK v1)
+    # Reference: Wang et al., "Cross-View Action Modeling" (CVPR 2014)
+    #            10 action classes, 3 camera views
     joint_names=[
         "hip_center",       # 0
         "spine",            # 1
@@ -313,6 +322,10 @@ COCO_SKELETON = SkeletonDefinition(
 MARS_MOUSE_SKELETON = SkeletonDefinition(
     name="mars_mouse",
     num_joints=7,
+    # 7 keypoints from MARS top-view mouse pose estimation
+    # Coordinate system: 2D pixel (top-view camera)
+    # Reference: Segalin et al., "MARS" (eLife 2021)
+    #            Top-view: nose, left_ear, right_ear, neck, left_hip, right_hip, tail_base
     joint_names=[
         "nose", "left_ear", "right_ear", "neck",
         "left_hip", "right_hip", "tail_base",
@@ -338,6 +351,11 @@ MARS_MOUSE_SKELETON = SkeletonDefinition(
 CALMS21_MOUSE_SKELETON = SkeletonDefinition(
     name="calms21_mouse",
     num_joints=7,
+    # 7 keypoints, same as MARS (resident-intruder dyad assay)
+    # Coordinate system: 2D pixel (top-view camera)
+    # Data shape: (N, 2, T, 7, 2) — 2 mice, T frames, 7 joints, xy
+    # Reference: Sun et al., "CalMS21" (NeurIPS 2021 Datasets & Benchmarks)
+    #            6M+ frames, 1M+ annotated, behavior classification
     joint_names=[
         "nose", "left_ear", "right_ear", "neck",
         "left_hip", "right_hip", "tail_base",
@@ -367,6 +385,10 @@ CALMS21_MOUSE_SKELETON = SkeletonDefinition(
 RAT7M_SKELETON = SkeletonDefinition(
     name="rat7m",
     num_joints=20,
+    # 20 joints from DANNCE 3D markerless motion capture
+    # Coordinate system: Z-up (3D motion capture arena)
+    # Reference: Dunn et al., "Geometric deep learning on 3D animal pose" (2021)
+    #            Figshare collection 5295370, ~7M frames
     joint_names=[
         "nose_tip", "head_top", "left_ear", "right_ear",
         "neck", "left_shoulder", "right_shoulder", "left_elbow",
@@ -419,22 +441,40 @@ RAT7M_SKELETON = SkeletonDefinition(
 SUBTLE_MOUSE_SKELETON = SkeletonDefinition(
     name="subtle_mouse",
     num_joints=9,
+    # Column order from SUBTLE kinematics.py avatar_configs['nodes']:
+    #   nose=0, neck=1, anus=2, chest=3, rfoot=4, lfoot=5, rhand=6, lhand=7, tip=8
+    # Edge topology (kinematics.py avatar_configs['edges']):
+    #   head=[0,1], fbody=[1,3], hbody=[3,2], rleg=[4,2], lleg=[5,2],
+    #   rarm=[6,3], larm=[7,3], tail=[2,8]
+    # Body axis: nose→neck→chest(mid_back)→anus(tail_base)→tip(tail_tip)
+    # Coordinate system: Z-up (3D motion capture), sampling rate: 20 Hz
+    # Reference: Kwon et al., "SUBTLE" (github.com/jeakwon/subtle)
     joint_names=[
-        "nose", "head", "neck", "body_center", "hip_left",
-        "hip_right", "tail_base", "tail_mid", "tail_tip",
+        "nose", "neck", "tail_base", "mid_back", "right_hindpaw",
+        "left_hindpaw", "right_forepaw", "left_forepaw", "tail_tip",
     ],
-    joint_parents=[1, 2, -1, 2, 3, 3, 3, 6, 7],
+    joint_parents=[1, 3, 3, -1, 2, 2, 3, 3, 2],
     edges=[
-        (0, 1), (1, 2), (2, 3), (3, 4), (3, 5),
-        (3, 6), (6, 7), (7, 8),
+        (0, 1),  # head: nose→neck
+        (1, 3),  # front body: neck→mid_back (chest)
+        (3, 2),  # hind body: mid_back→tail_base (anus)
+        (7, 3),  # left forepaw→mid_back
+        (6, 3),  # right forepaw→mid_back
+        (5, 2),  # left hindpaw→tail_base
+        (4, 2),  # right hindpaw→tail_base
+        (2, 8),  # tail: tail_base→tail_tip
     ],
-    symmetric_pairs=[(4, 5)],
+    symmetric_pairs=[(4, 5), (6, 7)],
     num_channels=3,
     coordinate_system="xyz",
     body_parts={
-        "head": [0, 1, 2],
-        "body": [3, 4, 5],
-        "tail": [6, 7, 8],
+        "head": [0, 1],
+        "body": [2, 3],
+        "left_front_leg": [7],
+        "right_front_leg": [6],
+        "left_back_leg": [5],
+        "right_back_leg": [4],
+        "tail": [8],
     },
     center_joint=3,
 )
@@ -443,6 +483,11 @@ SUBTLE_MOUSE_SKELETON = SkeletonDefinition(
 MABE22_MOUSE_SKELETON = SkeletonDefinition(
     name="mabe22_mouse",
     num_joints=12,
+    # 12 keypoints per mouse, 3 mice in triplet configuration
+    # Coordinate system: 2D pixel (top-view camera)
+    # Data shape: (N, T, 36, 2) where 36 = 3 mice × 12 joints
+    # Reference: Sun et al., "MABe22" (ICML 2023)
+    #            Multi-species multi-task benchmark
     joint_names=[
         "nose",              # 0
         "left_ear",          # 1
@@ -481,13 +526,16 @@ MABE22_MOUSE_SKELETON = SkeletonDefinition(
 SHANK3KO_MOUSE_SKELETON = SkeletonDefinition(
     name="shank3ko_mouse",
     num_joints=16,
+    # Joint names from raw .mat Body_name field (Shank3KO_mice_slk3D.mat)
+    # Coordinate system: Z-up (3D SLEAP tracking), sampling rate: 30 Hz
+    # Reference: Zenodo dataset, 16 joints, single mouse
     joint_names=[
         "nose", "left_ear", "right_ear", "neck",
         "left_front_limb", "right_front_limb",
         "left_hind_limb", "right_hind_limb",
         "left_front_claw", "right_front_claw",
         "left_hind_claw", "right_hind_claw",
-        "back", "root_tail", "middle_tail", "tip_tail",
+        "back", "root_tail", "mid_tail", "tip_tail",
     ],
     joint_parents=[
         3, 3, 3, -1,    # nose, ears -> neck

@@ -118,7 +118,7 @@ class Shank3KOLoader:
         """Load from preprocessed .npz file.
 
         Args:
-            filepath: Path to .npz with 'keypoints' (T, 16, 3) and optional 'labels'
+            filepath: Path to .npz with 'keypoints' (T, 16, 3) and optional 'labels', 'genotype'
 
         Returns:
             List of BehaviorSequence
@@ -127,6 +127,11 @@ class Shank3KOLoader:
         npz = np.load(filepath, allow_pickle=True)
         keypoints = npz["keypoints"].astype(np.float32)
         labels = npz["labels"].astype(int) if "labels" in npz else None
+        genotype = str(npz["genotype"]) if "genotype" in npz else None
+
+        meta = {"dataset": "shank3ko", "source_file": str(filepath)}
+        if genotype:
+            meta["genotype"] = genotype
 
         if keypoints.ndim == 3:
             return [BehaviorSequence(
@@ -135,7 +140,7 @@ class Shank3KOLoader:
                 skeleton_name=self.skeleton_name,
                 sample_id=filepath.stem,
                 fps=self.fps,
-                metadata={"dataset": "shank3ko", "source_file": str(filepath)},
+                metadata=meta,
             )]
 
         sequences = []
@@ -147,7 +152,7 @@ class Shank3KOLoader:
                 skeleton_name=self.skeleton_name,
                 sample_id=f"{filepath.stem}_{i:05d}",
                 fps=self.fps,
-                metadata={"dataset": "shank3ko", "source_file": str(filepath)},
+                metadata=dict(meta),
             ))
         return sequences
 
