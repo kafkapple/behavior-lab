@@ -72,6 +72,7 @@ class FeaturePipeline:
         _KEY_MAP = {
             "skeleton_kinematic": "keypoints",
             "dinov2": "frames",
+            "cebra": "data",
         }
 
         parts: list[np.ndarray] = []

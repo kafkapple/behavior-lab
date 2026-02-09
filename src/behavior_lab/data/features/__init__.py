@@ -62,6 +62,11 @@ class SkeletonBackend:
         return features["feature_matrix"]
 
 
+def _lazy_cebra():
+    from .cebra_backend import CEBRABackend
+    return CEBRABackend
+
+
 __all__ = [
     "FeatureBackend",
     "SkeletonBackend",

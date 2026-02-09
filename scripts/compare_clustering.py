@@ -7,6 +7,7 @@ Models tested:
   3. MoSeq fallback (PCA+HMM) — temporal syllables
   4. SUBTLE (Morlet+UMAP+Phenograph) — 3D datasets
   5. hBehaveMAE (hierarchical MAE) — MABe22 pretrained
+  6. CEBRA (temporal contrastive learning) — all datasets
 
 Datasets:
   - CalMS21: (N, 2, 64, 7, 2) — 2D mouse pair
@@ -269,24 +270,81 @@ def run_moseq_fallback(dataset: dict, n_states: int = 15) -> ModelResult:
 
 
 def run_subtle(dataset: dict) -> ModelResult:
-    """SUBTLE: Morlet wavelet + UMAP + Phenograph."""
-    from behavior_lab.models.discovery.subtle_wrapper import SUBTLE
+    """SUBTLE: Morlet wavelet + UMAP + Phenograph.
+
+    Runs in a subprocess to isolate potential SIGSEGV from macOS
+    multiprocessing issues (loky/OMP pthread_mutex_init).
+    """
+    import json
+    import subprocess
+    import tempfile
+
+    kp = dataset["keypoints"][:20000]  # cap
+
+    # Save keypoints to temp file for subprocess
+    with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as f:
+        tmp_path = f.name
+        np.savez(f, keypoints=kp)
+
+    out_path = tmp_path.replace(".npz", "_result.npz")
+
+    # Run SUBTLE in isolated subprocess
+    script = f"""
+import sys, json, time
+sys.path.insert(0, 'src')
+import numpy as np
+from behavior_lab.models.discovery.subtle_wrapper import SUBTLE
+
+kp = np.load('{tmp_path}')['keypoints']
+t0 = time.time()
+model = SUBTLE(fps={dataset['fps']})
+cr = model.fit_predict([kp])
+elapsed = time.time() - t0
+
+np.savez('{out_path}',
+    labels=cr.labels,
+    embeddings=cr.embeddings if cr.embeddings is not None else np.array([]),
+    n_clusters=np.array(cr.n_clusters),
+    elapsed=np.array(elapsed),
+)
+print(json.dumps({{'n_clusters': int(cr.n_clusters), 'elapsed': elapsed}}))
+"""
 
     t0 = time.time()
-    kp = dataset["keypoints"][:20000]  # cap
-    model = SUBTLE(fps=dataset["fps"])
-    cr = model.fit_predict([kp])
-    elapsed = time.time() - t0
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True, text=True, timeout=600,
+            env={**__import__("os").environ,
+                 "LOKY_MAX_CPU_COUNT": "1", "OMP_NUM_THREADS": "1"},
+        )
+        if proc.returncode != 0:
+            stderr_short = proc.stderr[-500:] if proc.stderr else "unknown"
+            return ModelResult("SUBTLE", dataset["name"], np.array([]),
+                               error=f"Subprocess exit {proc.returncode}: {stderr_short}")
 
-    return ModelResult(
-        model_name="SUBTLE",
-        dataset_name=dataset["name"],
-        labels=cr.labels,
-        embedding_2d=cr.embeddings,
-        n_clusters=cr.n_clusters,
-        elapsed_sec=elapsed,
-        metadata=cr.metadata,
-    )
+        data = np.load(out_path)
+        elapsed = float(data["elapsed"])
+        labels = data["labels"]
+        emb = data["embeddings"]
+        if emb.size == 0:
+            emb = None
+
+        return ModelResult(
+            model_name="SUBTLE",
+            dataset_name=dataset["name"],
+            labels=labels,
+            embedding_2d=emb,
+            n_clusters=int(data["n_clusters"]),
+            elapsed_sec=elapsed,
+        )
+
+    except subprocess.TimeoutExpired:
+        return ModelResult("SUBTLE", dataset["name"], np.array([]),
+                           error="Timeout (600s)")
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+        Path(out_path).unlink(missing_ok=True)
 
 
 def run_behavemae(dataset: dict) -> ModelResult:
@@ -347,6 +405,42 @@ def run_behavemae(dataset: dict) -> ModelResult:
         embedding_2d=result["embedding_2d"],
         n_clusters=result["n_clusters"],
         features=features,
+        elapsed_sec=elapsed,
+    )
+
+
+def run_cebra(dataset: dict, output_dim: int = 32, n_clusters: int = 8,
+              max_iterations: int = 5000) -> ModelResult:
+    """CEBRA: temporal contrastive learning → clustering.
+
+    Fits CEBRA on raw keypoint time-series (preserving temporal order),
+    then clusters the learned embeddings.
+    """
+    from behavior_lab.data.features.cebra_backend import CEBRABackend
+    from behavior_lab.models.discovery.clustering import cluster_features
+
+    t0 = time.time()
+    kp = dataset["keypoints"][:20000]  # cap frames
+
+    backend = CEBRABackend(
+        output_dim=output_dim,
+        max_iterations=max_iterations,
+        time_offsets=10,
+        device="cpu",
+    )
+    embeddings = backend.extract(kp)  # (T, output_dim)
+    print(f"      CEBRA: {kp.shape} → {embeddings.shape}")
+
+    result = cluster_features(embeddings, n_clusters=n_clusters, use_umap=True)
+    elapsed = time.time() - t0
+
+    return ModelResult(
+        model_name="CEBRA",
+        dataset_name=dataset["name"],
+        labels=result["labels"],
+        embedding_2d=result["embedding_2d"],
+        n_clusters=result["n_clusters"],
+        features=embeddings,
         elapsed_sec=elapsed,
     )
 
@@ -612,6 +706,18 @@ def main():
                 traceback.print_exc()
                 ds_results.append(ModelResult("hBehaveMAE", dataset["name"],
                                               np.array([]), error=str(e)))
+
+        # 6. CEBRA (temporal contrastive learning)
+        print("  [6] CEBRA (temporal contrastive)...")
+        try:
+            r = run_cebra(dataset, output_dim=32, n_clusters=8, max_iterations=2000)
+            ds_results.append(r)
+            print(f"      → {r.n_clusters} clusters, {r.elapsed_sec:.1f}s")
+        except Exception as e:
+            print(f"      → FAILED: {e}")
+            traceback.print_exc()
+            ds_results.append(ModelResult("CEBRA", dataset["name"],
+                                          np.array([]), error=str(e)))
 
         all_results.extend(ds_results)
 
