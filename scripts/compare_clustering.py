@@ -98,36 +98,42 @@ def load_subtle():
 
 
 def load_shank3ko():
-    """Load Shank3KO → (T, 16, 3)."""
+    """Load Shank3KO → (T, 16, 3) from structured .mat with CoordX/Y/Z fields."""
     mat_path = ROOT / "data" / "raw" / "shank3ko" / "Shank3KO_mice_slk3D.mat"
     if not mat_path.exists():
         return None
 
     import scipy.io
     mat = scipy.io.loadmat(str(mat_path), squeeze_me=True)
+    mice_data = mat.get("mice_slk3D")
+    if mice_data is None:
+        return None
 
-    # Find the data key
-    for key in mat:
-        if not key.startswith("_"):
-            val = mat[key]
-            if hasattr(val, 'dtype') and val.dtype.names:
-                # Structured array — iterate mice
-                first = val.flat[0]
-                for fname in first.dtype.names:
-                    arr = first[fname]
-                    if hasattr(arr, 'shape') and arr.ndim == 2 and arr.shape[1] == 48:
-                        # (T, 48) = 16 joints × 3D
-                        T = min(arr.shape[0], 30000)  # cap
-                        kp = arr[:T].reshape(T, 16, 3)
-                        return {
-                            "name": "Shank3KO",
-                            "class_names": None,
-                            "keypoints": kp,
-                            "labels": None,
-                            "fps": 30,
-                            "ndim": 3,
-                        }
-    return None
+    # Concat first 5 recordings (cap total frames)
+    all_kp = []
+    all_genotypes = []
+    for i in range(min(5, mice_data.size)):
+        rec = mice_data.flat[i]
+        cx = rec["CoordX"]  # (T, 16)
+        cy = rec["CoordY"]
+        cz = rec["CoordZ"]
+        coords = np.stack([cx, cy, cz], axis=2)  # (T, 16, 3)
+        T = min(coords.shape[0], 10000)  # cap per recording
+        all_kp.append(coords[:T].astype(np.float32))
+        geno = str(rec["Genotypes"])
+        all_genotypes.extend([0 if geno == "KO" else 1] * T)
+
+    kp = np.concatenate(all_kp, axis=0)  # (T_total, 16, 3)
+    labels = np.array(all_genotypes[:len(kp)], dtype=int)
+
+    return {
+        "name": "Shank3KO",
+        "class_names": ["KO", "WT"],
+        "keypoints": kp,
+        "labels": labels,
+        "fps": 30,
+        "ndim": 3,
+    }
 
 
 def load_mabe22():
