@@ -2,11 +2,79 @@
 
 Reference: Kwon et al. (2024), IJCV.
 Install: pip install git+https://github.com/jeakwon/subtle.git
+
+Compatibility: scipy >= 1.12 removed signal.cwt. We monkey-patch the
+SUBTLE module's morlet_cwt to use a manual convolution-based CWT.
 """
 import numpy as np
 from typing import Dict, List, Optional
 
 from ...core.types import ClusteringResult
+
+
+def _morlet2_compat(M, s, w=5):
+    """Drop-in replacement for scipy.signal.morlet2 (removed in scipy 1.15).
+
+    Normalized complex Morlet wavelet:
+        psi(t) = (pi * s)^(-0.25) * exp(i*w*t/s) * exp(-0.5*(t/s)^2)
+
+    Args:
+        M: length of the wavelet
+        s: width (scale) parameter
+        w: omega0 — central frequency (default 5)
+
+    Returns:
+        complex128 array of length M
+    """
+    t = np.arange(0, M) - (M - 1.0) / 2
+    t = t / s
+    output = np.exp(1j * w * t) * np.exp(-0.5 * t * t) * np.pi ** (-0.25)
+    return output
+
+
+def _cwt_compat(data, wavelet, widths, **kwargs):
+    """Drop-in replacement for scipy.signal.cwt (removed in scipy 1.12).
+
+    For each scale/width, generate the wavelet, convolve with data, and stack.
+    """
+    output = np.empty((len(widths), len(data)), dtype=np.complex128)
+    for i, width in enumerate(widths):
+        N = int(np.min([10 * width, len(data)]))
+        N = max(N * 2 + 1, 3)
+        wavelet_data = wavelet(N, width, **kwargs)
+        output[i] = np.convolve(data, wavelet_data, mode="same")
+    return output
+
+
+def _patch_subtle_cwt():
+    """Patch subtle.module.morlet_cwt for scipy >= 1.12.
+
+    scipy 1.12+ removed signal.cwt and 1.15+ removed signal.morlet2.
+    We replace both with pure-numpy implementations.
+    """
+    from scipy import signal
+
+    # Patch signal.morlet2 if missing
+    if not hasattr(signal, "morlet2"):
+        signal.morlet2 = _morlet2_compat
+
+    # Patch signal.cwt if missing
+    if not hasattr(signal, "cwt"):
+        signal.cwt = _cwt_compat
+
+    # Patch subtle.module directly (it caches the import)
+    try:
+        import subtle.module as sm
+
+        def patched_morlet_cwt(x, fs, omega, n_channels):
+            f_nyquist = fs / 2
+            freq = np.linspace(f_nyquist / 10, f_nyquist, n_channels)
+            widths = omega * fs / (2 * freq * np.pi)
+            return np.abs(_cwt_compat(x, _morlet2_compat, widths, w=omega))
+
+        sm.morlet_cwt = patched_morlet_cwt
+    except (ImportError, AttributeError):
+        pass
 
 
 class SUBTLE:
@@ -47,6 +115,7 @@ class SUBTLE:
             dict with 'embeddings', 'subclusters', 'superclusters',
                        'transitions', 'retention'
         """
+        _patch_subtle_cwt()
         try:
             import subtle
         except ImportError:
@@ -57,14 +126,16 @@ class SUBTLE:
         self._mapper = subtle.Mapper(
             fs=self.fps, n_train_frames=self.n_train_frames,
             embedding_method=self.embedding_method, **self.kwargs)
-        outputs = self._mapper.fit(flat)
+        data_list = self._mapper.fit(flat)
 
+        # Results live on the mapper and Data objects
+        data_obj = data_list[0] if data_list else None
         return {
-            'embeddings': outputs.get('Z'),
-            'subclusters': outputs.get('y'),
-            'superclusters': outputs.get('Y'),
-            'transitions': outputs.get('TP'),
-            'retention': outputs.get('R'),
+            'embeddings': getattr(self._mapper, 'Z', None),
+            'subclusters': getattr(self._mapper, 'y', None),
+            'superclusters': getattr(self._mapper, 'Y', None),
+            'transitions': getattr(data_obj, 'TP', None) if data_obj else None,
+            'retention': getattr(data_obj, 'R', None) if data_obj else None,
         }
 
     def predict(self, sequences: List[np.ndarray]) -> Dict:
@@ -80,14 +151,15 @@ class SUBTLE:
             raise RuntimeError("Call .fit() first")
 
         flat = [self._preprocess(s) for s in sequences]
-        outputs = self._mapper.run(flat)
+        data_list = self._mapper.run(flat)
 
+        data_obj = data_list[0] if data_list else None
         return {
-            'embeddings': outputs.get('Z'),
-            'subclusters': outputs.get('y'),
-            'superclusters': outputs.get('Y'),
-            'transitions': outputs.get('TP'),
-            'retention': outputs.get('R'),
+            'embeddings': getattr(data_obj, 'Z', None) if data_obj else None,
+            'subclusters': getattr(data_obj, 'y', None) if data_obj else None,
+            'superclusters': getattr(data_obj, 'Y', None) if data_obj else None,
+            'transitions': getattr(data_obj, 'TP', None) if data_obj else None,
+            'retention': getattr(data_obj, 'R', None) if data_obj else None,
         }
 
     def save(self, path: str):
@@ -98,6 +170,7 @@ class SUBTLE:
 
     def load(self, path: str):
         """Load pre-trained mapper."""
+        _patch_subtle_cwt()
         import subtle
         self._mapper = subtle.Mapper()
         self._mapper.load(path)

@@ -26,6 +26,9 @@ dependencies = [
 
 [project.optional-dependencies]
 torch = ["torch>=2.0", "torchvision>=0.15"]
+visual = ["torch>=2.0", "torchvision>=0.15"]
+cebra = ["cebra>=0.4"]
+videomae = ["transformers>=4.22", "av<14"]
 dlc = ["deeplabcut[modelzoo]>=3.0.0rc1"]
 web = ["fastapi>=0.100", "uvicorn>=0.23", "python-multipart>=0.0.6"]
 viz = ["matplotlib>=3.6", "seaborn>=0.12", "imageio>=2.25", "imageio-ffmpeg>=0.4", "opencv-python-headless>=4.8"]

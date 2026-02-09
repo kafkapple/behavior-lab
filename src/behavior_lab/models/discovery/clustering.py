@@ -29,7 +29,7 @@ def cluster_features(
     X = scaler.fit_transform(features)
 
     # PCA
-    pca = PCA(n_components=min(X.shape[1], 50), random_state=random_state)
+    pca = PCA(n_components=min(X.shape[0], X.shape[1], 50), random_state=random_state)
     X_pca = pca.fit_transform(X)
     cumvar = np.cumsum(pca.explained_variance_ratio_)
     n_components = np.searchsorted(cumvar, pca_variance) + 1

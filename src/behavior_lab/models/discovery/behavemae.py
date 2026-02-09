@@ -18,31 +18,60 @@ if _SUBMODULE_PATH.exists() and str(_SUBMODULE_PATH) not in sys.path:
     sys.path.insert(0, str(_SUBMODULE_PATH))
 
 
-def pose_to_behavemae_input(data: np.ndarray, target_frames: int = 400) -> 'torch.Tensor':
-    """Convert (T, K, D) skeleton data to BehaveMAE input format (B, T, 1, K*D).
+def pose_to_behavemae_input(data: np.ndarray, target_frames: int = 900,
+                            n_agents: int = 3, features_per_agent: int = 24
+                            ) -> 'torch.Tensor':
+    """Convert skeleton data to BehaveMAE input format (B, 1, T, n_agents, features).
 
-    The model's forward() adds a channel dim via unsqueeze(1), so input should be 4D.
+    Supports:
+      - (T, n_agents, J, D) e.g. MABe22 (1800, 3, 12, 2)
+      - (T, K, D) single-agent fallback
 
     Args:
-        data: (T, K, D) skeleton coordinates
-        target_frames: target temporal length (pad/crop)
+        data: skeleton keypoint array
+        target_frames: temporal length the model expects
+        n_agents: number of agents (spatial dim for model)
+        features_per_agent: features per agent (J*D)
 
     Returns:
-        torch.Tensor of shape (1, T, 1, K*D)
+        torch.Tensor of shape (1, 1, T, n_agents, features_per_agent)
     """
     import torch
 
-    T, K, D = data.shape
-    flat = data.reshape(T, K * D)  # (T, K*D)
+    if data.ndim == 4:
+        # (T, n_agents, J, D) → (T, n_agents, J*D)
+        T, A, J, D = data.shape
+        flat = data.reshape(T, A, J * D).astype(np.float32)
+    elif data.ndim == 3:
+        # (T, K, D) single-agent → (T, 1, K*D)
+        T, K, D = data.shape
+        flat = data.reshape(T, 1, K * D).astype(np.float32)
+    else:
+        raise ValueError(f"Expected 3D or 4D input, got {data.ndim}D")
 
-    # Pad or crop to target_frames
-    if T < target_frames:
-        flat = np.pad(flat, ((0, target_frames - T), (0, 0)), mode='edge')
-    elif T > target_frames:
+    # Pad or crop temporal dim to target_frames
+    if flat.shape[0] < target_frames:
+        flat = np.pad(flat, ((0, target_frames - flat.shape[0]), (0, 0), (0, 0)),
+                      mode='edge')
+    elif flat.shape[0] > target_frames:
         flat = flat[:target_frames]
 
-    # (B, T, 1, K*D) — model.forward() adds channel dim via unsqueeze(1)
-    tensor = torch.from_numpy(flat).float().unsqueeze(0).unsqueeze(2)
+    # Pad or crop agent dim
+    if flat.shape[1] < n_agents:
+        flat = np.pad(flat, ((0, 0), (0, n_agents - flat.shape[1]), (0, 0)),
+                      mode='constant')
+    elif flat.shape[1] > n_agents:
+        flat = flat[:, :n_agents, :]
+
+    # Pad or crop feature dim
+    if flat.shape[2] < features_per_agent:
+        flat = np.pad(flat, ((0, 0), (0, 0), (0, features_per_agent - flat.shape[2])),
+                      mode='constant')
+    elif flat.shape[2] > features_per_agent:
+        flat = flat[:, :, :features_per_agent]
+
+    # (1, 1, T, n_agents, features_per_agent) — Conv3d expects (B, C, T, H, W)
+    tensor = torch.from_numpy(flat).float().unsqueeze(0).unsqueeze(0)
     return tensor
 
 
@@ -60,30 +89,16 @@ class BehaveMAE:
         features = model.encode_hierarchical(data)  # dict per level
     """
 
-    # Default configs per dataset
+    # Default configs per dataset — extracted from checkpoint args
     CONFIGS = {
-        'shot7m2': dict(
-            input_size=(400, 1, 72), in_chans=1, init_embed_dim=96,
-            init_num_heads=2, stages=(2, 3, 4), out_embed_dims=(78, 128, 256),
-            q_strides=[(2, 1, 4), (2, 1, 6)], mask_unit_attn=(True, False, False),
-            patch_kernel=(2, 1, 3), patch_stride=(2, 1, 3), patch_padding=(0, 0, 0),
-            decoder_embed_dim=128, decoder_depth=1, decoder_num_heads=1,
-        ),
         'mabe22': dict(
-            input_size=(400, 1, 72), in_chans=1, init_embed_dim=96,
-            init_num_heads=2, stages=(2, 3, 4), out_embed_dims=(78, 128, 256),
-            q_strides=[(2, 1, 4), (2, 1, 6)], mask_unit_attn=(True, False, False),
-            patch_kernel=(2, 1, 3), patch_stride=(2, 1, 3), patch_padding=(0, 0, 0),
+            # Actual checkpoint: input_size=(900, 3, 24), 3 mice × 12 keypoints × 2D
+            input_size=(900, 3, 24), in_chans=1, init_embed_dim=128,
+            init_num_heads=2, stages=(3, 4, 5), out_embed_dims=(128, 192, 256),
+            q_strides=[(5, 1, 1), (1, 3, 1)], mask_unit_attn=(True, False, False),
+            patch_kernel=(3, 1, 24), patch_stride=(3, 1, 24), patch_padding=(0, 0, 0),
             decoder_embed_dim=128, decoder_depth=1, decoder_num_heads=1,
-        ),
-        'calms21': dict(
-            # 14 joints x 2D = 28 features → patch_kernel 4 → 7 spatial tokens
-            # q_strides: 7 → 7/7=1 → 1/1=1 (temporal only at second stage)
-            input_size=(400, 1, 28), in_chans=1, init_embed_dim=96,
-            init_num_heads=2, stages=(2, 3, 4), out_embed_dims=(78, 128, 256),
-            q_strides=[(2, 1, 7), (2, 1, 1)], mask_unit_attn=(True, False, False),
-            patch_kernel=(2, 1, 4), patch_stride=(2, 1, 4), patch_padding=(0, 0, 0),
-            decoder_embed_dim=128, decoder_depth=1, decoder_num_heads=1,
+            sep_pos_embed=True,
         ),
     }
 
@@ -127,45 +142,62 @@ class BehaveMAE:
 
         return cls(model=model, config=config)
 
-    def encode(self, data: np.ndarray, target_frames: int = 400) -> np.ndarray:
+    def encode(self, data: np.ndarray, target_frames: int = 900) -> np.ndarray:
         """Encode skeleton data to feature vector (highest level).
 
         Uses forward_encoder with mask_ratio=0 (no masking) for clean features.
 
         Args:
-            data: (T, K, D) skeleton coordinates
+            data: (T, n_agents, J, D) or (T, K, D) skeleton coordinates
 
         Returns:
-            (embed_dim,) or (N, embed_dim) feature array
+            (N_tokens, embed_dim) feature array
         """
         import torch
 
+        cfg = self.config
+        n_agents = cfg.get('input_size', (900, 3, 24))[1]
+        feat_per_agent = cfg.get('input_size', (900, 3, 24))[2]
+
         device = next(self.model.parameters()).device
-        x = pose_to_behavemae_input(data, target_frames).to(device)
-        x = x.unsqueeze(1)  # Add channel dim: (B, T, 1, K*D) -> (B, 1, T, 1, K*D)
+        x = pose_to_behavemae_input(
+            data, target_frames=target_frames,
+            n_agents=n_agents, features_per_agent=feat_per_agent,
+        ).to(device)
+        # x is already (B, 1, T, n_agents, features) — ready for Conv3d
 
         with torch.no_grad():
             latent, _ = self.model.forward_encoder(x, mask_ratio=0)
 
-        return latent.squeeze().cpu().numpy()
+        # latent may have extra size-1 dims, squeeze all then ensure 2D
+        out = latent.cpu().numpy().squeeze()
+        if out.ndim == 1:
+            out = out.reshape(1, -1)
+        return out  # (N_tokens, embed_dim)
 
     def encode_hierarchical(self, data: np.ndarray,
-                            target_frames: int = 400) -> Dict[str, np.ndarray]:
+                            target_frames: int = 900) -> Dict[str, np.ndarray]:
         """Encode skeleton data to multi-scale features using forward hooks.
 
         Captures per-stage intermediates from the encoder backbone.
 
         Args:
-            data: (T, K, D) skeleton coordinates
+            data: (T, n_agents, J, D) or (T, K, D) skeleton coordinates
 
         Returns:
             dict mapping level names to feature arrays
         """
         import torch
 
+        cfg = self.config
+        n_agents = cfg.get('input_size', (900, 3, 24))[1]
+        feat_per_agent = cfg.get('input_size', (900, 3, 24))[2]
+
         device = next(self.model.parameters()).device
-        x = pose_to_behavemae_input(data, target_frames).to(device)
-        x = x.unsqueeze(1)
+        x = pose_to_behavemae_input(
+            data, target_frames=target_frames,
+            n_agents=n_agents, features_per_agent=feat_per_agent,
+        ).to(device)
 
         # Register hooks on each stage to capture intermediates
         intermediates = []
