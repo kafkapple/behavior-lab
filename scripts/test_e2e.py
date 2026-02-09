@@ -44,6 +44,9 @@ from behavior_lab.visualization.colors import get_joint_labels, get_joint_full_n
 from behavior_lab.visualization.html_report import (
     generate_pipeline_report, image_to_base64,
 )
+from behavior_lab.visualization.video_overlay import (
+    overlay_keypoints_on_video, overlay_keypoints_on_frame_array,
+)
 
 OUT_DIR = ROOT / "outputs" / "e2e_test"
 
@@ -388,6 +391,43 @@ def test_calms21(report: dict, html_data: dict) -> None:
     if gif_path.exists():
         ds_html["figures"]["skeleton_gif"] = image_to_base64(gif_path)
     print(f"  Saved: sample_animation.gif ({n_anim} frames)")
+
+    # --- Keypoint Overlay (CalMS21: 2 mice, 2D) ---
+    print("\n  Generating keypoint overlay GIFs...")
+    overlay_items_calms = []
+    overlay_dir_calms = out / "overlays"
+    overlay_dir_calms.mkdir(parents=True, exist_ok=True)
+    H_ov, W_ov = 300, 300
+    for oi in range(min(2, len(train_seqs))):
+        kp_ov = train_seqs[oi].keypoints.copy()
+        n_ov = min(kp_ov.shape[0], 64)  # CalMS21 sequences are short (~64f)
+        kp_ov = kp_ov[:n_ov]
+        valid_mask = np.any(kp_ov != 0, axis=-1)
+        vx, vy = kp_ov[:, :, 0][valid_mask], kp_ov[:, :, 1][valid_mask]
+        if len(vx) == 0:
+            continue
+        xmin, xmax = vx.min(), vx.max()
+        ymin, ymax = vy.min(), vy.max()
+        sc = min((W_ov - 40) / max(xmax - xmin, 1), (H_ov - 40) / max(ymax - ymin, 1))
+        kp_ov[:, :, 0] = np.where(valid_mask, (kp_ov[:, :, 0] - xmin) * sc + 20, 0)
+        kp_ov[:, :, 1] = np.where(valid_mask, (kp_ov[:, :, 1] - ymin) * sc + 20, 0)
+        frames_ov = [np.full((H_ov, W_ov, 3), 25, dtype=np.uint8) for _ in range(n_ov)]
+        sp = overlay_dir_calms / f"overlay_{oi:02d}.gif"
+        try:
+            overlay_keypoints_on_frame_array(
+                frames_ov, kp_ov, skeleton, output_path=sp,
+                fps=15.0, joint_radius=4, limb_thickness=2, opacity=0.95,
+            )
+            if sp.exists():
+                overlay_items_calms.append({
+                    "label": f"Seq {oi} ({n_ov}f, synthetic bg)",
+                    "src": image_to_base64(sp),
+                })
+                print(f"    Saved: {sp.name} ({n_ov} frames)")
+        except Exception as e:
+            print(f"    Warning: overlay {oi} failed: {e}")
+    if overlay_items_calms:
+        ds_html["video_overlays"] = overlay_items_calms
 
     # --- Preprocessing ---
     print("\n  Preprocessing pipeline...")
@@ -1529,6 +1569,57 @@ def test_mabe22_behavemae(report: dict, html_data: dict) -> None:
     if gif_path.exists():
         ds_html["figures"]["skeleton_gif"] = image_to_base64(gif_path)
     print(f"  Saved: sample_animation.gif ({n_anim} frames)")
+
+    # --- Keypoint Overlay (synthetic background or real video) ---
+    print("\n  Generating keypoint overlay GIFs...")
+    overlay_items = []
+    overlay_dir = out / "overlays"
+    overlay_dir.mkdir(parents=True, exist_ok=True)
+    n_overlay = 3  # Number of sample overlays
+    n_overlay_frames = 150  # Frames per overlay (10s @ 15fps)
+    H_overlay, W_overlay = 300, 300
+
+    # Check for real video files
+    video_dir = ROOT / "data" / "raw" / "mabe22" / "videos" / "extracted"
+    has_video = video_dir.exists() and any(video_dir.glob("*.avi")) or any(video_dir.glob("*.mp4")) if video_dir.exists() else False
+
+    for oi in range(min(n_overlay, len(sequences))):
+        seq = sequences[oi]
+        kp = seq.keypoints[:n_overlay_frames].copy()  # (T, 36, 2)
+        # Scale keypoints to fit overlay canvas
+        valid_mask = np.any(kp != 0, axis=-1)  # (T, 36)
+        valid_x = kp[:, :, 0][valid_mask]
+        valid_y = kp[:, :, 1][valid_mask]
+        if len(valid_x) == 0:
+            continue
+        xmin, xmax = valid_x.min(), valid_x.max()
+        ymin, ymax = valid_y.min(), valid_y.max()
+        xr, yr = max(xmax - xmin, 1), max(ymax - ymin, 1)
+        scale = min((W_overlay - 40) / xr, (H_overlay - 40) / yr)
+        kp[:, :, 0] = np.where(valid_mask, (kp[:, :, 0] - xmin) * scale + 20, 0)
+        kp[:, :, 1] = np.where(valid_mask, (kp[:, :, 1] - ymin) * scale + 20, 0)
+
+        frames = [np.full((H_overlay, W_overlay, 3), 25, dtype=np.uint8)
+                  for _ in range(kp.shape[0])]
+        save_path = overlay_dir / f"overlay_{oi:02d}.gif"
+        try:
+            overlay_keypoints_on_frame_array(
+                frames, kp, skeleton,
+                output_path=save_path, fps=15.0,
+                joint_radius=4, limb_thickness=2,
+                show_labels=False, opacity=0.95,
+            )
+            if save_path.exists():
+                overlay_items.append({
+                    "label": f"Sequence {oi} ({kp.shape[0]}f, synthetic bg)",
+                    "src": image_to_base64(save_path),
+                })
+                print(f"    Saved: {save_path.name} ({kp.shape[0]} frames)")
+        except Exception as e:
+            print(f"    Warning: overlay {oi} failed: {e}")
+
+    if overlay_items:
+        ds_html["video_overlays"] = overlay_items
 
     # --- KMeans on mean-pooled features ---
     from behavior_lab.models.discovery.clustering import cluster_features

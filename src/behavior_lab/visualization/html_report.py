@@ -154,6 +154,26 @@ def _render_dataset_tab(name: str, ds: dict) -> str:
         cards = "".join(_render_metric_card(k, v) for k, v in probe.items())
         sections.append(f"<h3>Linear Probe</h3><div class='metrics-grid'>{cards}</div>")
 
+    # Video overlay GIF grid
+    overlays = ds.get("video_overlays", [])
+    if overlays:
+        overlay_cards = []
+        for item in overlays:
+            overlay_cards.append(
+                f'<div style="text-align:center;margin:4px;">'
+                f'<img src="{item["src"]}" alt="{_escape(item["label"])}" '
+                f'style="max-width:280px;border-radius:6px;border:1px solid var(--border);">'
+                f'<p style="font-size:0.8em;margin-top:4px;">{_escape(item["label"])}</p>'
+                f'</div>'
+            )
+        sections.append(
+            f"<h3>Keypoint Overlay</h3>"
+            f'<p style="font-size:0.85em;color:var(--text-light);margin-bottom:8px;">'
+            f'Skeleton keypoints rendered on {"video" if any("video" in i.get("label","").lower() for i in overlays) else "synthetic"} frames</p>'
+            f'<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">'
+            f'{"".join(overlay_cards)}</div>'
+        )
+
     # Per-class GIF grid
     per_class = ds.get("per_class_gifs", [])
     if per_class:
