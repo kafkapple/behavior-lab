@@ -1,0 +1,7 @@
+name: mammal_m1
+_target_: behavior_lab.data.loaders.mammal_mouse.MammalMouseLoader
+
+# gpu03 source (980 KB): /home/joon/data/results/MAMMAL_mouse/v012345_kp22_20260126/keypoints_22_3d.npz
+npz_path: ${paths.data_dir}/mammal_mouse/v012345_kp22_20260126/keypoints_22_3d.npz
+session_id: markerless_mouse_1
+fps: 50.0

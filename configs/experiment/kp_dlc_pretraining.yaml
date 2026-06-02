@@ -1,0 +1,51 @@
+# @package _global_
+#
+# kp_benchmark v0.1 — controlled DLC pretraining benchmark.
+#
+# Hypothesis: SuperAnimal pretraining improves DLC keypoint accuracy on mouse data,
+# measured on (a) in-distribution MAMMAL M1 held-out + (b) external Li M1 GT (n=50).
+#
+# Comparison: DLC ResNet50 (ImageNet init) vs DLC MobileNet (SuperAnimal init),
+# trained on IDENTICAL MAMMAL M1 80/20 splits (seed=42).
+
+defaults:
+  - override /dataset: mammal_m1
+  - _self_
+
+experiment:
+  name: kp_benchmark_v0.1_dlc_pretraining
+  seed: 42
+
+kp_benchmark:
+  # Predictors compared
+  predictors:
+    dlc_resnet50:
+      backbone: resnet_50
+      init: imagenet
+      net_type: resnet_50
+    dlc_superanimal:
+      backbone: hrnet_w32           # SuperAnimal-TopViewMouse default
+      init: superanimal_topviewmouse
+      net_type: hrnet_w32
+
+  # Data
+  data:
+    mammal_npz: ${paths.data_dir}/mammal_mouse/v012345_kp22_20260126/keypoints_22_3d.npz
+    li_label3d: ${paths.data_dir}/markerless_mouse_1/labels/label3d_dannce.mat
+    video_dir: ${paths.data_dir}/markerless_mouse_1/videos_undist
+    n_frames_total: 3600
+    train_ratio: 0.8
+
+  # Metric
+  metric:
+    name: root_relative_mpjpe
+    root_joint_idx: 0               # confirm with skeleton_22kp definition
+    bootstrap_n: 10000
+    ci: 0.95
+
+  # Output
+  output:
+    splits_dir: ${paths.output_dir}/kp_benchmark/splits
+    predictions_dir: ${paths.output_dir}/kp_benchmark/predictions
+    results_csv: ${paths.output_dir}/kp_benchmark/results.csv
+    report_md: ${paths.output_dir}/kp_benchmark/benchmark_v0.1.md

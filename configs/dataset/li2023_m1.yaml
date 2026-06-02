@@ -1,0 +1,8 @@
+name: li2023_m1
+_target_: behavior_lab.data.loaders.li2023.Li2023Loader
+
+# Default path resolves via env var BEHAVIOR_LAB_DATA (see config.yaml).
+# Override on command line with: dataset.label3d_path=/abs/path/label3d_dannce.mat
+# gpu03 source (1.2 MB): /node_data_2/joon/data/external/markerless_mouse_1/labels/label3d_dannce.mat
+label3d_path: ${paths.data_dir}/markerless_mouse_1/labels/label3d_dannce.mat
+session_id: markerless_mouse_1
