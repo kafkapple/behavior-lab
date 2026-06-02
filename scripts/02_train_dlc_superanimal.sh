@@ -13,6 +13,7 @@ GPU="${CUDA_VISIBLE_DEVICES:-5}"
 PROJECT_ROOT="${PROJECT_ROOT:-/node_data/joon/behavior-lab-kp-benchmark}"
 DATA_ROOT="${DATA_ROOT:-/home/joon/dev/behavior-lab/data}"
 REPO_ROOT="${REPO_ROOT:-/home/joon/dev/behavior-lab}"
+VIDEO_DIR="${VIDEO_DIR:-/node_data/joon/data/raw/markerless_mouse_1_nerf/videos_undist}"
 NET_TYPE="hrnet_w32"
 TAG="dlc_superanimal_hrnet_w32"
 SUPERANIMAL="superanimal_topviewmouse"
@@ -61,8 +62,10 @@ mammal_kp = mam["keypoints"].astype(np.float64)
 mammal_idx = mam["frame_indices"]
 train_ids = pd.read_csv(DATA_ROOT / "splits/mammal_m1_train.csv")["frame_id"].values
 
-video_dir = Path("/home/joon/data/external/MAMMAL_Mesh_markerless_mouse_1/data/markerless_mouse_1_nerf/videos_undist")
+video_dir = Path("$VIDEO_DIR")
 videos = [str(video_dir / f"{i}.mp4") for i in range(6)]
+missing = [v for v in videos if not Path(v).exists()]
+assert not missing, f"missing video: {missing}"
 
 project_name = f"kp_benchmark_{TAG}"
 config_path = dlc.create_new_project(

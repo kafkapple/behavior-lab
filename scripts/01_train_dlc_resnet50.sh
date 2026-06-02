@@ -16,6 +16,7 @@ GPU="${CUDA_VISIBLE_DEVICES:-4}"
 PROJECT_ROOT="${PROJECT_ROOT:-/node_data/joon/behavior-lab-kp-benchmark}"
 DATA_ROOT="${DATA_ROOT:-/home/joon/dev/behavior-lab/data}"
 REPO_ROOT="${REPO_ROOT:-/home/joon/dev/behavior-lab}"
+VIDEO_DIR="${VIDEO_DIR:-/node_data/joon/data/raw/markerless_mouse_1_nerf/videos_undist}"
 NET_TYPE="resnet_50"
 TAG="dlc_resnet50_imagenet"
 
@@ -54,9 +55,10 @@ mammal_kp = mam["keypoints"].astype(np.float64)         # (3600, 22, 3)
 mammal_idx = mam["frame_indices"]                       # (3600,)
 train_ids = pd.read_csv(DATA_ROOT / "splits/mammal_m1_train.csv")["frame_id"].values
 
-video_dir = Path("/home/joon/data/external/MAMMAL_Mesh_markerless_mouse_1/data/markerless_mouse_1_nerf/videos_undist")
+video_dir = Path("$VIDEO_DIR")
 videos = [str(video_dir / f"{i}.mp4") for i in range(6)]
-assert all(Path(v).exists() for v in videos), f"missing video"
+missing = [v for v in videos if not Path(v).exists()]
+assert not missing, f"missing video: {missing}"
 
 # 2) Create DLC project (single-animal, 22 kp)
 project_name = f"kp_benchmark_{TAG}"
