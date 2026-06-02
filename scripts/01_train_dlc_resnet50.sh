@@ -79,7 +79,7 @@ cfg["numframes2pick"] = 0           # we provide frames manually
 write_config(config_path, cfg)
 
 # 4) Generate labels per video (project MAMMAL 3D → 2D per cam, only at train_ids)
-import h5py
+# pandas.to_hdf in dlc3 env uses pytables (no h5py needed)
 labeled_dir = Path(config_path).parent / "labeled-data"
 labeled_dir.mkdir(exist_ok=True)
 common_train = np.intersect1d(train_ids, mammal_idx)
