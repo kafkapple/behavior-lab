@@ -7,7 +7,10 @@
 
 SuperAnimal pretraining improves DeepLabCut (DLC) keypoint accuracy on mouse data,
 measured on (a) in-distribution MAMMAL M1 held-out test split and
-(b) external Li 2023 M1 manual GT (n=50 sparse timepoints).
+(b) external Li 2023 M1 manual GT (81 total tp, 50 fully-valid).
+
+Training signal = MAMMAL mesh-fit pseudo-GT (dense, low coverage of video timeline).
+True OOD evaluation = Li manual labels.
 
 ## Design
 
@@ -55,11 +58,33 @@ docs/
 
 ## Data SSOT (gpu03)
 
-| Asset              | Path                                                                     | Size  |
-|--------------------|--------------------------------------------------------------------------|-------|
-| MAMMAL M1 dense    | `/home/joon/data/results/MAMMAL_mouse/v012345_kp22_20260126/keypoints_22_3d.npz` | 980 KB |
-| Li M1 sparse GT    | `/node_data_2/joon/data/external/markerless_mouse_1/labels/label3d_dannce.mat` | 1.2 MB |
-| M1 raw video       | `~/data/external/MAMMAL_Mesh_markerless_mouse_1/.../videos_undist/{0..5}.mp4`   | 127 MB |
+| Asset              | Path                                                                     | Size  | Schema |
+|--------------------|--------------------------------------------------------------------------|-------|--------|
+| MAMMAL M1 dense    | `/home/joon/data/results/MAMMAL_mouse/v012345_kp22_20260126/keypoints_22_3d.npz` | 958 KB | `keypoints` (3600,22,3), `frame_indices` (3600,) ∈ {0,5,…,17995} (5-step downsample), `keypoint_names` (22,) |
+| Li M1 sparse GT    | `/node_data_2/joon/data/external/markerless_mouse_1/labels/label3d_dannce.mat` | 1.2 MB | `labelData[0].data_3d` (81,66), `data_frame` (81,) ∈ [27,17858] — arbitrary video frames |
+| M1 raw video       | `~/data/external/MAMMAL_Mesh_markerless_mouse_1/.../videos_undist/{0..5}.mp4`   | 127 MB | 6 cam, 18000 fr |
+
+### 22-kp ordering (MAMMAL `keypoint_names`)
+
+```
+0:L_ear  1:R_ear  2:nose  3:neck  4:body_middle  5:tail_root  6:tail_middle  7:tail_end
+8:L_paw  9:L_paw_end  10:L_elbow  11:L_shoulder  12:R_paw  13:R_paw_end  14:R_elbow  15:R_shoulder
+16:L_foot  17:L_knee  18:L_hip  19:R_foot  20:R_knee  21:R_hip
+```
+
+Root joint candidates for `root_relative_mpjpe`: `body_middle` (idx 4) or `tail_root` (idx 5).
+
+### Frame alignment (critical)
+
+- MAMMAL covers only 3600 of 18000 video frames (every 5th).
+- Li GT spans arbitrary frames; only 17/81 happen to fall on MAMMAL grid.
+- **Implication**: DLC must train on **video frames directly** (not MAMMAL grid indices),
+  using MAMMAL kp as supervision signal. Li GT evaluation uses 81 Li frames as a
+  separate inference query — no MAMMAL grid alignment required.
+- Generated `data/markerless_mouse_1/labels/li_m1_gt.npz` contains:
+  - `keypoints_3d` (81, 22, 3) float32
+  - `frame_ids` (81,) int64 — video frame index
+  - `valid_mask` (81, 22) bool — `True` where kp manually labeled (50 frames fully valid, 31 partial)
 
 ## Reproduce
 
@@ -100,7 +125,9 @@ python scripts/benchmark_kp_dlc.py \
 
 ## Known caveats (must disclose in any report)
 
-- Li external N=50 → CI will be wide; null result is ambiguous (underpowered).
+- Li external: 81 total / 50 fully-valid → CI will be wide; null result is ambiguous (underpowered).
+- For partial-valid Li frames (31), use `valid_mask` to mask NaN keypoints before metric averaging.
+- Training signal is **MAMMAL pseudo-GT**, not human labels — DLC inherits MAMMAL's mesh-fit bias.
 - DLC default HPs may favor one backbone — comparison is "out-of-box", not tuned.
 - Root-relative metric eliminates global translation only; coord-frame rotation
   between MAMMAL/DLC outputs may need Procrustes if residual logs flag it.
