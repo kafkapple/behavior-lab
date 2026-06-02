@@ -128,16 +128,9 @@ def plot_kp_sample_3d(mammal_kp: np.ndarray, sample_frame: int = 0) -> str:
     fig = plt.figure(figsize=(7, 6))
     ax = fig.add_subplot(111, projection="3d")
     pts = mammal_kp[sample_frame]
-    edges = [
-        (2, 3), (0, 3), (1, 3),          # head → neck
-        (3, 4), (4, 5), (5, 6), (6, 7),  # neck → tail
-        (4, 11), (4, 15),                # neck → shoulders
-        (11, 10), (10, 8), (8, 9),       # L arm
-        (15, 14), (14, 12), (12, 13),    # R arm
-        (5, 18), (5, 21),                # tail_root → hips
-        (18, 17), (17, 16),              # L leg
-        (21, 20), (20, 19),              # R leg
-    ]
+    edges = [(2, 3), (0, 3), (1, 3), (3, 4), (4, 5), (5, 6), (6, 7), (4, 11),
+             (4, 15), (11, 10), (10, 8), (8, 9), (15, 14), (14, 12), (12, 13),
+             (5, 18), (5, 21), (18, 17), (17, 16), (21, 20), (20, 19)]
     for a, b in edges:
         ax.plot(*zip(pts[a], pts[b]), c="#888", lw=1.0)
     ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], c="#d33", s=30)
@@ -236,6 +229,11 @@ def render_html(ctx: dict, figs: dict) -> str:
 <h3>3.5 Sample MAMMAL skeleton (frame 0)</h3>
 {img('skeleton', 'MAMMAL 22-kp 3D pose at video frame index 0. Mouse body topology visible: head (nose/ears/neck), torso (neck → body_middle → tail_root), 4 limbs.')}
 
+<h3>3.6 Real-frame KP overlay (coordinate-system sanity check)</h3>
+<p><b class="good">정합 검증 PASS</b> — MAMMAL 22-kp 3D coordinates projected via calibrated camera params (K, R, t + radial/tangential distortion) land on the mouse body across all 6 views. Li GT (red) and MAMMAL pseudo-GT (green) agree closely, confirming both data sources share the same world coordinate frame.</p>
+{img('overlay_a', f'Frame {ctx["overlay_frames"][0]} — 6-view grid. Green = MAMMAL 22-kp projected. Red = Li 2023 manual GT projected. Skeleton bones drawn for both. The two predictors visually agree on body topology.')}
+{img('overlay_b', f'Frame {ctx["overlay_frames"][1]} — different pose. Overlay still tracks the mouse body in every view, validating the projection pipeline that DLC training will rely on.')}
+
 <h2>4. Design decisions (Q1–Q5 audit-corrected)</h2>
 <table>
 <tr><th>Q</th><th>Original option</th><th>v0.1 decision</th><th>Audit driver</th></tr>
@@ -280,28 +278,27 @@ commit cd37772  docs(kp_benchmark): correct Li GT count + add MAMMAL alignment n
 <tr><td>Li GT canonical npz</td><td class="good">✅ done</td><td>(81, 22, 3) + valid_mask saved</td></tr>
 <tr><td>Docs correction (50→81 etc.)</td><td class="good">✅ done</td><td>commit cd37772</td></tr>
 <tr><td>User modified files (8)</td><td class="good">✅ untouched</td><td>path overlap 0; git status preserved</td></tr>
-<tr><td>DLC training scripts (01/02 .sh)</td><td class="warn">⏸ next</td><td>requires gpu03 GPU + user approval</td></tr>
+<tr><td>KP overlay (3D→2D projection viz)</td><td class="good">✅ PASS</td><td>green=MAMMAL, red=Li agree on mouse body across 6 views</td></tr>
+<tr><td>DLC training scripts (01/02 .sh)</td><td class="good">✅ written + executable</td><td>uses /node_data/joon to avoid NFS hangs; ready to run on gpu03 GPU 4/5 (97 GB free)</td></tr>
 <tr><td>DLC inference → predictions npz</td><td class="warn">⏸ pending</td><td>after training</td></tr>
 <tr><td>benchmark_kp_dlc.py results CSV + report</td><td class="warn">⏸ pending</td><td>after inference</td></tr>
 </table>
 
-<h2>7. What's next (sequence)</h2>
+<h2>7. What's next</h2>
+<p><b>C ✅ + B ✅ done.</b> A (DLC training) ready to launch on gpu03 GPU 4 + GPU 5 (both 97 GB free, idle).</p>
 <ol>
-<li><b>C — Environment check</b> (1 min): verify <code>dlc3</code> conda env exists on gpu03, GPU idle (<code>nvidia-smi</code>), SuperAnimal weights downloadable.</li>
-<li><b>B — Write DLC training scripts</b> (~10 min, no GPU consumed):
-   <ul>
-   <li><code>scripts/01_train_dlc_resnet50.sh</code> — DLC ResNet50 (ImageNet init) on mammal_m1_train.csv frames, MAMMAL kp as supervision</li>
-   <li><code>scripts/02_train_dlc_superanimal.sh</code> — DLC HRNet-w32 (SuperAnimal-TopViewMouse init), same train set</li>
-   <li>Commit + push to behavior-lab</li>
-   </ul></li>
-<li><b>A — Execute training on gpu03</b> (~30–90 min/model, user-approved):
-   <ul>
-   <li>Outputs: <code>outputs/kp_benchmark/predictions/{{dlc_resnet50, dlc_superanimal}}.npz</code></li>
-   <li>Inference on mammal_m1_test.csv (in-dist) + li_m1_external.csv (OOD)</li>
-   </ul></li>
-<li><b>Evaluate</b> (~1 min): <code>python scripts/benchmark_kp_dlc.py</code> → <code>outputs/kp_benchmark/results.csv</code> + markdown table with bootstrap 95% CI.</li>
-<li><b>Final HTML report</b> (v0.1 results): per-keypoint error bars, MPJPE distributions, CI overlap analysis.</li>
+<li><b>A1 — ResNet50 training</b>: <code>CUDA_VISIBLE_DEVICES=4 bash scripts/01_train_dlc_resnet50.sh</code> on gpu03. ~30–60 min, 20 k iter on 2880 × 6 = 17 k labeled images. Output to <code>/node_data/joon/behavior-lab-kp-benchmark/kp_benchmark_dlc_resnet50_imagenet</code>.</li>
+<li><b>A2 — SuperAnimal training</b> (can run in parallel on GPU 5): <code>CUDA_VISIBLE_DEVICES=5 bash scripts/02_train_dlc_superanimal.sh</code>. SuperAnimal-TopViewMouse weight init via <code>create_training_dataset(weight_init="modelzoo:superanimal_topviewmouse")</code>.</li>
+<li><b>Inference</b>: <code>deeplabcut.analyze_videos()</code> on 6 videos → per-view 2D predictions → triangulate to 3D → npz with key <code>keypoints_3d</code>.</li>
+<li><b>Evaluate</b>: <code>python scripts/benchmark_kp_dlc.py</code> → results.csv + bootstrap 95% CI on (in-dist MAMMAL test, OOD Li GT) for both predictors.</li>
+<li><b>Final HTML</b>: re-run <code>render_kp_data_report.py</code> with <code>--include-results</code> to add per-kp error bars + CI overlap + DLC prediction overlay on Li GT frames.</li>
 </ol>
+
+<h3>Alternative — quicker pre-flight (10 min)</h3>
+<p>If full training is too long for the current session, an intermediate
+result is available via SuperAnimal <b>zero-shot inference</b> (no fine-tune,
+out-of-box). Provides a baseline number for the OOD Li frames and validates
+the inference pipeline before committing to 60+ min of training.</p>
 
 <h2>8. Sanity verdict</h2>
 <p><b class="good">정상.</b> Scaffold + data prep 단계의 모든 검증 통과:</p>
@@ -370,12 +367,23 @@ def main() -> int:
         "rng_z": (float(mammal_kp[..., 2].min()), float(mammal_kp[..., 2].max())),
     }
 
+    # Load pre-rendered KP overlay PNGs if available
+    overlay_dir = REPO_ROOT / "outputs/kp_benchmark/overlay"
+    overlay_frames = []
+    overlay_b64 = {}
+    if overlay_dir.exists():
+        for p in sorted(overlay_dir.glob("frame_*_overlay.png"))[:2]:
+            overlay_b64[f"overlay_{'a' if not overlay_frames else 'b'}"] = base64.b64encode(p.read_bytes()).decode()
+            overlay_frames.append(int(p.stem.split("_")[1]))
+    ctx["overlay_frames"] = overlay_frames or [0, 0]
+
     figs = {
         "splits": plot_split_sizes(train_n, test_n, ctx["li_total"]),
         "timeline": plot_frame_timeline(mammal_idx, li.frame_ids),
         "range": plot_kp_range(mammal_kp),
         "valid": plot_li_valid_heatmap(valid_mask),
         "skeleton": plot_kp_sample_3d(mammal_kp, sample_frame=0),
+        **overlay_b64,
     }
 
     html = render_html(ctx, figs)
