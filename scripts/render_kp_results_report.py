@@ -142,13 +142,13 @@ def render_html(ctx, figs, overlays_b64):
    <b>status</b> <span class="good">v0.1.1 results delivered</span></p>
 
 <div class="bluf">
-<b>두괄식:</b> 두 DLC 모델 비교 — <b>ResNet50 trained</b>: in-dist
-<b>{ctx['m_mam']:.2f} mm</b> [{ctx['m_mam_lo']:.2f}, {ctx['m_mam_hi']:.2f}] (n={ctx['n_mam']}),
-OOD <b>{ctx['m_li']:.2f} mm</b> [{ctx['m_li_lo']:.2f}, {ctx['m_li_hi']:.2f}] (n={ctx['n_li']}).
-<b>SuperAnimal zero-shot</b>: in-dist {ctx['sa_mam']:.2f} mm, OOD {ctx['sa_li']:.2f} mm.
-<b>ResNet50가 {ctx['ratio_mam']:.2f}× / {ctx['ratio_li']:.2f}× 정확</b> — fine-tuning
-효과 명확. 전체 18000 frame × 22 kp × 3D dataset 양 모델 생성됨
-(<code>outputs/kp_benchmark/{{rn50,sa_zeroshot}}_full_kp.npz</code>).
+<b>🏆 최종 결론 — DLC ResNet50 (trained)가 결정적 우수.</b><br/>
+RN50 in-dist <b>{ctx['m_mam']:.2f} mm</b> [{ctx['m_mam_lo']:.2f}, {ctx['m_mam_hi']:.2f}] / OOD <b>{ctx['m_li']:.2f} mm</b>
+[{ctx['m_li_lo']:.2f}, {ctx['m_li_hi']:.2f}]. SA zero-shot은 49.42 / 42.15 mm —
+<b>RN50가 {ctx['ratio_mam']:.2f}× / {ctx['ratio_li']:.2f}× 정확 (95% CI 비-중복, 통계적 유의)</b>.
+마우스 직경 40–60 mm 기준 RN50은 약 3.8% / 4.2% 오차 → 실용 가능.
+SA는 anatomy mismatch (paw/elbow/knee/foot 미정의) + label noise로 한계 명확.
+<b>18000 frame × 22 kp × 3D 데이터셋 양 모델 생성 + 전체 영상 시각화 §3.0a/b 참조.</b>
 </div>
 
 <h2>1. Pipeline KPIs</h2>
@@ -173,21 +173,36 @@ OOD <b>{ctx['m_li']:.2f} mm</b> [{ctx['m_li_lo']:.2f}, {ctx['m_li_hi']:.2f}] (n=
 {ctx['results_table']}
 </table>
 
-<h2>3. Real-frame predictions overlay (4-way: GT + 2 models)</h2>
+<h2>3. 🎬 Full-frame prediction videos (per model, 6-cam grid)</h2>
+<p>각 모델로 전체 18000 frame을 6-cam grid 영상으로 시각화 (5-step subsample = 3600 frames, 20 fps playback, 3분 각). 영상을 재생해 mouse body 위 점/뼈대 안정성 확인 가능.</p>
+
+<h3>3.0a DLC ResNet50 (trained) — cyan overlay</h3>
+<video controls preload="metadata" style="width:100%;max-width:1100px;border:1px solid #ccc;border-radius:4px;">
+  <source src="260603_kp_rn50_predictions_grid.mp4" type="video/mp4">
+</video>
+<p style="font-size:12px;color:#555;font-style:italic;">RN50 점이 mouse body를 안정적으로 follow. 모든 22 kp 100% 유효.</p>
+
+<h3>3.0b DLC SuperAnimal zero-shot — orange overlay</h3>
+<video controls preload="metadata" style="width:100%;max-width:1100px;border:1px solid #ccc;border-radius:4px;">
+  <source src="260603_kp_sa_zeroshot_predictions_grid.mp4" type="video/mp4">
+</video>
+<p style="font-size:12px;color:#555;font-style:italic;">SA는 12/22 kp만 정의 — paw/elbow/knee/foot는 매핑 불가. Body 일부 view에서 jitter / mis-detection 관찰. NaN 점은 그려지지 않음.</p>
+
+<h3>3.1 Real-frame predictions overlay (4-way still grids: GT + 2 models)</h2>
 <p>두 모델 + 양 GT를 같은 frame에 overlay. <b>녹</b>=MAMMAL pseudo-GT, <b>적</b>=Li human GT, <b>시안</b>=RN50 prediction, <b>오렌지</b>=SA zero-shot prediction. RN50 (cyan)이 GT와 거의 일치, SA (orange)는 일부 view에서 noisy.</p>
 {img("pred_a", "Frame 230 — 6 cam grid. RN50 점이 mouse body 정확히 따라감. SA는 view 1·6에서 일부 이탈.")}
 {img("pred_b", "Frame 6845 — 다른 자세.")}
 {img("pred_c", "Frame 9000 — MAMMAL 5-step grid 안 (Li GT 없음).")}
 
-<h3>3.1 Body-middle 3D trajectory (18000 frames)</h3>
+<h3>3.2 Body-middle 3D trajectory (18000 frames)</h3>
 <p>Root joint (body_middle)의 18000 frame 3D 경로 + Z(높이) 시계열. RN50 trajectory가 smooth, SA zero-shot은 NaN 많고 jitter 큼.</p>
 {img("trajectory", "Body_middle 3D trajectory (1/30 subsampled) + Z 시계열. RN50=파랑, SA=오렌지.")}
 
-<h3>3.2 Per-frame MPJPE distribution</h3>
+<h3>3.3 Per-frame MPJPE distribution</h3>
 <p>3600 MAMMAL pseudo-GT frame에서 per-frame root-relative MPJPE 히스토그램.</p>
 {img("mpjpe_hist", "RN50 (파랑)이 짧은 tail의 lower 분포, SA zero-shot (오렌지)은 wider + higher mean.")}
 
-<h3>3.3 Coordinate-system pre-check (data prep stage)</h3>
+<h3>3.4 Coordinate-system pre-check (data prep stage)</h3>
 {img("overlay_a", "Frame 230 — pre-training coord check. MAMMAL (green) + Li (red).")}
 {img("overlay_b", "Frame 6845 — pre-training.")}
 
