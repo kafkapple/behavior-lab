@@ -42,56 +42,58 @@ def fig_to_b64(fig) -> str:
 
 
 def plot_mpjpe_bars(df: pd.DataFrame) -> str:
-    fig, ax = plt.subplots(figsize=(8, 4))
-    rn = df[df["predictor"] == "dlc_resnet50_imagenet"]
-    rows = []
-    for _, r in rn.iterrows():
-        if np.isfinite(r["mpjpe_mean_mm"]):
-            rows.append((r["split"], r["mpjpe_mean_mm"],
-                         r["mpjpe_ci_lo"], r["mpjpe_ci_hi"],
-                         int(r["n_valid_frames"])))
-    if not rows:
-        ax.text(0.5, 0.5, "no valid rows", ha="center", va="center"); return fig_to_b64(fig)
-    labels = [r[0] for r in rows]
-    means = [r[1] for r in rows]
-    los = [r[1] - r[2] for r in rows]
-    his = [r[3] - r[1] for r in rows]
-    ns = [r[4] for r in rows]
-    x = np.arange(len(labels))
-    ax.bar(x, means, yerr=[los, his], capsize=8, color=["#3a7", "#d33"], alpha=0.85)
-    for i, (m, n) in enumerate(zip(means, ns)):
-        ax.text(i, m + max(his) * 0.3, f"{m:.2f} mm\n(n={n})",
-                ha="center", fontsize=10, fontweight="bold")
-    ax.set_xticks(x)
-    ax.set_xticklabels(["MAMMAL pseudo-GT\n(in-distribution test)",
-                        "Li human GT\n(out-of-distribution)"], fontsize=10)
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    splits = ["mammal_full_3600", "li_external"]
+    split_labels = ["MAMMAL pseudo-GT\n(in-dist, n=3600)",
+                    "Li human GT\n(OOD, n=81)"]
+    predictors = ["dlc_resnet50_imagenet", "dlc_superanimal_zeroshot_hrnet_w32"]
+    pred_labels = ["DLC ResNet50 (trained)", "DLC SuperAnimal (zero-shot)"]
+    colors = ["#3a7", "#d33"]
+    x = np.arange(len(splits))
+    width = 0.38
+    for i, (pred, lbl, col) in enumerate(zip(predictors, pred_labels, colors)):
+        means, los, his = [], [], []
+        for s in splits:
+            r = df[(df["predictor"] == pred) & (df["split"] == s)]
+            if r.empty or not np.isfinite(r["mpjpe_mean_mm"].iloc[0]):
+                means.append(0); los.append(0); his.append(0); continue
+            r = r.iloc[0]
+            means.append(r["mpjpe_mean_mm"])
+            los.append(r["mpjpe_mean_mm"] - r["mpjpe_ci_lo"])
+            his.append(r["mpjpe_ci_hi"] - r["mpjpe_mean_mm"])
+        bars = ax.bar(x + (i - 0.5) * width, means, width,
+                      yerr=[los, his], capsize=6, label=lbl, color=col, alpha=0.85)
+        for j, m in enumerate(means):
+            if m > 0:
+                ax.text(x[j] + (i - 0.5) * width, m + max(his) * 0.4 + 1,
+                        f"{m:.1f}", ha="center", fontsize=10, fontweight="bold")
+    ax.set_xticks(x); ax.set_xticklabels(split_labels, fontsize=10)
     ax.set_ylabel("Root-relative MPJPE (mm)")
-    ax.set_title("DLC ResNet50 (ImageNet→MAMMAL train) — MPJPE + 95% CI")
+    ax.set_title("Two-model 3D KP comparison — MPJPE + 95% bootstrap CI")
+    ax.legend(loc="upper left")
     ax.grid(True, axis="y", alpha=0.3)
     return fig_to_b64(fig)
 
 
 def plot_per_kp_error(df_kp: pd.DataFrame) -> str:
-    rn = df_kp[df_kp["predictor"] == "dlc_resnet50_imagenet"].copy()
-    if rn.empty:
-        fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, "no per-kp data")
-        return fig_to_b64(fig)
-
-    fig, ax = plt.subplots(figsize=(13, 4.2))
-    x = np.arange(22)
-    width = 0.42
-    for i, split in enumerate(["mammal_test", "li_external"]):
-        vals = rn[rn["split"] == split].sort_values("kp_idx")["mpjpe_mean_mm"].values
-        col = "#3a7" if split == "mammal_test" else "#d33"
-        bars = ax.bar(x + (i - 0.5) * width, vals, width,
-                      label=split, color=col, alpha=0.85)
-    ax.set_xticks(x)
-    ax.set_xticklabels(KP_NAMES, rotation=60, ha="right", fontsize=9)
-    ax.set_ylabel("MPJPE (mm)")
-    ax.set_title("ResNet50 — per-keypoint MPJPE (NaN-aware mean across frames)")
-    ax.legend(title="Split")
-    ax.grid(True, axis="y", alpha=0.3)
+    fig, axes = plt.subplots(2, 1, figsize=(13, 8), sharex=True)
+    predictors = ["dlc_resnet50_imagenet", "dlc_superanimal_zeroshot_hrnet_w32"]
+    titles = ["DLC ResNet50 (trained)", "DLC SuperAnimal (zero-shot)"]
+    for ax, pred, title in zip(axes, predictors, titles):
+        x = np.arange(22)
+        width = 0.42
+        for i, split in enumerate(["mammal_full_3600", "li_external"]):
+            sub = df_kp[(df_kp["predictor"] == pred) & (df_kp["split"] == split)].sort_values("kp_idx")
+            vals = sub["mpjpe_mean_mm"].values
+            col = "#3a7" if split == "mammal_full_3600" else "#d33"
+            ax.bar(x + (i - 0.5) * width, vals, width, label=split, color=col, alpha=0.85)
+        ax.set_ylabel("MPJPE (mm)")
+        ax.set_title(f"{title} — per-keypoint MPJPE")
+        ax.legend(title="Split", loc="upper right")
+        ax.grid(True, axis="y", alpha=0.3)
+    axes[-1].set_xticks(np.arange(22))
+    axes[-1].set_xticklabels(KP_NAMES, rotation=60, ha="right", fontsize=9)
+    plt.tight_layout()
     return fig_to_b64(fig)
 
 
@@ -140,13 +142,13 @@ def render_html(ctx, figs, overlays_b64):
    <b>status</b> <span class="good">v0.1.1 results delivered</span></p>
 
 <div class="bluf">
-<b>두괄식:</b> DLC ResNet50 (ImageNet→MAMMAL train, 20 epochs)는
-<b>in-distribution MAMMAL pseudo-GT</b> 평가에서 root-relative MPJPE
-<b>{ctx['m_mam']:.2f} mm</b> (95% CI {ctx['m_mam_lo']:.2f}–{ctx['m_mam_hi']:.2f},
-n={ctx['n_mam']}), <b>외부 Li human GT</b>에서 <b>{ctx['m_li']:.2f} mm</b>
-(CI {ctx['m_li_lo']:.2f}–{ctx['m_li_hi']:.2f}, n={ctx['n_li']}). 마우스 직경 약
-40–60 mm 기준 in-dist 약 3% / OOD 약 5% 오차. <b>SuperAnimal zero-shot</b>은
-27-kp → MAMMAL 22-kp 이름 매핑 불완전으로 valid 0건 — v0.2에서 매핑 보정 후 재평가.
+<b>두괄식:</b> 두 DLC 모델 비교 — <b>ResNet50 trained</b>: in-dist
+<b>{ctx['m_mam']:.2f} mm</b> [{ctx['m_mam_lo']:.2f}, {ctx['m_mam_hi']:.2f}] (n={ctx['n_mam']}),
+OOD <b>{ctx['m_li']:.2f} mm</b> [{ctx['m_li_lo']:.2f}, {ctx['m_li_hi']:.2f}] (n={ctx['n_li']}).
+<b>SuperAnimal zero-shot</b>: in-dist {ctx['sa_mam']:.2f} mm, OOD {ctx['sa_li']:.2f} mm.
+<b>ResNet50가 {ctx['ratio_mam']:.2f}× / {ctx['ratio_li']:.2f}× 정확</b> — fine-tuning
+효과 명확. 전체 18000 frame × 22 kp × 3D dataset 양 모델 생성됨
+(<code>outputs/kp_benchmark/{{rn50,sa_zeroshot}}_full_kp.npz</code>).
 </div>
 
 <h2>1. Pipeline KPIs</h2>
@@ -233,8 +235,10 @@ def main() -> int:
     df = pd.read_csv(results_csv)
     df_kp = pd.read_csv(per_kp_csv)
 
-    rn_mam = df[(df["predictor"] == "dlc_resnet50_imagenet") & (df["split"] == "mammal_test")].iloc[0]
+    rn_mam = df[(df["predictor"] == "dlc_resnet50_imagenet") & (df["split"] == "mammal_full_3600")].iloc[0]
     rn_li = df[(df["predictor"] == "dlc_resnet50_imagenet") & (df["split"] == "li_external")].iloc[0]
+    sa_mam = df[(df["predictor"] == "dlc_superanimal_zeroshot_hrnet_w32") & (df["split"] == "mammal_full_3600")].iloc[0]
+    sa_li = df[(df["predictor"] == "dlc_superanimal_zeroshot_hrnet_w32") & (df["split"] == "li_external")].iloc[0]
 
     results_table = ""
     for _, r in df.iterrows():
@@ -252,6 +256,9 @@ def main() -> int:
         "m_mam_hi": rn_mam["mpjpe_ci_hi"], "n_mam": int(rn_mam["n_valid_frames"]),
         "m_li": rn_li["mpjpe_mean_mm"], "m_li_lo": rn_li["mpjpe_ci_lo"],
         "m_li_hi": rn_li["mpjpe_ci_hi"], "n_li": int(rn_li["n_valid_frames"]),
+        "sa_mam": sa_mam["mpjpe_mean_mm"], "sa_li": sa_li["mpjpe_mean_mm"],
+        "ratio_mam": sa_mam["mpjpe_mean_mm"] / rn_mam["mpjpe_mean_mm"],
+        "ratio_li": sa_li["mpjpe_mean_mm"] / rn_li["mpjpe_mean_mm"],
         "results_table": results_table,
     }
     figs = {
