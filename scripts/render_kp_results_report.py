@@ -173,10 +173,23 @@ OOD <b>{ctx['m_li']:.2f} mm</b> [{ctx['m_li_lo']:.2f}, {ctx['m_li_hi']:.2f}] (n=
 {ctx['results_table']}
 </table>
 
-<h2>3. Real-frame KP overlay (coordinate-system check)</h2>
-<p>좌표계 정합 검증 (preliminary, before training). MAMMAL 22kp (green) + Li GT (red) 모두 mouse body에 정확히 안착.</p>
-{img("overlay_a", "Frame 230, 6-view grid.")}
-{img("overlay_b", "Frame 6845.")}
+<h2>3. Real-frame predictions overlay (4-way: GT + 2 models)</h2>
+<p>두 모델 + 양 GT를 같은 frame에 overlay. <b>녹</b>=MAMMAL pseudo-GT, <b>적</b>=Li human GT, <b>시안</b>=RN50 prediction, <b>오렌지</b>=SA zero-shot prediction. RN50 (cyan)이 GT와 거의 일치, SA (orange)는 일부 view에서 noisy.</p>
+{img("pred_a", "Frame 230 — 6 cam grid. RN50 점이 mouse body 정확히 따라감. SA는 view 1·6에서 일부 이탈.")}
+{img("pred_b", "Frame 6845 — 다른 자세.")}
+{img("pred_c", "Frame 9000 — MAMMAL 5-step grid 안 (Li GT 없음).")}
+
+<h3>3.1 Body-middle 3D trajectory (18000 frames)</h3>
+<p>Root joint (body_middle)의 18000 frame 3D 경로 + Z(높이) 시계열. RN50 trajectory가 smooth, SA zero-shot은 NaN 많고 jitter 큼.</p>
+{img("trajectory", "Body_middle 3D trajectory (1/30 subsampled) + Z 시계열. RN50=파랑, SA=오렌지.")}
+
+<h3>3.2 Per-frame MPJPE distribution</h3>
+<p>3600 MAMMAL pseudo-GT frame에서 per-frame root-relative MPJPE 히스토그램.</p>
+{img("mpjpe_hist", "RN50 (파랑)이 짧은 tail의 lower 분포, SA zero-shot (오렌지)은 wider + higher mean.")}
+
+<h3>3.3 Coordinate-system pre-check (data prep stage)</h3>
+{img("overlay_a", "Frame 230 — pre-training coord check. MAMMAL (green) + Li (red).")}
+{img("overlay_b", "Frame 6845 — pre-training.")}
 
 <h2>4. Pipeline summary</h2>
 <table>
@@ -268,9 +281,21 @@ def main() -> int:
     overlays_b64 = {}
     overlay_dir = REPO_ROOT / "outputs/kp_benchmark/overlay"
     if overlay_dir.exists():
+        # original GT-only overlays
         for p, key in zip(sorted(overlay_dir.glob("frame_*_overlay.png")),
                           ["overlay_a", "overlay_b"]):
             overlays_b64[key] = base64.b64encode(p.read_bytes()).decode()
+        # new prediction overlays
+        pred_files = sorted(overlay_dir.glob("frame_*_predictions.png"))
+        for p, key in zip(pred_files, ["pred_a", "pred_b", "pred_c"]):
+            overlays_b64[key] = base64.b64encode(p.read_bytes()).decode()
+        # trajectory + histogram
+        tj = overlay_dir / "trajectory_body_middle.png"
+        if tj.exists():
+            overlays_b64["trajectory"] = base64.b64encode(tj.read_bytes()).decode()
+        hh = overlay_dir / "per_frame_mpjpe_hist.png"
+        if hh.exists():
+            overlays_b64["mpjpe_hist"] = base64.b64encode(hh.read_bytes()).decode()
 
     html = render_html(ctx, figs, overlays_b64)
     args.output.parent.mkdir(parents=True, exist_ok=True)
