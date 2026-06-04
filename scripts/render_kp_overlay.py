@@ -77,11 +77,17 @@ def load_cameras(label3d_path: Path) -> list[dict]:
     return cams
 
 
-def project(pts_3d: np.ndarray, cam: dict) -> np.ndarray:
-    """Project (N, 3) world points → (N, 2) pixel coords with distortion."""
+def project(pts_3d: np.ndarray, cam: dict, distort: bool = False) -> np.ndarray:
+    """Project (N, 3) world points → (N, 2) pixel coords.
+
+    distort=False (default): pinhole only — use for videos_undist (already
+    undistorted by upstream pipeline). Applying distortion to projections
+    onto undistorted images causes systematic edge-of-frame offsets.
+
+    distort=True: apply radial (k1, k2, k3) + tangential (p1, p2) distortion
+    from cam params. Use only when projecting onto raw distorted images.
+    """
     K, R, t = cam["K"], cam["R"], cam["t"]
-    rdist = cam["rdist"]
-    tdist = cam["tdist"]
 
     cam_pts = (R @ pts_3d.T).T + t                  # (N, 3) camera frame
     z = cam_pts[:, 2]
@@ -89,21 +95,23 @@ def project(pts_3d: np.ndarray, cam: dict) -> np.ndarray:
     x = cam_pts[:, 0] / safe
     y = cam_pts[:, 1] / safe
 
-    r2 = x * x + y * y
-    k1 = rdist[0] if rdist.size > 0 else 0.0
-    k2 = rdist[1] if rdist.size > 1 else 0.0
-    k3 = rdist[2] if rdist.size > 2 else 0.0
-    p1 = tdist[0] if tdist.size > 0 else 0.0
-    p2 = tdist[1] if tdist.size > 1 else 0.0
-
-    radial = 1.0 + k1 * r2 + k2 * r2 * r2 + k3 * r2 * r2 * r2
-    xd = x * radial + 2.0 * p1 * x * y + p2 * (r2 + 2.0 * x * x)
-    yd = y * radial + p1 * (r2 + 2.0 * y * y) + 2.0 * p2 * x * y
+    if distort:
+        rdist = cam["rdist"]
+        tdist = cam["tdist"]
+        r2 = x * x + y * y
+        k1 = rdist[0] if rdist.size > 0 else 0.0
+        k2 = rdist[1] if rdist.size > 1 else 0.0
+        k3 = rdist[2] if rdist.size > 2 else 0.0
+        p1 = tdist[0] if tdist.size > 0 else 0.0
+        p2 = tdist[1] if tdist.size > 1 else 0.0
+        radial = 1.0 + k1 * r2 + k2 * r2 * r2 + k3 * r2 * r2 * r2
+        x = x * radial + 2.0 * p1 * x * y + p2 * (r2 + 2.0 * x * x)
+        y = y * radial + p1 * (r2 + 2.0 * y * y) + 2.0 * p2 * x * y
 
     fx, fy = K[0, 0], K[1, 1]
     cx, cy = K[0, 2], K[1, 2]
-    u = fx * xd + cx
-    v = fy * yd + cy
+    u = fx * x + cx
+    v = fy * y + cy
     pixels = np.stack([u, v], axis=-1)
     pixels[z <= 0] = np.nan
     return pixels

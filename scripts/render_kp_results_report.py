@@ -175,27 +175,17 @@ temporal smoothing 없음, bone-length prior 없음). 자세한 비교는 §4. <
 {ctx['results_table']}
 </table>
 
-<h2>3. 🎬 Full-frame prediction videos — 나란히 비교</h2>
-<p>각 모델로 전체 18000 frame 중 5-step subsample = 3600 frames (20 fps playback, 3분). 6-cam grid + 22-kp 오버레이. <b>왼쪽 RN50 trained (cyan), 오른쪽 SA zero-shot (orange).</b> 같은 frame을 동시 재생하려면 양쪽 ▶ 클릭.</p>
+<h2>3. 🎬 Full-frame prediction video — RN50 trained (선택된 최종 모델)</h2>
+<p>전체 18000 frame 중 5-step subsample = 3600 frames @ 20 fps = 3분 재생. 6-cam grid + 22-kp 오버레이 (cyan). H.264 인코딩으로 모든 브라우저 호환. <b>SA zero-shot 영상은 성능 약함 + 시각적 노이즈로 본 보고서에서 제외</b> (npz 데이터는 outputs/에 보존).</p>
 
-<div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:space-between;">
-  <div style="flex:1;min-width:500px;">
-    <h3 style="margin-top:0;">DLC ResNet50 (trained) — cyan</h3>
-    <video controls preload="metadata" style="width:100%;border:1px solid #06a;border-radius:4px;">
-      <source src="260603_kp_rn50_predictions_grid.mp4" type="video/mp4">
-    </video>
-    <p style="font-size:12px;color:#555;font-style:italic;">전 frame 22/22 kp 유효. 점이 mouse body를 안정적으로 follow.</p>
-  </div>
-  <div style="flex:1;min-width:500px;">
-    <h3 style="margin-top:0;">DLC SuperAnimal zero-shot — orange</h3>
-    <video controls preload="metadata" style="width:100%;border:1px solid #e80;border-radius:4px;">
-      <source src="260603_kp_sa_zeroshot_predictions_grid.mp4" type="video/mp4">
-    </video>
-    <p style="font-size:12px;color:#555;font-style:italic;">12/22 kp만 정의 (paw/elbow/knee/foot 미매핑 → NaN 미표시). 일부 view에서 jitter / mis-detection.</p>
-  </div>
-</div>
+<video controls preload="metadata" style="width:100%;max-width:1100px;border:1px solid #06a;border-radius:4px;display:block;margin:0 auto;">
+  <source src="260603_kp_rn50_predictions_grid_h264.mp4" type="video/mp4">
+  <p>Video tag 미지원 — <a href="260603_kp_rn50_predictions_grid_h264.mp4">RN50 video 직접 다운로드</a></p>
+</video>
+<p style="font-size:12px;color:#555;font-style:italic;text-align:center;">RN50 점이 mouse body를 안정적으로 follow. <b>2026-06-04 distortion fix 적용</b> — videos_undist는 이미 undistorted이므로 distortion 재적용 제거 → overlay 정밀도 향상.</p>
 
-<h3>3.1 Real-frame predictions overlay (4-way still grids: GT + 2 models)</h2>
+<h3>3.1 Real-frame predictions overlay (4-way still grids: GT + 2 models, distortion fix 적용)</h3>
+<p>아직 비교 검증용으로 SA 정지 이미지는 유지. <b>distortion off pinhole projection</b> 사용 (이전 distortion 적용 → 미세 offset 원인 제거).</p>
 <p>두 모델 + 양 GT를 같은 frame에 overlay. <b>녹</b>=MAMMAL pseudo-GT, <b>적</b>=Li human GT, <b>시안</b>=RN50 prediction, <b>오렌지</b>=SA zero-shot prediction. RN50 (cyan)이 GT와 거의 일치, SA (orange)는 일부 view에서 noisy.</p>
 {img("pred_a", "Frame 230 — 6 cam grid. RN50 점이 mouse body 정확히 따라감. SA는 view 1·6에서 일부 이탈.")}
 {img("pred_b", "Frame 6845 — 다른 자세.")}
@@ -221,14 +211,14 @@ temporal smoothing 없음, bone-length prior 없음). 자세한 비교는 §4. <
 <ol>
 <li><b>Stage 1 — DLC 2D inference per cam</b> (<code>deeplabcut.analyze_videos</code>):
    각 6 cam의 mp4를 독립적으로 처리, 2D (x, y, likelihood) 출력 → 6개 h5.</li>
-<li><b>Stage 2 — Custom DLT 3D triangulation</b> (our <code>scripts/03_infer_dlc.sh</code> +
-   <code>/tmp/full_kp_dataset.py</code>):
+<li><b>Stage 2 — Custom DLT 3D triangulation</b> (canonical: <code>/tmp/full_kp_dataset.py</code>):
   <ul>
-    <li>label3d_dannce.mat에서 6-cam intrinsics K + extrinsics R, t 로드</li>
-    <li>각 kp마다 6 view 중 likelihood ≥ 0.10인 view만 사용</li>
-    <li>각 view → projection matrix P_i = K_i [R_i | t_i]</li>
+    <li>label3d_dannce.mat에서 6-cam intrinsics K + extrinsics R, t 로드 (MATLAB col-major → .T → OpenCV form, det(R)&lt;0 시 reflection fix)</li>
+    <li>각 kp마다 6 view 중 <b>likelihood ≥ 0.10</b>인 view만 사용 (final benchmark threshold)</li>
+    <li>각 view → projection matrix P_i = K_i [R_i | t_i] (pinhole only, distortion off — videos_undist 가정)</li>
     <li>3D 점 X: SVD로 <code>min ||A·X|| s.t. ||X||=1</code> 풀이 (Direct Linear Transform)</li>
     <li>per-frame, per-kp 독립 (temporal smoothing 없음, bone-length prior 없음)</li>
+    <li>⚠️ <code>03_infer_dlc.sh</code>의 prob_min=0.3은 archived (덜 보수적). 보고된 수치는 모두 prob_min=0.10 기준</li>
   </ul>
 </li>
 </ol>
