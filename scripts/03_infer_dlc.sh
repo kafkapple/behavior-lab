@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# ⚠️ ARCHIVED 2026-06-04 — prob_min=0.3 hardcoded, but canonical v0.1.3
+# results use prob_min=0.05 (see triangulate_full.py).
+# Use scripts/triangulate_full.py for canonical 3D triangulation instead.
 # DLC inference for kp_benchmark v0.1.
 #
 # For a trained DLC project (per tag), runs analyze_videos on all 6 cameras,
@@ -58,7 +61,7 @@ dest.mkdir(parents=True, exist_ok=True)
 # 2) Per-cam inference (2D + likelihood). DLC 3.0 saves CSV/H5 per video.
 dlc.analyze_videos(
     config_path, videos, shuffle=1, save_as_csv=True,
-    destfolder=str(dest), gputouse=$GPU,
+    destfolder=str(dest), gputouse=0,
 )
 
 # 3) Load test + Li frame ids

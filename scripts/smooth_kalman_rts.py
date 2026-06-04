@@ -141,8 +141,12 @@ def main():
         print(f"  vel before {before_vel:.3f} → after {after_vel:.3f} mm/fr "
               f"({(1 - after_vel / before_vel) * 100:.1f}% jitter reduction)")
         out = PRED / f"{tag}_full_kp_kalman.npz"
+        # Match smooth_kp_temporal.py schema: include valid_mask so downstream
+        # scripts can use either smoother interchangeably (review I2).
+        valid_mask = ~np.isnan(sm).any(axis=-1)
         np.savez(out,
                  keypoints_3d=sm.astype(np.float32),
+                 valid_mask=valid_mask,
                  frame_ids=d["frame_ids"],
                  keypoint_names=d["keypoint_names"],
                  q=args.q, R=args.R)

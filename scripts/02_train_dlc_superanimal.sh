@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# ⚠️ ARCHIVED 2026-06-04 — never succeeded due to cv2 race condition during
+# labeling when 01 and 02 ran in parallel (both wrote labeled-data/cam_i/).
+# v0.2 retry: run sequentially after 01, not in parallel.
+# Canonical SA path for v0.1.3 results = SuperAnimal zero-shot (no fine-tune).
 # DLC HRNet-w32 (SuperAnimal-TopViewMouse init) train on MAMMAL M1 pseudo-GT.
 #
 # Mirrors 01_train_dlc_resnet50.sh but with SuperAnimal pretrained backbone.

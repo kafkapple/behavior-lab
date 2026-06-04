@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# ⚠️ DEPRECATED 2026-06-04 — NAME_MAP has duplicate values that cause
+# silent dict overwrite in SA_KP = {v: k for k, v in NAME_MAP.items()}
+# (e.g. throat_base/neck_base both map to "neck", only one survives).
+# Canonical SA→MAMMAL mapping is in scripts/triangulate_full.py (SA_MAP).
+# This script's analyze_videos step still works; only the triangulation
+# part is buggy. Run analyze_videos here, then use triangulate_full.py.
 # SuperAnimal-TopViewMouse zero-shot inference on M1 video frames.
 #
 # v0.1.1 fallback for the SuperAnimal arm: DLC modelzoo zero-shot
