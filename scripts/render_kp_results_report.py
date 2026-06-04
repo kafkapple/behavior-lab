@@ -229,6 +229,17 @@ Anipose linear == ours (수학적 동일), RANSAC은 너무 strict.
   </div>
 </div>
 
+<h2>3.6 📐 Smoothing 비교: Savitzky-Golay vs Kalman+RTS (2026-06-04)</h2>
+<p>사용자 지적: Kalman이 더 표준적. 즉시 구현 + 비교:</p>
+<table>
+<tr><th>Method</th><th>mammal_3600 MPJPE</th><th>OOD Li MPJPE</th><th>jitter 감소</th><th>구현 복잡도</th></tr>
+<tr><td>Raw (no smoothing)</td><td>23.10 [22.68, 23.54]</td><td>19.90 [18.47, 21.37]</td><td>—</td><td>—</td></tr>
+<tr><td><b>Savitzky-Golay w=15</b> ⭐</td><td><b>22.33</b> [21.95, 22.72]</td><td><b>19.14</b> [17.73, 20.63]</td><td>-63%</td><td>1 scipy call</td></tr>
+<tr><td>Kalman+RTS q=1 R=4</td><td>22.39 [22.00, 22.79]</td><td>19.21 [17.82, 20.67]</td><td>-61%</td><td>2-state F·M·H matrix + RTS backward</td></tr>
+</table>
+<p><b>결론</b>: <b>통계적 tied</b> (95% CI overlap, Δ=0.07 mm). SavGol이 더 단순하면서 동등 성능 → SavGol을 default 유지. Kalman의 잠재력 (per-frame likelihood로 R 가중, OOD velocity 추정)은 v0.2 활용 가능.</p>
+<p><b>이론 + formula + pseudo-code SSOT</b>: <code>docs/triangulation_methodology.md</code></p>
+
 <h2>3.5 🔬 5-방법 종합 비교 (2026-06-04 확장)</h2>
 <p>사용자 지적 — handoff §2의 Anipose / DLC native 3D / MAMMAL 비교 누락. 본 §에서 가능한 것 모두 실험:</p>
 
