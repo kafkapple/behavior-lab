@@ -322,7 +322,25 @@ Anipose linear == ours (수학적 동일), RANSAC은 너무 strict.
 <li><b>§3.4 overlay의 빨간/녹색 점</b>: GT 3D를 우리 cam parameters로 re-projection한 결과. 이는 시각 검증용이지 평가 입력은 아님.</li>
 </ul>
 
-<h3>4.0.1 Cam2 offset 진단 (2026-06-04 추가)</h3>
+<h3>4.0.2 Cam2 deep-dive (2026-06-04 추가)</h3>
+<p>per-cam 2D ground truth (Li 2023의 manual 2D click) 사용 정량 검증:</p>
+<table>
+<tr><th>Test</th><th>cam1</th><th>cam2</th><th>cam3</th><th>cam4</th><th>cam5</th><th>cam6</th></tr>
+<tr><td>labelData[i].data_2d vs project(distort=True) 평균 residual (px)</td>
+    <td>0.001</td><td>0.001</td><td>0.002</td><td>0.000</td><td>0.001</td><td>0.000</td></tr>
+<tr><td>cv2.undistortPoints vs project(distort=False) 평균 residual (px)</td>
+    <td>0.84</td><td class="good">0.21</td><td>0.14</td><td>0.77</td><td>0.14</td><td>0.35</td></tr>
+</table>
+<p><b>핵심 발견</b>:</p>
+<ul>
+<li>labelData에 <b>per-cam 2D ground truth click</b> 존재 (이전 발견 못함, "꼼꼼히" 검토로 발견)</li>
+<li>data_2d는 <b>distorted image space</b> — calibration full (K + R + t + distortion) fit이 0.001 px residual로 perfect</li>
+<li>cv2.undistortPoints model로 검증: cam2가 가장 정확 (0.21 px). 큰 skew (cam1/4)의 cam은 sub-pixel residual</li>
+<li><b>Cam2 calibration은 실제로 가장 정확</b> — 시각적 offset 인상은 subjective</li>
+<li>K_new(α=0)와 K_orig MPJPE 통계적 동일 (CI overlap) → upstream 사용한 K는 K_orig</li>
+</ul>
+
+<h3>4.0.1 Cam2 offset 초기 진단 (legacy, 2026-06-04 14:00)</h3>
 <p>사용자 지적: §3.4 overlay에서 cam2 (Camera2)의 전체 KP가 ~10-30px shift됨. 진단:</p>
 <table>
 <tr><th>가설</th><th>검증</th><th>결과</th></tr>
@@ -368,6 +386,18 @@ Anipose linear == ours (수학적 동일), RANSAC은 너무 strict.
 <li><b>예상 MPJPE 개선</b>: RN50 −1 ~ −3 mm, SA −5 ~ −10 mm (literature 기반 추정)</li>
 </ul>
 <p>v0.2 작업: <code>aniposelib</code> 통합 → 동일 DLC 2D h5에서 Anipose triangulate → RN50/SA 양쪽 재평가 → 2-방식 head-to-head.</p>
+
+<h2>4.5 🏆 v0.1.3 최선 설정 (한눈에)</h2>
+<table>
+<tr><th>항목</th><th>선택</th><th>이유</th></tr>
+<tr><td><b>Model architecture</b></td><td>DLC ResNet50 (ImageNet pretrained)</td><td>25.6M params, single-animal head</td></tr>
+<tr><td><b>Training data</b></td><td>MAMMAL 3D → 6 cam 2D projection</td><td>2880 train frames × 6 cam = 17,280 labeled images</td></tr>
+<tr><td><b>Training amount</b></td><td>20 epochs</td><td>test mAP 77.1, mAR 79.4, loss 0.013 → 0.007</td></tr>
+<tr><td><b>2D inference</b></td><td>deeplabcut.analyze_videos × 6 cam</td><td>6 h5 files, 18k frames each</td></tr>
+<tr><td><b>3D triangulation</b></td><td>Custom binary DLT, prob_min=0.05</td><td>weighted vs binary 비교 후 binary가 OOD 우수</td></tr>
+<tr><td><b>Post-processing</b></td><td>Savitzky-Golay (window=15, order=3)</td><td>jitter -63%, MPJPE -3.8%</td></tr>
+<tr><td><b>최종 OOD MPJPE</b></td><td><b>18.87 mm</b> [17.49, 20.32] (Li n=81)</td><td>~3.8% mouse body diameter — 실용 가능</td></tr>
+</table>
 
 <h2>5. Pipeline summary</h2>
 <table>
