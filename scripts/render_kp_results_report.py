@@ -237,8 +237,30 @@ Anipose linear == ours (수학적 동일), RANSAC은 너무 strict.
 <tr><td><b>Savitzky-Golay w=15</b> ⭐</td><td><b>22.33</b> [21.95, 22.72]</td><td><b>19.14</b> [17.73, 20.63]</td><td>-63%</td><td>1 scipy call</td></tr>
 <tr><td>Kalman+RTS q=1 R=4</td><td>22.39 [22.00, 22.79]</td><td>19.21 [17.82, 20.67]</td><td>-61%</td><td>2-state F·M·H matrix + RTS backward</td></tr>
 </table>
-<p><b>결론</b>: <b>통계적 tied</b> (95% CI overlap, Δ=0.07 mm). SavGol이 더 단순하면서 동등 성능 → SavGol을 default 유지. Kalman의 잠재력 (per-frame likelihood로 R 가중, OOD velocity 추정)은 v0.2 활용 가능.</p>
-<p><b>이론 + formula + pseudo-code SSOT</b>: <code>docs/triangulation_methodology.md</code></p>
+<p><b>정확한 결론</b> (Karpathy: don't overclaim):</p>
+<ul>
+<li>MPJPE 차이 <b>0.07 mm는 bootstrap noise 범위 내</b> (CI 폭 ~3 mm)</li>
+<li>95% CI 거의 완전 overlap → <b>통계적으로 무차별</b></li>
+<li>SavGol이 "더 성공" 아닌 <b>"통계적 동치"</b></li>
+<li>Default SavGol 선택 이유 = <b>단순성</b> (scipy 1-line vs 60 lines Kalman)</li>
+</ul>
+
+<h3>3.6.1 알고리즘 상세 설명</h3>
+<p><b>Savitzky-Golay</b>: Sliding window (N=15)의 데이터에 차수 3 다항식 fit → window 중심을 다항식 값으로 대체. 수학적으로 동등한 FIR convolution (pre-computed coefficients). Peak/feature 보존이 moving average보다 우수.</p>
+
+<p><b>Kalman+RTS</b>: State-space framework. State = [position, velocity]^T. <b>Forward Kalman pass</b>는 causal (predict + update). <b>Backward RTS pass</b>는 미래 정보를 incorporate → offline smoother. Q (process noise) + R (measurement noise)로 dynamics + uncertainty 명시.</p>
+
+<p><b>왜 동치인가</b>: 두 알고리즘 모두 essentially <b>low-pass FIR filter</b> (~10 Hz cutoff). 우리 데이터에서 노이즈는 고주파, 신호는 저주파 → 같은 cutoff면 결과 동일.</p>
+
+<p><b>Kalman이 이길 잠재 조건 (v0.2)</b>:</p>
+<ol>
+<li>Per-frame R = f(DLC likelihood) — 낮은 신뢰 frame down-weight</li>
+<li>Higher-order dynamics (constant-acceleration) — sudden jumps</li>
+<li>Multi-kp joint state + bone-length constraint</li>
+<li>Long NaN gap 메우기 (extrapolation)</li>
+</ol>
+
+<p><b>이론 + formula + pseudo-code SSOT</b>: <code>docs/triangulation_methodology.md</code> §2</p>
 
 <h2>3.5 🔬 5-방법 종합 비교 (2026-06-04 확장)</h2>
 <p>사용자 지적 — handoff §2의 Anipose / DLC native 3D / MAMMAL 비교 누락. 본 §에서 가능한 것 모두 실험:</p>
