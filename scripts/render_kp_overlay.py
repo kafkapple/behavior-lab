@@ -108,10 +108,11 @@ def project(pts_3d: np.ndarray, cam: dict, distort: bool = False) -> np.ndarray:
         x = x * radial + 2.0 * p1 * x * y + p2 * (r2 + 2.0 * x * x)
         y = y * radial + p1 * (r2 + 2.0 * y * y) + 2.0 * p2 * x * y
 
-    fx, fy = K[0, 0], K[1, 1]
-    cx, cy = K[0, 2], K[1, 2]
-    u = fx * x + cx
-    v = fy * y + cy
+    # Full upper-triangular K: includes skew K[0,1] which we previously dropped.
+    # Skew ranges from -5.9 to +1.4 for these 6 cams; ignoring it caused
+    # 1-3 px y-dependent offset on cams with large |skew| (cam1/4/6).
+    u = K[0, 0] * x + K[0, 1] * y + K[0, 2]
+    v = K[1, 1] * y + K[1, 2]
     pixels = np.stack([u, v], axis=-1)
     pixels[z <= 0] = np.nan
     return pixels

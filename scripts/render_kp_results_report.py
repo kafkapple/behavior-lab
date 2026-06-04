@@ -290,6 +290,29 @@ bone-length prior + Kalman 통합으로 추가 1-3 mm 개선 기대.
 
 <b class="warn">중요</b>: 현 결과는 <b>DLC 기본 3D module도, Anipose도 아닌 custom DLT</b>입니다.</p>
 
+<h3>4.0 GT 표현 형식 (자주 묻는 질문)</h3>
+<p><b>Q: GT는 6개 view 별 2D 정답인가?</b></p>
+<p><b>A: 아니오 — 3D world 좌표입니다.</b></p>
+<ul>
+<li><b>Li 2023 GT</b>: <code>label3d_dannce.mat</code>의 <code>labelData[0].data_3d</code>
+   (81, 22×3) — Li 등이 manual 2D click + 자체 triangulate해서 3D world 좌표로 저장.</li>
+<li><b>MAMMAL pseudo-GT</b>: mesh-fit 결과의 3D (3600, 22, 3). 좌표계 = Li GT와 동일 world frame.</li>
+<li><b>평가</b>: <code>root_relative_mpjpe</code> = 두 3D point cloud의 root joint 빼고 L2 norm. 6-view 2D 비교 아님.</li>
+<li><b>§3.4 overlay의 빨간/녹색 점</b>: GT 3D를 우리 cam parameters로 re-projection한 결과. 이는 시각 검증용이지 평가 입력은 아님.</li>
+</ul>
+
+<h3>4.0.1 Cam2 offset 진단 (2026-06-04 추가)</h3>
+<p>사용자 지적: §3.4 overlay에서 cam2 (Camera2)의 전체 KP가 ~10-30px shift됨. 진단:</p>
+<table>
+<tr><th>가설</th><th>검증</th><th>결과</th></tr>
+<tr><td>K.T transpose 잘못</td><td><code>p.K</code> raw 출력 → cx/cy at K[2,0], K[2,1] → <code>.T</code> 필요</td><td>✅ K.T 올바름</td></tr>
+<tr><td>det(R)&lt;0 reflection 처리 오류</td><td>6 cam 모두 det=+1.0</td><td>✅ 무관 (dead code)</td></tr>
+<tr><td>skew K[0,1] 무시</td><td>cam1=-5.82, cam4=-5.89, cam6=-4.93 무시 중</td><td>⚠️ 1-3px 오차 (cam2는 +1.4로 영향 작음). <b>이번 fix 적용</b></td></tr>
+<tr><td>upstream undistortion K_new ≠ K_orig</td><td><code>videos_undist</code> 생성 시 OpenCV의 <code>getOptimalNewCameraMatrix(alpha)</code> 사용했다면 K_new가 K_orig와 다름</td><td>🔴 <b>cam2 offset의 잠재적 원인</b>. metadata 부재로 unverifiable</td></tr>
+<tr><td>cam-to-mp4 mapping off-by-one</td><td>다른 5개 cam은 정확히 mouse body에 안착</td><td>✅ mapping 정확 (cam2만 issue)</td></tr>
+</table>
+<p>v0.2 권장: <code>videos_undist</code> 생성 pipeline 확인 후 K_new 추출 또는 raw video 재요청 → cam2 K 재calibrate.</p>
+
 <h3>4.1 사용한 pipeline (2-stage)</h3>
 <ol>
 <li><b>Stage 1 — DLC 2D inference per cam</b> (<code>deeplabcut.analyze_videos</code>):
