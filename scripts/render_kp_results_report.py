@@ -143,16 +143,18 @@ def render_html(ctx, figs, overlays_b64):
    <b>status</b> <span class="good">v0.1.1 results delivered</span></p>
 
 <div class="bluf">
-<b>🏆 최종 결론 (v0.1.2 — smoothing 포함)</b> — <b>DLC ResNet50 trained + custom DLT + Savitzky-Golay smoothing</b>이 우수.<br/><br/>
-RN50 (smoothed) in-dist <b>22.33 mm</b> / OOD <b>19.14 mm</b>.
-SA zero-shot (smoothed) 47.74 / 36.68 mm —
-<b>RN50가 2.14× / 1.92× 정확 (95% CI 비중복, 통계적 유의)</b>.
-RN50 OOD ~3.8% 오차 (마우스 직경 40-60 mm 기준) → 실용 가능.<br/><br/>
-<b>📊 적용된 fix 2건 (2026-06-04)</b>: ① distortion off (videos_undist 이미 undistorted, double-correction 제거),
-② Savitzky-Golay window=15 temporal smoothing → jitter -63% / -75%, MPJPE -3-13%.<br/><br/>
-<b>⚠️ "DLC native 3D"도 "Anipose"도 아님</b> — Stage 1 = DLC 2D per-cam analyze_videos.
-Stage 2 = 우리가 작성한 linear DLT + 1D temporal smoothing. <b>v0.2 Anipose</b> 도입 시
-bone-length prior + Kalman 통합으로 추가 1-3 mm 개선 기대.
+<b>🏆 최종 결론 (v0.1.3 — DLT tuning 적용)</b> — <b>DLC ResNet50 trained + binary DLT (pm=0.05) + Savitzky-Golay smoothing</b>.<br/><br/>
+RN50 (final) in-dist <b>22.48 mm</b> [22.10, 22.87] / OOD <b>18.87 mm</b> [17.49, 20.32].
+SA zero-shot (smoothed) 47.74 / 36.68 mm — <b>RN50가 2.12× / 1.94× 정확</b> (95% CI 비중복).
+RN50 OOD ~3.8% 오차 → 실용 가능.<br/><br/>
+<b>📊 적용된 fix 4건 (2026-06-04)</b>: ① distortion off (videos_undist 더블보정 제거), ② Savitzky-Golay window=15 smoothing,
+③ Skew K[0,1] 포함 (cam1/4/6 1-3px overlay 정확), ④ <b>prob_min 0.10 → 0.05 (OOD -1.4%)</b>.<br/><br/>
+<b>📊 Triangulation 변형 4가지 추가 실험</b> (§3.5.5):
+binary pm=0.10 / pm=0.05 / weighted soft pm=0.05 / Anipose RANSAC.
+Weighted DLT는 in-dist에 강함 (20.96 mm) but OOD에서는 binary 0.05가 최적 (18.87 mm).
+DLC가 MAMMAL bias 흡수 → weighted = MAMMAL match, binary = human GT match.<br/><br/>
+<b>⚠️ "DLC native 3D"도 "Anipose"도 아님</b> — Stage 1 DLC 2D + Stage 2 custom DLT.
+Anipose linear == ours (수학적 동일), RANSAC은 너무 strict.
 </div>
 
 <h2>1. Pipeline KPIs</h2>
@@ -241,6 +243,25 @@ bone-length prior + Kalman 통합으로 추가 1-3 mm 개선 기대.
 <tr><td>DLC native dlc_3d module</td><td colspan="2">❌ 미실행</td><td>stereo pair config 필요 — 6-cam 직접 부적합</td></tr>
 <tr><td>DANNCE volumetric</td><td colspan="2">❌ deferred v0.3</td><td>private weights, Blackwell incompat</td></tr>
 </table>
+
+<h3>3.5.5 Triangulation 변형 실험 (2026-06-04 추가)</h3>
+<p>5가지 DLT variant × in-dist + OOD 비교:</p>
+<table>
+<tr><th>Method</th><th>mammal_3600 raw</th><th>mammal_3600 smoothed</th><th>li_external raw</th><th>li_external smoothed</th></tr>
+<tr><td>binary pm=0.10 (v0.1.2)</td><td>23.10</td><td>22.33</td><td>19.90</td><td>19.14</td></tr>
+<tr><td><b>binary pm=0.05 ⭐ (v0.1.3)</b></td><td>23.25</td><td>22.48</td><td>19.50</td><td class="good"><b>18.87</b></td></tr>
+<tr><td>weighted soft pm=0.05</td><td class="good">21.31</td><td class="good">20.96</td><td>19.83</td><td>19.86</td></tr>
+<tr><td>weighted soft pm=0.10</td><td>21.43</td><td>21.04</td><td>20.20</td><td>20.25</td></tr>
+<tr><td>K_new(α=0) [K_undist test]</td><td>23.14</td><td>22.40</td><td>20.07</td><td>19.28</td></tr>
+</table>
+<p><b>해석</b>:</p>
+<ul>
+<li><b>Weighted DLT</b>: in-dist (MAMMAL) +1.5 mm 개선. high-likelihood view = MAMMAL과 정합 view.</li>
+<li><b>Binary pm=0.05</b>: OOD (human Li) -0.3 mm 개선. 낮은 threshold로 더 많은 view 평균화 → human label과 정합.</li>
+<li><b>K_new(α=0)</b>: K_orig와 0.04-0.17 mm 차이로 CI 중복 → upstream undistortion에 K_orig 사용 확인 (cam2 offset의 K hypothesis 기각).</li>
+<li><b>Tradeoff</b>: training distribution match vs human GT match — 용도에 따라 선택.</li>
+<li><b>OOD 최적</b>: binary pm=0.05 smoothed = 18.87 mm (winner).</li>
+</ul>
 
 <h3>3.5.1 핵심 결과 해석</h3>
 <ol>

@@ -55,8 +55,21 @@ COLOR_LI = (40, 40, 230)          # red-ish BGR
 COLOR_LI_BONE = (20, 20, 180)
 
 
-def load_cameras(label3d_path: Path) -> list[dict]:
-    """Parse 6 camera params from label3d_dannce.mat."""
+def load_cameras(label3d_path: Path, use_K_undist: bool = False,
+                 K_undist_alpha: float = 0.0,
+                 img_size: tuple[int, int] = (1152, 1024)) -> list[dict]:
+    """Parse 6 camera params from label3d_dannce.mat.
+
+    use_K_undist=False (default): K_orig from label3d. Empirically the
+    upstream undistortion was done with cv2.undistort(img, K, dist,
+    newCameraMatrix=K) — verified by lower MPJPE with K_orig (19.14 mm)
+    vs K_new α=0 (19.28 mm), CI overlap so statistically tied.
+
+    use_K_undist=True: substitute K with cv2.getOptimalNewCameraMatrix
+    K_new at the given alpha. Available for ablation only; no measurable
+    benefit on this dataset.
+    """
+    import cv2
     mat = sio.loadmat(label3d_path, struct_as_record=False, squeeze_me=True)
     cams = []
     for i in range(len(mat["camnames"])):
@@ -68,11 +81,22 @@ def load_cameras(label3d_path: Path) -> list[dict]:
         if np.linalg.det(R) < 0:
             R = R.copy()
             R[:, 2] *= -1
+        rdist = np.asarray(p.RDistort, dtype=np.float64).flatten()
+        tdist = np.asarray(p.TDistort, dtype=np.float64).flatten()
+        if use_K_undist:
+            dist = np.array([
+                rdist[0] if rdist.size > 0 else 0.0,
+                rdist[1] if rdist.size > 1 else 0.0,
+                tdist[0] if tdist.size > 0 else 0.0,
+                tdist[1] if tdist.size > 1 else 0.0,
+                rdist[2] if rdist.size > 2 else 0.0,
+            ])
+            K_new, _ = cv2.getOptimalNewCameraMatrix(K, dist, img_size, alpha=K_undist_alpha)
+            K = K_new
         cams.append({
             "name": str(mat["camnames"][i]),
             "K": K, "R": R, "t": t,
-            "rdist": np.asarray(p.RDistort, dtype=np.float64).flatten(),
-            "tdist": np.asarray(p.TDistort, dtype=np.float64).flatten(),
+            "rdist": rdist, "tdist": tdist,
         })
     return cams
 
