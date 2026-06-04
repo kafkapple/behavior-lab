@@ -1,7 +1,12 @@
-"""Final HTML report for kp_benchmark v0.1.1 — DLC ResNet50 results.
+"""Final HTML report for kp_benchmark v0.1.x — DLC results + method compare.
 
 Self-contained: embeds figures as base64. Reads results.csv + per_kp_error.csv.
 Output: ~/Documents/Obsidian/.../_html/260603_kp_benchmark_v0.1_results.html
+
+# no-split: single-purpose report generator. HTML template (render_html)
+# references figures by key dict from the inline plot_* helpers; splitting
+# would force passing 7+ named args across modules or a fragile global
+# registry. Plain functions + one f-string template = locally readable.
 """
 from __future__ import annotations
 
@@ -209,6 +214,36 @@ bone-length prior + Kalman 통합으로 추가 1-3 mm 개선 기대.
     <p style="font-size:12px;color:#555;font-style:italic;">12/22 kp만 정의 (paw/elbow/knee/foot NaN). MPJPE 36.68 mm OOD. 일부 view detection drift 잔존.</p>
   </div>
 </div>
+
+<h2>3.5 🔬 5-방법 종합 비교 (2026-06-04 확장)</h2>
+<p>사용자 지적 — handoff §2의 Anipose / DLC native 3D / MAMMAL 비교 누락. 본 §에서 가능한 것 모두 실험:</p>
+
+<table>
+<tr><th>Method</th><th>in-dist MPJPE (n)</th><th>OOD Li MPJPE (n)</th><th>비고</th></tr>
+<tr><td><b>RN50 + custom DLT (raw)</b></td><td>23.10 [22.68, 23.54] (n=3600)</td><td>19.90 [18.47, 21.37] (n=81)</td><td>v0.1 baseline</td></tr>
+<tr><td><b>RN50 + custom DLT (smoothed)</b> ⭐</td><td class="good">22.33 [21.95, 22.72]</td><td class="good">19.14 [17.73, 20.63] (n=81)</td><td>v0.1.2 winner</td></tr>
+<tr><td>RN50 + aniposelib linear DLT</td><td>23.10 ✓ identical</td><td>19.90 ✓ identical</td><td>수학적 동등성 검증 PASS</td></tr>
+<tr><td>RN50 + aniposelib RANSAC (ths=8px)</td><td>10.34 (n=582)</td><td>21.12 (n=22)</td><td>너무 strict, 17 k frame 제외</td></tr>
+<tr><td>SA zero-shot + DLT (smoothed)</td><td>47.74</td><td>36.68 (n=78)</td><td>2.1× 부정확</td></tr>
+<tr><td><b>MAMMAL mesh-fit (direct)</b></td><td>—</td><td class="warn">26.69 [22.75, 30.79] (n=17)</td><td><b>DLC가 학습 signal보다 정확</b></td></tr>
+<tr><td>DLC native dlc_3d module</td><td colspan="2">❌ 미실행</td><td>stereo pair config 필요 — 6-cam 직접 부적합</td></tr>
+<tr><td>DANNCE volumetric</td><td colspan="2">❌ deferred v0.3</td><td>private weights, Blackwell incompat</td></tr>
+</table>
+
+<h3>3.5.1 핵심 결과 해석</h3>
+<ol>
+<li><b>Anipose linear == 우리 DLT</b> — aniposelib는 동일 algorithm (SVD-based DLT). 정확히 같은 수치 → 우리 구현 검증.</li>
+<li><b>Anipose RANSAC = 너무 보수적</b> — reprojection threshold 8 px에서 17 k frame이 outlier로 제외됨. 살아남은 frame은 10.34 mm (가장 정확) but coverage 너무 낮음. RANSAC threshold tuning 필요 (v0.2).</li>
+<li><b>MAMMAL direct vs Li (26.69 mm) > DLC (19.14 mm) on same OOD</b> — surprising: DLC가 자신의 학습 signal보다 정확. 가설:
+  <ul>
+    <li>MAMMAL mesh-fit이 inherent anatomical bias 보유 (특정 자세/limb 위치)</li>
+    <li>DLC는 image-based learning으로 visual cue 추출 → mesh fit이 놓친 정보 학습</li>
+    <li>또는 DLC가 MAMMAL의 noise를 smoothing함 (label denoising effect)</li>
+  </ul>
+  실용적 함의: <b>DLC는 supervision 품질을 능가</b> — 향후 supervision으로 다른 noisy source도 사용 가능.</li>
+<li><b>DLC native dlc_3d</b> — stereo pair (2-cam) gradle, 6-cam에 직접 부적합. v0.2: pairwise triangulation 후 평균 또는 사용 안 함.</li>
+<li><b>DANNCE</b>: private weights blocker 그대로 — v0.3 별도 작업.</li>
+</ol>
 
 <h3>3.0c Smoothing 효과 (MPJPE before/after)</h3>
 <table>
