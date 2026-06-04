@@ -1,12 +1,8 @@
+# no-split: single-purpose HTML report generator; template+figures locally coupled
 """Final HTML report for kp_benchmark v0.1.x — DLC results + method compare.
 
 Self-contained: embeds figures as base64. Reads results.csv + per_kp_error.csv.
 Output: ~/Documents/Obsidian/.../_html/260603_kp_benchmark_v0.1_results.html
-
-# no-split: single-purpose report generator. HTML template (render_html)
-# references figures by key dict from the inline plot_* helpers; splitting
-# would force passing 7+ named args across modules or a fragile global
-# registry. Plain functions + one f-string template = locally readable.
 """
 from __future__ import annotations
 
@@ -198,20 +194,36 @@ bone-length prior + Kalman 통합으로 추가 1-3 mm 개선 기대.
   <span class="l">SA OOD MPJPE 추가 개선</span><span class="v">-13%</span>
 </div>
 
-<div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:space-between;margin-top:14px;">
-  <div style="flex:1;min-width:480px;">
-    <h3 style="margin-top:0;color:#06a;">🟢 DLC ResNet50 (trained) + smoothing</h3>
+<p>4-method visualization side-by-side. 모두 같은 3600 frame (5-step subsample) @ 20 fps. 색상은 method 식별:</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+  <div>
+    <h3 style="margin-top:0;color:#06a;">🟢 RN50 trained + DLT (smoothed) ⭐</h3>
     <video controls preload="metadata" style="width:100%;border:2px solid #06a;border-radius:4px;">
       <source src="260604_kp_rn50_smoothed_h264.mp4" type="video/mp4">
     </video>
-    <p style="font-size:12px;color:#555;font-style:italic;">전 frame 22/22 kp 유효. MPJPE 19.14 mm OOD. 점이 mouse body를 안정적으로 follow.</p>
+    <p style="font-size:11px;color:#555;font-style:italic;">22/22 kp valid. OOD MPJPE 19.14 mm. <b>최종 winner</b>.</p>
   </div>
-  <div style="flex:1;min-width:480px;">
-    <h3 style="margin-top:0;color:#e80;">🟠 DLC SuperAnimal zero-shot + smoothing</h3>
+  <div>
+    <h3 style="margin-top:0;color:#e80;">🟠 SA zero-shot + DLT (smoothed)</h3>
     <video controls preload="metadata" style="width:100%;border:2px solid #e80;border-radius:4px;">
       <source src="260604_kp_sa_zeroshot_smoothed_h264.mp4" type="video/mp4">
     </video>
-    <p style="font-size:12px;color:#555;font-style:italic;">12/22 kp만 정의 (paw/elbow/knee/foot NaN). MPJPE 36.68 mm OOD. 일부 view detection drift 잔존.</p>
+    <p style="font-size:11px;color:#555;font-style:italic;">12/22 kp만 매핑 (paw/elbow/knee/foot NaN). OOD MPJPE 36.68 mm. 일부 view drift.</p>
+  </div>
+  <div>
+    <h3 style="margin-top:0;color:#a0a;">🟣 RN50 + Anipose RANSAC (smoothed)</h3>
+    <video controls preload="metadata" style="width:100%;border:2px solid #a0a;border-radius:4px;">
+      <source src="260604_kp_anipose_ransac_smoothed_h264.mp4" type="video/mp4">
+    </video>
+    <p style="font-size:11px;color:#555;font-style:italic;">RANSAC view-selection threshold 8px → 30% NaN (outlier 제외). 남은 frame은 가장 정확 (10.34 mm) but coverage 낮음.</p>
+  </div>
+  <div>
+    <h3 style="margin-top:0;color:#3a3;">🟢 MAMMAL mesh-fit (supervision source)</h3>
+    <video controls preload="metadata" style="width:100%;border:2px solid #3a3;border-radius:4px;">
+      <source src="260604_kp_mammal_meshfit_h264.mp4" type="video/mp4">
+    </video>
+    <p style="font-size:11px;color:#555;font-style:italic;">DLC training의 pseudo-GT. 모든 5-step frame valid. Li GT 직접 비교: 26.69 mm (n=17 overlap) — <b>DLC가 이 supervision보다 정확</b>.</p>
   </div>
 </div>
 
