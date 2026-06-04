@@ -143,20 +143,21 @@ def main():
     args = ap.parse_args()
 
     cams = load_cameras(DATA / "markerless_mouse_1/labels/label3d_dannce.mat")
-    rn = np.load(PRED_DIR / "dlc_resnet50_imagenet_full_kp.npz")["keypoints_3d"]
-    sa = np.load(PRED_DIR / "dlc_superanimal_zeroshot_hrnet_w32_full_kp.npz")["keypoints_3d"]
+    # Use temporal-smoothed predictions (Savitzky-Golay window=15)
+    rn = np.load(PRED_DIR / "dlc_resnet50_imagenet_full_kp_smoothed.npz")["keypoints_3d"]
+    sa = np.load(PRED_DIR / "dlc_superanimal_zeroshot_hrnet_w32_full_kp_smoothed.npz")["keypoints_3d"]
 
     # BGR colors
     CYAN_PT = (255, 200, 0); CYAN_BONE = (200, 150, 0)
     ORANGE_PT = (0, 140, 255); ORANGE_BONE = (0, 100, 200)
 
-    render_video("DLC_ResNet50_trained", rn, cams,
+    render_video("DLC_ResNet50_trained_smoothed", rn, cams,
                  CYAN_PT, CYAN_BONE,
-                 OUT_DIR / "260603_kp_rn50_predictions_grid.mp4",
+                 OUT_DIR / "260604_kp_rn50_smoothed_grid.mp4",
                  subsample=args.subsample, tile_h=args.tile_h)
-    render_video("DLC_SuperAnimal_zeroshot", sa, cams,
+    render_video("DLC_SuperAnimal_zeroshot_smoothed", sa, cams,
                  ORANGE_PT, ORANGE_BONE,
-                 OUT_DIR / "260603_kp_sa_zeroshot_predictions_grid.mp4",
+                 OUT_DIR / "260604_kp_sa_zeroshot_smoothed_grid.mp4",
                  subsample=args.subsample, tile_h=args.tile_h)
 
 

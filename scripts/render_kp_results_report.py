@@ -142,15 +142,16 @@ def render_html(ctx, figs, overlays_b64):
    <b>status</b> <span class="good">v0.1.1 results delivered</span></p>
 
 <div class="bluf">
-<b>🏆 최종 결론 (이번 v0.1 실험 범위 내)</b> — <b>DLC ResNet50 trained + custom DLT triangulation</b>이 우수.<br/><br/>
-RN50 in-dist <b>{ctx['m_mam']:.2f} mm</b> [{ctx['m_mam_lo']:.2f}, {ctx['m_mam_hi']:.2f}] / OOD <b>{ctx['m_li']:.2f} mm</b>
-[{ctx['m_li_lo']:.2f}, {ctx['m_li_hi']:.2f}]. SA zero-shot 49.42 / 42.15 mm —
-<b>RN50가 {ctx['ratio_mam']:.2f}× / {ctx['ratio_li']:.2f}× 정확 (95% CI 비중복, 통계적 유의)</b>.
-RN50 in-dist ~4% / OOD ~4.2% 오차 (마우스 직경 40-60mm 기준) → 실용 가능 수준.<br/><br/>
-<b>⚠️ 단, "DLC 기본 3D"도 "Anipose"도 아님</b> — Stage 1만 DLC (2D per-cam),
-Stage 2는 우리가 작성한 <b>linear DLT triangulation</b> (label3d 6-cam K/R/t 직접 사용,
-temporal smoothing 없음, bone-length prior 없음). 자세한 비교는 §4. <b>Anipose 도입은 v0.2 작업</b>
-(추가 1-3 mm 개선 + jitter 흡수 기대).
+<b>🏆 최종 결론 (v0.1.2 — smoothing 포함)</b> — <b>DLC ResNet50 trained + custom DLT + Savitzky-Golay smoothing</b>이 우수.<br/><br/>
+RN50 (smoothed) in-dist <b>22.33 mm</b> / OOD <b>19.14 mm</b>.
+SA zero-shot (smoothed) 47.74 / 36.68 mm —
+<b>RN50가 2.14× / 1.92× 정확 (95% CI 비중복, 통계적 유의)</b>.
+RN50 OOD ~3.8% 오차 (마우스 직경 40-60 mm 기준) → 실용 가능.<br/><br/>
+<b>📊 적용된 fix 2건 (2026-06-04)</b>: ① distortion off (videos_undist 이미 undistorted, double-correction 제거),
+② Savitzky-Golay window=15 temporal smoothing → jitter -63% / -75%, MPJPE -3-13%.<br/><br/>
+<b>⚠️ "DLC native 3D"도 "Anipose"도 아님</b> — Stage 1 = DLC 2D per-cam analyze_videos.
+Stage 2 = 우리가 작성한 linear DLT + 1D temporal smoothing. <b>v0.2 Anipose</b> 도입 시
+bone-length prior + Kalman 통합으로 추가 1-3 mm 개선 기대.
 </div>
 
 <h2>1. Pipeline KPIs</h2>
@@ -175,14 +176,49 @@ temporal smoothing 없음, bone-length prior 없음). 자세한 비교는 §4. <
 {ctx['results_table']}
 </table>
 
-<h2>3. 🎬 Full-frame prediction video — RN50 trained (선택된 최종 모델)</h2>
-<p>전체 18000 frame 중 5-step subsample = 3600 frames @ 20 fps = 3분 재생. 6-cam grid + 22-kp 오버레이 (cyan). H.264 인코딩으로 모든 브라우저 호환. <b>SA zero-shot 영상은 성능 약함 + 시각적 노이즈로 본 보고서에서 제외</b> (npz 데이터는 outputs/에 보존).</p>
+<h2>3. 🎬 Full-frame video — 양 모델 비교 (smoothed + distortion fix 적용)</h2>
+<p>3600 frames @ 20 fps = 3분 재생, 6-cam grid + 22-kp overlay, H.264 인코딩 (browser 호환).
+<b>2026-06-04 적용 fix 2건</b>: (a) distortion off (videos_undist double-correction 제거), (b) <b>Savitzky-Golay temporal smoothing</b> (window=15 = 150 ms @ 100 fps) — per-frame DLT jitter 흡수.</p>
 
-<video controls preload="metadata" style="width:100%;max-width:1100px;border:1px solid #06a;border-radius:4px;display:block;margin:0 auto;">
-  <source src="260603_kp_rn50_predictions_grid_h264.mp4" type="video/mp4">
-  <p>Video tag 미지원 — <a href="260603_kp_rn50_predictions_grid_h264.mp4">RN50 video 직접 다운로드</a></p>
-</video>
-<p style="font-size:12px;color:#555;font-style:italic;text-align:center;">RN50 점이 mouse body를 안정적으로 follow. <b>2026-06-04 distortion fix 적용</b> — videos_undist는 이미 undistorted이므로 distortion 재적용 제거 → overlay 정밀도 향상.</p>
+<div class="kpi" style="border-left-color:#06a;">
+  <span class="l">RN50 jitter 감소</span><span class="v">-63%</span>
+</div>
+<div class="kpi" style="border-left-color:#e80;">
+  <span class="l">SA jitter 감소</span><span class="v">-75%</span>
+</div>
+<div class="kpi" style="border-left-color:#3a3;">
+  <span class="l">RN50 OOD MPJPE 추가 개선</span><span class="v">-3.8%</span>
+</div>
+<div class="kpi" style="border-left-color:#3a3;">
+  <span class="l">SA OOD MPJPE 추가 개선</span><span class="v">-13%</span>
+</div>
+
+<div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:space-between;margin-top:14px;">
+  <div style="flex:1;min-width:480px;">
+    <h3 style="margin-top:0;color:#06a;">🟢 DLC ResNet50 (trained) + smoothing</h3>
+    <video controls preload="metadata" style="width:100%;border:2px solid #06a;border-radius:4px;">
+      <source src="260604_kp_rn50_smoothed_h264.mp4" type="video/mp4">
+    </video>
+    <p style="font-size:12px;color:#555;font-style:italic;">전 frame 22/22 kp 유효. MPJPE 19.14 mm OOD. 점이 mouse body를 안정적으로 follow.</p>
+  </div>
+  <div style="flex:1;min-width:480px;">
+    <h3 style="margin-top:0;color:#e80;">🟠 DLC SuperAnimal zero-shot + smoothing</h3>
+    <video controls preload="metadata" style="width:100%;border:2px solid #e80;border-radius:4px;">
+      <source src="260604_kp_sa_zeroshot_smoothed_h264.mp4" type="video/mp4">
+    </video>
+    <p style="font-size:12px;color:#555;font-style:italic;">12/22 kp만 정의 (paw/elbow/knee/foot NaN). MPJPE 36.68 mm OOD. 일부 view detection drift 잔존.</p>
+  </div>
+</div>
+
+<h3>3.0c Smoothing 효과 (MPJPE before/after)</h3>
+<table>
+<tr><th>모델</th><th>Split</th><th>raw MPJPE</th><th>smoothed MPJPE</th><th>Δ</th></tr>
+<tr><td><b>RN50 trained</b></td><td>MAMMAL 3600</td><td>23.10 mm</td><td><b>22.33 mm</b></td><td class="good">-3.3%</td></tr>
+<tr><td><b>RN50 trained</b></td><td>Li OOD 81</td><td>19.90 mm</td><td><b>19.14 mm</b></td><td class="good">-3.8%</td></tr>
+<tr><td>SA zero-shot</td><td>MAMMAL 3600</td><td>49.42 mm</td><td>47.74 mm</td><td>-3.4%</td></tr>
+<tr><td>SA zero-shot</td><td>Li OOD 81</td><td>42.15 mm</td><td>36.68 mm</td><td class="good">-13%</td></tr>
+</table>
+<p style="font-size:12px;color:#555;font-style:italic;">SA OOD에서 smoothing 효과 큼 — raw에서 noisy detection이 frame-level outlier 만들었기 때문. RN50은 raw가 이미 안정적이라 개선 폭 작음.</p>
 
 <h3>3.1 Real-frame predictions overlay (4-way still grids: GT + 2 models, distortion fix 적용)</h3>
 <p>아직 비교 검증용으로 SA 정지 이미지는 유지. <b>distortion off pinhole projection</b> 사용 (이전 distortion 적용 → 미세 offset 원인 제거).</p>
