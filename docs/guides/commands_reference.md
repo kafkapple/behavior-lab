@@ -35,64 +35,30 @@ LOKY_MAX_CPU_COUNT=1 python scripts/viz_feature_backends.py
 
 ---
 
-### 2. Clustering Model Comparison
+### 2. Method Comparison + Report (canonical)
 
-**What**: Runs 6 discovery models on 4 datasets, generates comparison figures + caches results.
+> `compare_clustering.py` / `generate_cluster_report.py` were **removed (260705)** — the
+> multi-method benchmark + HTML report now live on the shared modules (single common path):
+> `experiments.compare_discovery_methods` + `visualization.render_comparison_report`.
+> Heavy methods (keypoint-MoSeq/VAME) run in isolated conda envs via `scripts/isolated_run.py`.
 
-```bash
-LOKY_MAX_CPU_COUNT=1 OMP_NUM_THREADS=1 python scripts/compare_clustering.py
+```python
+from behavior_lab.data import ingest
+from behavior_lab.experiments.discovery import compare_discovery_methods
+from behavior_lab.visualization import render_comparison_report
+
+seqs = ingest("path/to/keypoints.npz")              # DLC/SLEAP/npz -> BehaviorSequence
+runs = compare_discovery_methods(                    # one comparable API
+    seqs[0].keypoints, methods=("kmeans_pca_umap", "bsoid", "pca_hmm_fallback"))
+render_comparison_report(runs, "outputs/comparison.html", fps=30.0)   # ONE comparable HTML
 ```
 
-**Output**:
-- `outputs/clustering_comparison/comparison_{dataset}.png` (4 files)
-- `outputs/clustering_comparison/cache/{dataset}.npz` (4 cached results)
-
-**Runtime**: ~20-30 minutes (all models)
-
-**Models**: Clustering, B-SOiD, MoSeq (HMM), SUBTLE, hBehaveMAE, CEBRA
-**Datasets**: CalMS21, SUBTLE, Shank3KO, MABe22
-
----
-
-### 3. HTML Report Generation
-
-**What**: Generates self-contained HTML report with comparison PNGs + per-cluster GIF animations.
-Uses cached results from `compare_clustering.py`.
-
+**Isolated heavy method** (own env, no torch conflict):
 ```bash
-# Default: top 2 models by Silhouette, max 8 clusters per model
-python scripts/generate_cluster_report.py
-
-# Specific models only
-python scripts/generate_cluster_report.py --models clustering,cebra
-
-# More GIFs: top 3 models, max 6 clusters
-python scripts/generate_cluster_report.py --top-n 3 --max-clusters 6
-
-# Custom GIF settings
-python scripts/generate_cluster_report.py --n-frames 240 --fps 10
-
-# Force re-run models (no cache)
-python scripts/generate_cluster_report.py --rerun
-
-# Custom output path
-python scripts/generate_cluster_report.py --output my_report.html
+conda run -n kpms python scripts/isolated_run.py --method keypoint_moseq --npz <file.npz> --out outputs/iso/kpms
 ```
 
-**Output**: `outputs/clustering_comparison/report.html` (~10-20 MB)
-**Runtime**: ~10 minutes (cached) / ~35 minutes (rerun)
-
-**CLI Options**:
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--models` | all | Comma-separated model names |
-| `--rerun` | false | Force re-run (ignore cache) |
-| `--max-clusters` | 8 | Max clusters for GIF generation |
-| `--top-n` | 2 | Top N models (by Silhouette) for GIFs |
-| `--n-frames` | 480 | Frames per GIF animation |
-| `--fps` | 15.0 | GIF playback speed |
-| `--output` | report.html | Output HTML path |
+**Workbench batch runner** (over local dataset slices): `python scripts/run_behavior_workbench_batch.py`
 
 ---
 

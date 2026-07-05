@@ -139,7 +139,7 @@ def plot_temporal_raster(
 
     # Create a color-coded strip
     unique = sorted(set(labels))
-    cmap_obj = plt.cm.get_cmap(cmap, len(unique))
+    cmap_obj = plt.get_cmap(cmap, len(unique))
     label_to_color = {l: i for i, l in enumerate(unique)}
     colors = np.array([label_to_color[l] for l in labels])
 
@@ -205,7 +205,7 @@ def plot_multiscale_ethogram(
         time_sec = np.arange(T) / fps
         unique = sorted(set(labels))
         n_unique = len(unique)
-        cmap_obj = plt.cm.get_cmap(cmap, max(n_unique, 2))
+        cmap_obj = plt.get_cmap(cmap, max(n_unique, 2))
         label_map = {l: i for i, l in enumerate(unique)}
         colors = np.array([label_map[l] for l in labels])
 

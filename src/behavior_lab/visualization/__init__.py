@@ -22,6 +22,7 @@ from .colors import (
     PERSON_COLORS,
 )
 from .html_report import generate_pipeline_report, fig_to_base64
+from .comparison import render_comparison_report
 from .video_overlay import (
     render_skeleton_on_frame,
     overlay_keypoints_on_video,
@@ -51,6 +52,7 @@ __all__ = [
     "PERSON_COLORS",
     "generate_pipeline_report",
     "fig_to_base64",
+    "render_comparison_report",
     "render_skeleton_on_frame",
     "overlay_keypoints_on_video",
     "overlay_keypoints_on_frame_array",
