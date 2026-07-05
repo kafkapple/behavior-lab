@@ -34,15 +34,19 @@ behavior-lab/
 │   │   ├── graph/         # GCN family: InfoGCN, ST-GCN, AGCN + PySKL wrappers
 │   │   ├── sequence/      # MLP, LSTM, Transformer, RuleBased
 │   │   ├── ssl/           # {GCN, InfoGCN, Interaction} × {MAE, JEPA, DINO}
-│   │   └── discovery/     # B-SOiD, MoSeq, SUBTLE, BehaveMAE, CEBRA, KMeans
+│   │   └── discovery/     # B-SOiD, MoSeq, Keypoint-MoSeq, VAME, SUBTLE, BehaveMAE, CEBRA, KMeans
+│   ├── experiments/       # pipeline.run_comparison (unified cross-species) + discovery
 │   ├── evaluation/        # Classification, clustering, behavior metrics
-│   └── visualization/     # Skeleton plots, animations, embeddings, HTML reports
+│   └── visualization/     # Skeleton plots/GIFs, embeddings, comparison.render_comparison_report
+│                          #   (+ ground-truth ARI/NMI, agreement matrix) + render_cluster_gallery
 └── scripts/
-    ├── compare_clustering.py      # 6-model × 4-dataset benchmark
+    ├── isolated_run.py            # run one heavy method (keypoint-MoSeq/VAME) in its own conda env
     ├── viz_feature_backends.py    # SkeletonBackend visualization (5 panels)
-    ├── generate_cluster_report.py # HTML report with per-cluster GIF animations
     └── test_e2e.py                # End-to-end pipeline verification
 ```
+> Benchmark + report are now library calls (`experiments.run_comparison` +
+> `visualization.render_comparison_report`); the old `compare_clustering.py` /
+> `generate_cluster_report.py` scripts were removed (260705).
 
 ---
 

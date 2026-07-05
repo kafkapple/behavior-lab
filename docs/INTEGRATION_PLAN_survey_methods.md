@@ -3,7 +3,7 @@
 > Scope decision (bori 승인): **Option A — VAME wrapper 1개 신설 + 중복 비교 하네스 통합.** 새 하네스 금지, 기존 통합계약(`BehaviorClusterer` Protocol + `get_model` registry + `compare_discovery_methods` + `html_report`) 재사용. `/karpathy /ponytail --devil` 렌즈.
 >
 > 연계 서베이(정본): Obsidian `40_Areas/2_Research/_Surveys/BehaviorAnalysis/4_Papers/` (`_MoC_Behavior_Papers` + Paper_* 9 + Review_* 2).
-> Status: **§1 VAME 통합 = ✅ 구현·테스트 완료** (vame.py + registry + config + catalog + pyproject + workbench, test 5/5). **§2 하네스 전면 통합 = 부분** (VAME는 batch runner 편입; compare_clustering.py deprecate는 미착수).
+> Status: **§1 VAME 통합 = ✅ 완료** (vame.py + registry + config + catalog + pyproject, test 5/5, s-DANNCE·CalMS21·NTU 실행 검증). **§2 하네스 통합 = ✅ 완료 (260705)** — `compare_clustering.py`/`generate_cluster_report.py` 삭제, `experiments.run_comparison`(다종 통합) + `visualization.render_comparison_report`(정량+ground-truth+agreement) + `render_cluster_gallery` + `scripts/isolated_run.py`(격리 env)로 수렴. keypoint-MoSeq·VAME는 전용 conda env.
 
 ---
 

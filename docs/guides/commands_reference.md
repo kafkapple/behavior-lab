@@ -78,15 +78,24 @@ LOKY_MAX_CPU_COUNT=1 OMP_NUM_THREADS=1 python scripts/test_e2e.py
 
 ## Typical Workflow
 
+```python
+# One config-driven call — works for ANY species (mouse/rat/human).
+from behavior_lab.experiments import run_comparison
+
+# Light methods in-process; heavy methods (keypoint-MoSeq/VAME) precomputed in
+# isolated conda envs via scripts/isolated_run.py and passed as extra_labels.
+run_comparison(
+    "data/keypoints.npz", "calms21",              # source + DatasetSpec key
+    "outputs/comparison.html",                    # metrics + ARI/NMI + ethogram + agreement
+    extra_labels={"keypoint_moseq": kpms_labels, "VAME": vame_labels},
+    ground_truth=labels,                          # optional gold-standard eval
+    gallery_html="outputs/cluster_gallery.html")  # optional per-cluster skeleton GIFs
+```
+
 ```bash
-# Step 1: Run model comparison (generates PNGs + cache)
-LOKY_MAX_CPU_COUNT=1 OMP_NUM_THREADS=1 python scripts/compare_clustering.py
-
-# Step 2: Generate HTML report (uses cache, adds per-cluster GIF animations)
-python scripts/generate_cluster_report.py
-
-# Step 3: View in browser
-open outputs/clustering_comparison/report.html
+# Heavy methods run in isolated envs first (no torch/jax conflict):
+conda run -n kpms python scripts/isolated_run.py --method keypoint_moseq --npz data.npz --out outputs/iso/kpms
+conda run -n vame python scripts/isolated_run.py --method vame          --npz data.npz --out outputs/iso/vame
 ```
 
 ---

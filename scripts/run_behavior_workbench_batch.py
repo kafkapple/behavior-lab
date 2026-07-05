@@ -2,8 +2,13 @@
 """Run a capped, notebook-friendly behavior discovery comparison.
 
 This runner executes all installed discovery families on small, consistent
-local dataset slices. It is intentionally separate from the heavier
-``compare_clustering.py`` benchmark, which can take many minutes per full run.
+local dataset slices (self-contained convenience CLI).
+
+For the canonical, config-driven cross-species comparison + report, prefer the
+library entry point ``behavior_lab.experiments.run_comparison`` (ties ingest ->
+compare_discovery_methods -> render_comparison_report, with ground-truth ARI/NMI
+and per-cluster galleries). Heavy methods run in isolated envs via
+``scripts/isolated_run.py``.
 """
 # no-split: cohesive comparison-runner script — run_* fns share DatasetSlice/
 # BatchResult/metric_result + plot/html helpers; splitting fragments locality.
