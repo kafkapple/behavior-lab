@@ -26,7 +26,10 @@ def _compute_bsoid_features(data: np.ndarray, fps: int = 30) -> np.ndarray:
         (T', n_features) binned to 10fps with smoothing
     """
     T, K, D = data.shape
-    assert D == 2, f"B-SOiD requires 2D data, got D={D}"
+    # B-SOiD features (displacement, pairwise distance, angular change) are
+    # mathematically D-agnostic. Original paper used 2D (CalMS21) but all
+    # operations generalize to 3D. See Deliberation #5 in research plan.
+    assert D in (2, 3), f"B-SOiD requires 2D or 3D data, got D={D}"
 
     # Displacement: (T-1, K)
     disp = np.linalg.norm(np.diff(data, axis=0), axis=-1)

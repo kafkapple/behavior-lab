@@ -1,0 +1,7 @@
+name: vame
+_target_: behavior_lab.models.discovery.vame.VAME
+project_dir: ./vame_output
+latent_dim: 30
+time_window: 30
+n_clusters: 15
+num_epochs: 100

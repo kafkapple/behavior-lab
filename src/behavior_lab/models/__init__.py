@@ -10,9 +10,15 @@ Taxonomy (single axis: Architecture, sub-grouped by paradigm):
 - discovery/   Behavior discovery — B-SOiD, MoSeq, SUBTLE, BehaveMAE, clustering
 - losses/      Label smoothing, MMD
 """
-from .graph import InfoGCN, InfoGCN_Interaction, STGCN, AGCN
-from .sequence import get_action_classifier
-from .ssl import build_ssl_model, MODEL_REGISTRY as SSL_REGISTRY
+try:
+    from .graph import InfoGCN, InfoGCN_Interaction, STGCN, AGCN
+except ImportError:
+    InfoGCN = InfoGCN_Interaction = STGCN = AGCN = None
+
+try:
+    from .ssl import MODEL_REGISTRY as SSL_REGISTRY
+except ImportError:
+    SSL_REGISTRY = {}
 
 
 def _remap_infogcn_kwargs(kwargs: dict) -> dict:
@@ -31,6 +37,7 @@ _DISCOVERY_MODELS = {
     'moseq': ('behavior_lab.models.discovery.moseq', 'KeypointMoSeq'),
     'keypoint_moseq': ('behavior_lab.models.discovery.moseq', 'KeypointMoSeq'),
     'subtle': ('behavior_lab.models.discovery.subtle_wrapper', 'SUBTLE'),
+    'vame': ('behavior_lab.models.discovery.vame', 'VAME'),
     'behavemae': ('behavior_lab.models.discovery.behavemae', 'BehaveMAE'),
     'behave_mae': ('behavior_lab.models.discovery.behavemae', 'BehaveMAE'),
     'clustering': ('behavior_lab.models.discovery.clustering', 'cluster_features'),
@@ -78,6 +85,8 @@ def get_model(name: str, **kwargs):
         'agcn': AGCN,
     }
     if name_lower in graph_models:
+        if graph_models[name_lower] is None:
+            raise ImportError("Install behavior-lab[torch] to use graph models")
         kw = _remap_infogcn_kwargs(kwargs) if 'infogcn' in name_lower else kwargs
         return graph_models[name_lower](**kw)
 
@@ -94,6 +103,8 @@ def get_model(name: str, **kwargs):
     # Sequence models
     seq_names = ('lstm', 'mlp', 'transformer', 'rule_based', 'rule', 'baseline')
     if name_lower in seq_names:
+        from .sequence import get_action_classifier
+
         return get_action_classifier(name_lower, **kwargs)
 
     # Discovery models (lazy import — heavy deps)

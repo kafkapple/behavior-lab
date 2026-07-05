@@ -27,14 +27,23 @@ class KeypointMoSeq:
 
     def __init__(self, project_dir: str = './moseq_output',
                  num_iters: int = 50, latent_dim: int = 10,
-                 kappa: float = 1e6, bodypart_names: Optional[List[str]] = None):
+                 kappa: float = 1e6, bodypart_names: Optional[List[str]] = None,
+                 anterior_idxs: Optional[List[int]] = None,
+                 posterior_idxs: Optional[List[int]] = None,
+                 num_states: int = 20,
+                 use_confidences: bool = False):
         self.project_dir = project_dir
         self.num_iters = num_iters
         self.latent_dim = latent_dim
         self.kappa = kappa
         self.bodypart_names = bodypart_names
+        self.anterior_idxs = anterior_idxs
+        self.posterior_idxs = posterior_idxs
+        self.num_states = num_states
+        self.use_confidences = use_confidences
         self._model = None
         self._pca = None
+        self._results = None
         self._config = {
             'latent_dim': latent_dim,
             'kappa': kappa,
@@ -45,7 +54,10 @@ class KeypointMoSeq:
     def _to_kpms_format(self, keypoints: np.ndarray, name: str = 'rec_0'):
         """Convert (T, K, D) -> keypoint-moseq dict format."""
         coords = {name: keypoints}
-        confs = {name: np.ones(keypoints.shape[:2])}
+        if self.use_confidences:
+            confs = {name: np.ones(keypoints.shape[:2])}
+        else:
+            confs = None
         return coords, confs
 
     def fit(self, keypoints: np.ndarray, recording_name: str = 'rec_0') -> 'KeypointMoSeq':
@@ -62,24 +74,75 @@ class KeypointMoSeq:
 
         coords, confs = self._to_kpms_format(keypoints, recording_name)
         bodyparts = self.bodypart_names or [f'kp{i}' for i in range(keypoints.shape[1])]
+        anterior_idxs = self.anterior_idxs or self._infer_anterior_idxs(bodyparts)
+        posterior_idxs = self.posterior_idxs or self._infer_posterior_idxs(bodyparts)
 
-        # Format data
-        data, metadata = kpms.format_data(coords, confs, bodyparts=bodyparts, **self._config)
+        # Format data in the current keypoint-moseq API.
+        data, metadata = kpms.format_data(
+            coords,
+            confs,
+            bodyparts=bodyparts,
+            use_bodyparts=bodyparts,
+            **self._config,
+        )
+        if not self.use_confidences:
+            data.pop("conf", None)
+        try:
+            from jax_moseq.utils.debugging import convert_data_precision
+            data = convert_data_precision(data)
+        except Exception:
+            pass
 
-        # Fit PCA + init model
-        self._pca = kpms.fit_pca(data, **self._config)
-        model = kpms.init_model(data, pca=self._pca, **self._config)
+        # Fit PCA + initialize model with explicit mask/heading indices.
+        pca_kwargs = {
+            "anterior_idxs": anterior_idxs,
+            "posterior_idxs": posterior_idxs,
+            "verbose": False,
+        }
+        if self.use_confidences and data.get("conf") is not None:
+            pca_kwargs["conf"] = data.get("conf")
+            pca_kwargs["noise_prior"] = 1.0
 
-        # Stage 1: AR-HMM
-        model, _ = kpms.fit_model(
-            model, data, metadata, project_dir=self.project_dir,
-            ar_only=True, num_iters=self.num_iters)
+        self._pca = kpms.fit_pca(
+            data["Y"],
+            data["mask"],
+            **pca_kwargs,
+        )
 
-        # Stage 2: Full SLDS
+        init_kwargs = dict(
+            data=data,
+            pca=self._pca,
+            trans_hypparams={"num_states": self.num_states, "gamma": 1e3, "alpha": 5.7, "kappa": self.kappa},
+            ar_hypparams={"latent_dim": self.latent_dim, "nlags": 3, "S_0_scale": 0.01, "K_0_scale": 10.0},
+            obs_hypparams={"sigmasq_0": 0.1, "sigmasq_C": 0.1, "nu_sigma": 1e5, "nu_s": 5},
+            cen_hypparams={"sigmasq_loc": 0.5},
+            anterior_idxs=anterior_idxs,
+            posterior_idxs=posterior_idxs,
+            fix_heading=False,
+            conf_threshold=0.5,
+            verbose=False,
+        )
+        if self.use_confidences and data.get("conf") is not None:
+            init_kwargs["noise_prior"] = 1.0
+
+        model = kpms.init_model(**init_kwargs)
+
         self._model, self._model_name = kpms.fit_model(
-            model, data, metadata, project_dir=self.project_dir,
-            ar_only=False, num_iters=self.num_iters)
+            model,
+            data,
+            metadata,
+            project_dir=self.project_dir,
+            model_name='keypoint_moseq',
+            ar_only=False,
+            num_iters=self.num_iters,
+            save_every_n_iters=None,
+            generate_progress_plots=False,
+            verbose=False,
+        )
 
+        self._results = kpms.extract_results(
+            self._model, metadata, save_results=False
+        )
         self._metadata = metadata
         return self
 
@@ -97,13 +160,35 @@ class KeypointMoSeq:
 
         import keypoint_moseq as kpms
 
+        if self._results is not None and recording_name in self._results:
+            if self._results[recording_name]["syllable"].shape[0] == keypoints.shape[0]:
+                return np.asarray(self._results[recording_name]["syllable"])
+
         coords, confs = self._to_kpms_format(keypoints, recording_name)
         bodyparts = self.bodypart_names or [f'kp{i}' for i in range(keypoints.shape[1])]
-        data, metadata = kpms.format_data(coords, confs, bodyparts=bodyparts, **self._config)
+        anterior_idxs = self.anterior_idxs or self._infer_anterior_idxs(bodyparts)
+        posterior_idxs = self.posterior_idxs or self._infer_posterior_idxs(bodyparts)
+        data, metadata = kpms.format_data(coords, confs, bodyparts=bodyparts, use_bodyparts=bodyparts, **self._config)
+        if not self.use_confidences:
+            data.pop("conf", None)
+        try:
+            from jax_moseq.utils.debugging import convert_data_precision
+            data = convert_data_precision(data)
+        except Exception:
+            pass
 
-        results = kpms.apply_model(self._model, data, metadata,
-                                   save_results=False, return_model=False)
-        return results[recording_name]['syllable']
+        results = kpms.apply_model(
+            self._model,
+            data,
+            metadata,
+            anterior_idxs=anterior_idxs,
+            posterior_idxs=posterior_idxs,
+            save_results=False,
+            return_model=False,
+            project_dir=self.project_dir,
+            model_name='keypoint_moseq',
+        )
+        return np.asarray(results[recording_name]['syllable'])
 
     def get_results(self, keypoints: np.ndarray, recording_name: str = 'rec') -> Dict:
         """Get full results including latent state and centroid.
@@ -118,9 +203,20 @@ class KeypointMoSeq:
 
         coords, confs = self._to_kpms_format(keypoints, recording_name)
         bodyparts = self.bodypart_names or [f'kp{i}' for i in range(keypoints.shape[1])]
+        anterior_idxs = self.anterior_idxs or self._infer_anterior_idxs(bodyparts)
+        posterior_idxs = self.posterior_idxs or self._infer_posterior_idxs(bodyparts)
         data, metadata = kpms.format_data(coords, confs, bodyparts=bodyparts, **self._config)
+        if not self.use_confidences:
+            data.pop("conf", None)
+        try:
+            from jax_moseq.utils.debugging import convert_data_precision
+            data = convert_data_precision(data)
+        except Exception:
+            pass
 
         results = kpms.apply_model(self._model, data, metadata,
+                                   anterior_idxs=anterior_idxs,
+                                   posterior_idxs=posterior_idxs,
                                    save_results=False, return_model=False)
         return results[recording_name]
 
@@ -134,6 +230,18 @@ class KeypointMoSeq:
             metadata={"algorithm": "moseq", "latent_dim": self.latent_dim},
         )
 
+    def _infer_anterior_idxs(self, bodyparts: List[str]) -> List[int]:
+        for name in ("nose", "head", "snout", "forehead"):
+            if name in bodyparts:
+                return [bodyparts.index(name)]
+        return [0]
+
+    def _infer_posterior_idxs(self, bodyparts: List[str]) -> List[int]:
+        for name in ("tail_base", "tail", "tail_tip", "rump"):
+            if name in bodyparts:
+                return [bodyparts.index(name)]
+        return [len(bodyparts) - 1]
+
     def save(self, path: str) -> None:
         """Save model state to file."""
         state = {
@@ -141,6 +249,7 @@ class KeypointMoSeq:
             "pca": self._pca,
             "config": self._config,
             "bodypart_names": self.bodypart_names,
+            "use_confidences": self.use_confidences,
         }
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path, "wb") as f:
@@ -154,6 +263,7 @@ class KeypointMoSeq:
         self._pca = state["pca"]
         self._config = state.get("config", self._config)
         self.bodypart_names = state.get("bodypart_names", self.bodypart_names)
+        self.use_confidences = state.get("use_confidences", self.use_confidences)
 
 
 class _PCAHMMFallback:
