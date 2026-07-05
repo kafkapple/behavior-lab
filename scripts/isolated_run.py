@@ -30,7 +30,7 @@ def main() -> None:
     a = ap.parse_args()
 
     seq = ingest(a.npz)[0]
-    kp = seq.keypoints[: a.max_frames]
+    kp = np.nan_to_num(seq.keypoints[: a.max_frames], nan=0.0)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
 
