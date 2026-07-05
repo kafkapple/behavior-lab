@@ -43,6 +43,7 @@ from behavior_lab.visualization.skeleton import strip_zero_frames, strip_zero_pe
 from behavior_lab.visualization.colors import get_joint_labels, get_joint_full_names
 from behavior_lab.visualization.html_report import (
     generate_pipeline_report, image_to_base64,
+    generate_cluster_animations,
 )
 from behavior_lab.visualization.video_overlay import (
     overlay_keypoints_on_video, overlay_keypoints_on_frame_array,
@@ -170,130 +171,6 @@ def generate_per_class_animations(
                 print(f"    Saved: {save_path.name} ({kp.shape[0]} frames)")
         except Exception as e:
             print(f"    Warning: Failed to generate GIF for class {label_idx}: {e}")
-
-    return gif_items
-
-
-def generate_cluster_animations(
-    keypoints: np.ndarray,
-    labels: np.ndarray,
-    skeleton,
-    out_dir,
-    sample_indices: np.ndarray | None = None,
-    n_frames: int | None = None,
-    fps: float | None = None,
-    max_clusters: int | None = None,
-):
-    """Generate one representative GIF per cluster for unsupervised datasets.
-
-    Finds the longest contiguous bout for each cluster label and animates it.
-
-    Args:
-        keypoints: (T_total, K, D) — full concatenated keypoint array
-        labels: (N,) — cluster labels from KMeans (may be subsampled)
-        skeleton: SkeletonDefinition
-        out_dir: Directory for saving GIF files
-        sample_indices: If labels were computed on subsampled frames,
-            provide the frame indices so we can map back to keypoints.
-            If None, assumes labels[i] corresponds to keypoints[i].
-        n_frames: Frames per GIF (default from VIZ_CONFIG)
-        fps: Playback fps (default from VIZ_CONFIG)
-        max_clusters: Max clusters to animate (default from VIZ_CONFIG)
-
-    Returns:
-        List of dicts with 'label' and 'src' (base64) for HTML embedding.
-    """
-    n_frames = n_frames or VIZ_CONFIG["per_class_n_frames"]
-    fps = fps or VIZ_CONFIG["gif_fps_playback"]
-    max_clusters = max_clusters or VIZ_CONFIG["per_class_max"]
-
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Map labels back to original frame indices
-    if sample_indices is not None:
-        frame_labels = np.full(len(keypoints), -1, dtype=int)
-        frame_labels[sample_indices] = labels
-    else:
-        frame_labels = labels.copy()
-
-    unique_labels = sorted(set(labels))
-    if len(unique_labels) > max_clusters:
-        unique_labels = unique_labels[:max_clusters]
-
-    gif_items = []
-    print(f"\n  Generating per-cluster representative animations...")
-
-    for cid in unique_labels:
-        # Find contiguous bouts of this cluster
-        mask = frame_labels == cid
-        if mask.sum() < 10:
-            continue
-
-        # Find runs of True in mask
-        diffs = np.diff(mask.astype(int))
-        starts = np.where(diffs == 1)[0] + 1
-        ends = np.where(diffs == -1)[0] + 1
-        if mask[0]:
-            starts = np.concatenate([[0], starts])
-        if mask[-1]:
-            ends = np.concatenate([ends, [len(mask)]])
-
-        if len(starts) == 0 or len(ends) == 0:
-            continue
-
-        # Pick the longest bout
-        bout_lens = ends[:len(starts)] - starts[:len(ends)]
-        best_idx = np.argmax(bout_lens)
-        bout_start = starts[best_idx]
-        bout_end = ends[best_idx]
-        bout_len = bout_end - bout_start
-
-        # Extract frames — use at least n_frames, extending if bout is shorter
-        if bout_len >= n_frames:
-            kp_segment = keypoints[bout_start:bout_start + n_frames]
-        else:
-            # Concatenate multiple bouts to reach n_frames
-            segments = []
-            remaining = n_frames
-            # Sort bouts by length (longest first)
-            order = np.argsort(-bout_lens)
-            for bi in order:
-                bs, be = starts[bi], ends[bi]
-                take = min(be - bs, remaining)
-                segments.append(keypoints[bs:bs + take])
-                remaining -= take
-                if remaining <= 0:
-                    break
-            kp_segment = np.concatenate(segments, axis=0)[:n_frames]
-
-        save_path = out_dir / f"cluster_{cid:02d}.gif"
-        title = f"Cluster {cid} ({kp_segment.shape[0]}f, {bout_lens.sum()} total)"
-
-        try:
-            # Apply outlier clipping for 3D data
-            kp_viz = kp_segment
-            if kp_segment.shape[-1] >= 3 and VIZ_CONFIG["clip_per_joint"]:
-                kp_viz = clip_outlier_joints(
-                    kp_segment,
-                    per_joint=True,
-                    iqr_factor=VIZ_CONFIG["clip_iqr_factor"],
-                )
-
-            anim = animate_skeleton(
-                kp_viz, skeleton=skeleton,
-                fps=fps, title=title,
-                save_path=str(save_path),
-            )
-            plt.close("all")
-            if save_path.exists():
-                gif_items.append({
-                    "label": f"Cluster {cid}",
-                    "src": image_to_base64(save_path),
-                })
-                print(f"    Saved: {save_path.name} ({kp_segment.shape[0]} frames)")
-        except Exception as e:
-            print(f"    Warning: Failed GIF for cluster {cid}: {e}")
 
     return gif_items
 
@@ -1299,6 +1176,11 @@ def test_subtle(report: dict, html_data: dict) -> None:
     cluster_gifs = generate_cluster_animations(
         all_kp, labels, skeleton, out / "clusters",
         sample_indices=sample_indices,
+        n_frames=VIZ_CONFIG["per_class_n_frames"],
+        fps=VIZ_CONFIG["gif_fps_playback"],
+        max_clusters=VIZ_CONFIG["per_class_max"],
+        clip_per_joint=VIZ_CONFIG["clip_per_joint"],
+        clip_iqr_factor=VIZ_CONFIG["clip_iqr_factor"],
     )
     if cluster_gifs:
         ds_html["per_class_gifs"] = cluster_gifs
@@ -1446,6 +1328,11 @@ def test_shank3ko(report: dict, html_data: dict) -> None:
     cluster_gifs = generate_cluster_animations(
         all_kp, labels, skeleton, out / "clusters",
         sample_indices=sample_indices,
+        n_frames=VIZ_CONFIG["per_class_n_frames"],
+        fps=VIZ_CONFIG["gif_fps_playback"],
+        max_clusters=VIZ_CONFIG["per_class_max"],
+        clip_per_joint=VIZ_CONFIG["clip_per_joint"],
+        clip_iqr_factor=VIZ_CONFIG["clip_iqr_factor"],
     )
     if cluster_gifs:
         ds_html["per_class_gifs"] = cluster_gifs

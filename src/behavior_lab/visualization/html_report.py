@@ -11,6 +11,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 
 def fig_to_base64(fig, dpi: int = 150) -> str:
     """Convert a matplotlib Figure to a base64 data URI (PNG).
@@ -192,6 +194,43 @@ def _render_dataset_tab(name: str, ds: dict) -> str:
             f'{"".join(gif_cards)}</div>'
         )
 
+    # Multi-model comparison image (e.g., from compare_clustering.py)
+    comparison_img = ds.get("comparison_image")
+    if comparison_img:
+        sections.append(
+            f"<h3>Model Comparison</h3>"
+            f"{_render_image(comparison_img, alt='Model Comparison', max_width=1200)}"
+        )
+
+    # Metrics comparison table (multi-model)
+    metrics_table = ds.get("metrics_table")
+    if metrics_table:
+        headers = metrics_table.get("headers", [])
+        rows = metrics_table.get("rows", [])
+        if headers and rows:
+            sections.append(
+                f"<h3>Model Metrics</h3>{_render_table(headers, rows)}"
+            )
+
+    # Per-model cluster GIF grids
+    model_cluster_gifs = ds.get("model_cluster_gifs", {})
+    for model_name, gifs in model_cluster_gifs.items():
+        if gifs:
+            gif_cards = []
+            for item in gifs:
+                gif_cards.append(
+                    f'<div style="text-align:center;margin:4px;">'
+                    f'<img src="{item["src"]}" alt="{_escape(item["label"])}" '
+                    f'style="max-width:200px;border-radius:6px;border:1px solid var(--border);">'
+                    f'<p style="font-size:0.8em;margin-top:4px;">{_escape(item["label"])}</p>'
+                    f'</div>'
+                )
+            sections.append(
+                f"<h3>{_escape(model_name)} — Per-Cluster Behaviors</h3>"
+                f'<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">'
+                f'{"".join(gif_cards)}</div>'
+            )
+
     return "\n".join(sections)
 
 
@@ -281,6 +320,134 @@ function switchTab(evt, tabId) {
   evt.currentTarget.classList.add('active');
 }
 """
+
+
+def generate_cluster_animations(
+    keypoints: np.ndarray,
+    labels: np.ndarray,
+    skeleton,
+    out_dir: str | Path,
+    sample_indices: np.ndarray | None = None,
+    n_frames: int = 480,
+    fps: float = 15.0,
+    max_clusters: int = 8,
+    clip_per_joint: bool = True,
+    clip_iqr_factor: float = 3.0,
+) -> list[dict]:
+    """Generate per-cluster representative GIF animations.
+
+    Finds the longest contiguous bout for each cluster label and animates
+    the skeleton keypoints as a GIF. Returns base64-encoded data URIs
+    suitable for embedding in HTML reports.
+
+    Args:
+        keypoints: (T_total, K, D) full concatenated keypoint array
+        labels: (N,) cluster labels (may be subsampled)
+        skeleton: SkeletonDefinition for skeleton rendering
+        out_dir: Directory for saving intermediate GIF files
+        sample_indices: If labels were computed on subsampled frames,
+            provide the frame indices to map back to keypoints.
+            If None, assumes labels[i] corresponds to keypoints[i].
+        n_frames: Number of frames per GIF
+        fps: Playback fps for the GIF
+        max_clusters: Maximum number of clusters to animate
+        clip_per_joint: Whether to apply per-joint IQR outlier clipping (3D)
+        clip_iqr_factor: IQR multiplier for outlier clipping
+
+    Returns:
+        List of dicts with 'label' (str) and 'src' (base64 data URI).
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from .skeleton import animate_skeleton, clip_outlier_joints
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Map labels back to original frame indices
+    if sample_indices is not None:
+        frame_labels = np.full(len(keypoints), -1, dtype=int)
+        frame_labels[sample_indices] = labels
+    else:
+        frame_labels = labels.copy()
+
+    unique_labels = sorted(set(labels) - {-1})
+    if len(unique_labels) > max_clusters:
+        unique_labels = unique_labels[:max_clusters]
+
+    gif_items = []
+    print(f"\n  Generating per-cluster representative animations...")
+
+    for cid in unique_labels:
+        # Find contiguous bouts of this cluster
+        mask = frame_labels == cid
+        if mask.sum() < 10:
+            continue
+
+        # Find runs of True in mask
+        diffs = np.diff(mask.astype(int))
+        starts = np.where(diffs == 1)[0] + 1
+        ends = np.where(diffs == -1)[0] + 1
+        if mask[0]:
+            starts = np.concatenate([[0], starts])
+        if mask[-1]:
+            ends = np.concatenate([ends, [len(mask)]])
+
+        if len(starts) == 0 or len(ends) == 0:
+            continue
+
+        # Pick the longest bout
+        bout_lens = ends[:len(starts)] - starts[:len(ends)]
+        best_idx = np.argmax(bout_lens)
+        bout_start = starts[best_idx]
+        bout_end = ends[best_idx]
+        bout_len = bout_end - bout_start
+
+        # Extract frames — concatenate multiple bouts if longest is short
+        if bout_len >= n_frames:
+            kp_segment = keypoints[bout_start:bout_start + n_frames]
+        else:
+            segments = []
+            remaining = n_frames
+            order = np.argsort(-bout_lens)
+            for bi in order:
+                bs, be = starts[bi], ends[bi]
+                take = min(be - bs, remaining)
+                segments.append(keypoints[bs:bs + take])
+                remaining -= take
+                if remaining <= 0:
+                    break
+            kp_segment = np.concatenate(segments, axis=0)[:n_frames]
+
+        save_path = out_dir / f"cluster_{cid:02d}.gif"
+        title = f"Cluster {cid} ({kp_segment.shape[0]}f, {bout_lens.sum()} total)"
+
+        try:
+            # Apply outlier clipping for 3D data
+            kp_viz = kp_segment
+            if kp_segment.shape[-1] >= 3 and clip_per_joint:
+                kp_viz = clip_outlier_joints(
+                    kp_segment, per_joint=True, iqr_factor=clip_iqr_factor,
+                )
+
+            anim = animate_skeleton(
+                kp_viz, skeleton=skeleton,
+                fps=fps, title=title,
+                save_path=str(save_path),
+            )
+            plt.close("all")
+            if save_path.exists():
+                gif_items.append({
+                    "label": f"Cluster {cid}",
+                    "src": image_to_base64(save_path),
+                })
+                print(f"    Saved: {save_path.name} ({kp_segment.shape[0]} frames)")
+        except Exception as e:
+            print(f"    Warning: Failed GIF for cluster {cid}: {e}")
+
+    return gif_items
 
 
 def generate_pipeline_report(

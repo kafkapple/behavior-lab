@@ -510,7 +510,7 @@ def animate_skeleton(
     # Mask out zero joints to avoid bbox distortion from padding
     nonzero_mask = np.any(bounds_kp != 0, axis=-1)  # (T, K) boolean
     if np.any(nonzero_mask):
-        active_kp = bounds_kp.copy()
+        active_kp = bounds_kp.astype(np.float64)
         active_kp[~nonzero_mask] = np.nan
         mins = np.nanmin(active_kp, axis=(0, 1))
         maxs = np.nanmax(active_kp, axis=(0, 1))
@@ -627,7 +627,13 @@ def animate_skeleton(
 
     if save_path:
         if save_path.endswith(".gif"):
-            anim.save(save_path, writer="pillow", fps=fps)
+            # GIF format only supports 10ms frame delay granularity.
+            # Pillow truncates (e.g. 15fps → 60ms instead of 67ms → 16.7fps).
+            # Round to nearest 10ms for accuracy: 15fps → 70ms → 14.3fps.
+            duration_ms = round(1000 / fps / 10) * 10
+            duration_ms = max(duration_ms, 20)  # minimum 20ms (50fps)
+            anim.save(save_path, writer="pillow",
+                      fps=1000 / duration_ms)
         else:
             anim.save(save_path, writer="ffmpeg", fps=fps)
 

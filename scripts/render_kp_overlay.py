@@ -38,15 +38,17 @@ KP_NAMES = [
     "R_foot", "R_knee", "R_hip",
 ]
 
+# SSOT: FaceLift configs/keypoints/mouse_22.yaml (mirrored in behaviorsplatter
+# temporal_deform/keypoints_22.py::SKELETON_BONES). 260702 fix: front limbs
+# used to route through body_middle(4) — anatomically wrong, the pectoral
+# girdle attaches near the neck/thoracic spine, not mid-spine.
 EDGES = [
-    (2, 3), (0, 3), (1, 3),
+    (2, 0), (2, 1), (2, 3),
     (3, 4), (4, 5), (5, 6), (6, 7),
-    (4, 11), (4, 15),
-    (11, 10), (10, 8), (8, 9),
-    (15, 14), (14, 12), (12, 13),
-    (5, 18), (5, 21),
-    (18, 17), (17, 16),
-    (21, 20), (20, 19),
+    (3, 11), (11, 10), (10, 8), (8, 9),
+    (3, 15), (15, 14), (14, 12), (12, 13),
+    (5, 18), (18, 17), (17, 16),
+    (5, 21), (21, 20), (20, 19),
 ]
 
 COLOR_MAMMAL = (0, 200, 0)        # green BGR

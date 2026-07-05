@@ -270,11 +270,15 @@ def run_moseq_fallback(dataset: dict, n_states: int = 15) -> ModelResult:
 
 
 def run_subtle(dataset: dict) -> ModelResult:
-    """SUBTLE: Morlet wavelet + UMAP + Phenograph.
+    """SUBTLE: Morlet wavelet + UMAP + Phenograph (3D only).
 
     Runs in a subprocess to isolate potential SIGSEGV from macOS
     multiprocessing issues (loky/OMP pthread_mutex_init).
     """
+    if dataset.get("ndim", 3) != 3:
+        return ModelResult("SUBTLE", dataset["name"], np.array([]),
+                           error=f"3D only (got {dataset.get('ndim')}D)")
+
     import json
     import subprocess
     import tempfile
@@ -293,6 +297,26 @@ def run_subtle(dataset: dict) -> ModelResult:
 import sys, json, time
 sys.path.insert(0, 'src')
 import numpy as np
+
+# Prevent fork()-based SIGSEGV on macOS (OpenMP thread state conflicts)
+import multiprocessing
+multiprocessing.set_start_method('spawn', force=True)
+
+# Force UMAP + phenograph to use n_jobs=1 (prevents loky SIGSEGV on macOS)
+import umap
+_orig_umap_init = umap.UMAP.__init__
+def _safe_umap_init(self, *args, **kwargs):
+    kwargs.setdefault('n_jobs', 1)
+    return _orig_umap_init(self, *args, **kwargs)
+umap.UMAP.__init__ = _safe_umap_init
+
+import phenograph
+_orig_cluster = phenograph.cluster
+def _safe_cluster(*args, **kwargs):
+    kwargs['n_jobs'] = 1
+    return _orig_cluster(*args, **kwargs)
+phenograph.cluster = _safe_cluster
+
 from behavior_lab.models.discovery.subtle_wrapper import SUBTLE
 
 kp = np.load('{tmp_path}')['keypoints']
@@ -316,7 +340,9 @@ print(json.dumps({{'n_clusters': int(cr.n_clusters), 'elapsed': elapsed}}))
             [sys.executable, "-c", script],
             capture_output=True, text=True, timeout=600,
             env={**__import__("os").environ,
-                 "LOKY_MAX_CPU_COUNT": "1", "OMP_NUM_THREADS": "1"},
+                 "LOKY_MAX_CPU_COUNT": "1", "OMP_NUM_THREADS": "1",
+                 "NUMBA_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
+                 "MKL_NUM_THREADS": "1"},
         )
         if proc.returncode != 0:
             stderr_short = proc.stderr[-500:] if proc.stderr else "unknown"
@@ -608,6 +634,37 @@ def print_metrics_table(all_results: list[ModelResult], all_datasets: list[dict]
 
 
 # =====================================================================
+# Result caching
+# =====================================================================
+
+def save_results_cache(results: list[ModelResult], dataset: dict):
+    """Save model labels + embeddings to .npz for HTML report generation."""
+    cache_dir = OUTPUT_DIR / "cache"
+    cache_dir.mkdir(exist_ok=True)
+    data = {}
+    for r in results:
+        if r.labels is not None and len(r.labels) > 0:
+            data[f"{r.model_name}__labels"] = r.labels
+            if r.embedding_2d is not None:
+                data[f"{r.model_name}__embedding_2d"] = r.embedding_2d
+            if r.features is not None:
+                data[f"{r.model_name}__features"] = r.features
+    data["__model_names"] = np.array([r.model_name for r in results])
+    data["__elapsed"] = np.array([r.elapsed_sec for r in results])
+    data["__errors"] = np.array([r.error or "" for r in results])
+    np.savez_compressed(cache_dir / f"{dataset['name'].lower()}.npz", **data)
+    print(f"  Cached results: {cache_dir / dataset['name'].lower()}.npz")
+
+
+def load_results_cache(dataset_name: str) -> dict[str, np.ndarray] | None:
+    """Load cached model results. Returns None if cache doesn't exist."""
+    cache_path = OUTPUT_DIR / "cache" / f"{dataset_name.lower()}.npz"
+    if cache_path.exists():
+        return dict(np.load(cache_path, allow_pickle=True))
+    return None
+
+
+# =====================================================================
 # Main
 # =====================================================================
 
@@ -724,6 +781,9 @@ def main():
         # Generate comparison figure
         print("  Generating comparison figure...")
         make_comparison_figure(ds_results, dataset)
+
+        # Cache results for HTML report generation
+        save_results_cache(ds_results, dataset)
 
     # Summary table
     print_metrics_table(all_results, datasets)
