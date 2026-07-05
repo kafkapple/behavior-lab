@@ -49,6 +49,7 @@ get_model('name')
 
 | Document | 핵심 내용 | 백링크 |
 |----------|----------|--------|
+| **[Behavior Analysis PRD](behavior_analysis_prd.md)** | 프로젝트 목표, 범위, 운영 원칙, 평가 계약 | ← workbench, theory |
 | **[Overview](overview.md)** | 연구 질문, 가설 (H1-H4), 3-paradigm 파이프라인 | ← taxonomy, theory/* |
 | **[Architecture](architecture.md)** | 모듈 맵, 데이터 포맷, Hydra config, skeleton registry | ← taxonomy, overview |
 | **[Model Taxonomy](model_taxonomy.md)** | 30+ 모델 카탈로그, 분류 체계 비판, 대안 비교 | ← architecture |
@@ -69,12 +70,25 @@ get_model('name')
 | **[Dataset Catalog](datasets.md)** | 전체 데이터셋 사양: joints, classes, formats, skeletons | core, loaders |
 | **[E2E Verification](e2e_verification.md)** | 실데이터 파이프라인 검증: 로더→전처리→B-SOiD→평가→시각화 | all modules |
 
+### Research & Reference
+
+| Document | 핵심 내용 | 관련 |
+|----------|----------|------|
+| **[Technical Notes](behavior_lab_technical_notes.md)** | 전체 모듈/모델/데이터셋 상세 스펙, 발표 슬라이드용 연구 노트 | all modules |
+| **[Commands Reference](guides/commands_reference.md)** | 주요 CLI 명령어, Python API, 트러블슈팅 | scripts/ |
+
 ### Guides
 
 | Document | 핵심 내용 | 관련 |
 |----------|----------|------|
 | **[Quick Start Guide](guides/quickstart.md)** | 설치, 데이터셋 설명, 전처리, 행동 분석, 리포트 생성 실행법 | all modules |
 | **[Benchmark Guide](guides/benchmark_guide.md)** | 멀티모델 벤치마크: Supervised/SSL/Discovery 비교 방법 | models/ |
+
+### Notebooks (Spontaneous Behavior Discovery)
+
+| Document | 핵심 내용 | 관련 |
+|----------|----------|------|
+| **[Discovery Notebooks MoC](../notebooks/calms21_behavior_discovery/README.md)** | CalMS21 & MABe22 행동 발굴 노트북 개요 (01-04) 및 가이드를 모은 MoC | notebooks/ |
 
 ### Reference
 
