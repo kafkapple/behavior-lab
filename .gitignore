@@ -41,3 +41,6 @@ multirun/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Claude local permission grants (machine-specific)
+.claude/settings.local.json

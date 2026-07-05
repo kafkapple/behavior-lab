@@ -1,0 +1,29 @@
+# MAMMAL to DualPM Converter Configuration
+
+# Input paths
+mammal_dir: /home/joon/dev/MAMMAL_mouse
+fitting_result: null  # Required: e.g., "markerless_mouse_1_nerf_20251126_234835"
+
+# Output path
+output_dir: null  # Required: e.g., "/home/joon/data/dualpm_mouse_train"
+
+# Processing options
+resolution: 160
+train_split: 0.9
+camera_view: 0  # 0-5 for multi-view data
+
+# Feature extraction (optional)
+with_features: false
+feature_model: sd_dino  # sd_dino or dinov2
+
+# Model settings
+model_name: mouse
+num_joints: null  # Auto-detected from MAMMAL model
+
+# Coordinate transformation
+scale_to_meters: true  # MAMMAL uses mm, convert to m
+normalize_bbox: false  # Normalize to [-1, 1] bounding box
+
+# Output format
+pose_format: npz  # npz or json
+gltf_embedded: true  # Embed binary data in GLTF (single file)
