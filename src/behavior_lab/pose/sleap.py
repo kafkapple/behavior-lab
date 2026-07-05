@@ -234,7 +234,10 @@ def _normalize_sleap_tracks(tracks: np.ndarray) -> np.ndarray:
     arr = np.asarray(tracks, dtype=np.float32)
     if arr.ndim != 4:
         raise ValueError(f"Expected SLEAP tracks to be 4-D, got {arr.shape}")
-    dim_axis = next((i for i, size in enumerate(arr.shape) if size in (2, 3)), None)
+    # The coordinate (xy/xyz) axis is the trailing axis in SLEAP analysis
+    # exports (frames, nodes, tracks, xy). Search from the end so a nodes or
+    # tracks count of 2/3 is not mistaken for the coordinate axis.
+    dim_axis = next((i for i in reversed(range(arr.ndim)) if arr.shape[i] in (2, 3)), None)
     if dim_axis is None:
         raise ValueError(f"Could not locate coordinate dimension in tracks shape {arr.shape}")
     arr = np.moveaxis(arr, dim_axis, -1)
