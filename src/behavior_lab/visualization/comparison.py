@@ -55,8 +55,12 @@ def render_comparison_report(runs: Any, out_html: str | Path, *, fps: float = 30
 
     data = _normalize(runs)
 
-    # (1) metrics table (compute bouts uniformly; silhouette from features or provided)
-    headers = ["Method", "Clusters", "Silhouette", "Bouts", "Mean bout (s)"]
+    def _r(x, n=3):
+        return round(float(x), n) if isinstance(x, (int, float)) and not isinstance(x, bool) else "—"
+
+    # (1) metrics table — quantitative per-method summary
+    headers = ["Method", "Clusters", "Silhouette", "Bouts", "Mean bout (s)",
+               "Temporal consist.", "Entropy rate"]
     rows: list[list[Any]] = []
     labels_dict: dict[str, np.ndarray] = {}
     for name, d in data.items():
@@ -71,9 +75,9 @@ def render_comparison_report(runs: Any, out_html: str | Path, *, fps: float = 30
                 sil = None
         bm = compute_behavior_metrics(labels, fps=fps)
         durations = getattr(bm, "bout_durations", {}) or {}
-        mean_bout = round(float(np.mean(list(durations.values()))), 3) if durations else "—"
-        rows.append([name, n_clusters, round(sil, 3) if isinstance(sil, (int, float)) else "—",
-                     int(getattr(bm, "num_bouts", 0)), mean_bout])
+        mean_bout = _r(np.mean(list(durations.values()))) if durations else "—"
+        rows.append([name, n_clusters, _r(sil), int(getattr(bm, "num_bouts", 0)), mean_bout,
+                     _r(getattr(bm, "temporal_consistency", None)), _r(getattr(bm, "entropy_rate", None))])
     metrics_html = _render_table(headers, rows)
 
     def _fig(ret):
@@ -89,6 +93,38 @@ def render_comparison_report(runs: Any, out_html: str | Path, *, fps: float = 30
             figures.append(fig_to_base64(fig)); plt.close(fig)
     except Exception as exc:  # never let one plot sink the report
         figures.append(f"<p>ethogram failed: {_escape(str(exc))}</p>")
+
+    # (2b) pairwise method-agreement (ARI) — quantitative, label-free.
+    # Methods run at different cadences, so labels are time-aligned (resampled to
+    # the longest) before comparison; high ARI = methods discover similar structure.
+    if len(labels_dict) >= 2:
+        try:
+            from sklearn.metrics import adjusted_rand_score
+            names = list(labels_dict)
+            T = max(len(v) for v in labels_dict.values())
+            aligned = {}
+            for k, lab in labels_dict.items():
+                lab = np.asarray(lab)
+                aligned[k] = lab if len(lab) == T else lab[np.linspace(0, len(lab) - 1, T).astype(int)]
+            n = len(names)
+            mat = np.eye(n)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    mat[i, j] = mat[j, i] = adjusted_rand_score(aligned[names[i]], aligned[names[j]])
+            fig, ax = plt.subplots(figsize=(1.1 * n + 2.5, 1.0 * n + 1.5))
+            im = ax.imshow(mat, cmap="viridis", vmin=-0.1, vmax=1.0)
+            ax.set_xticks(range(n)); ax.set_xticklabels(names, rotation=45, ha="right")
+            ax.set_yticks(range(n)); ax.set_yticklabels(names)
+            for i in range(n):
+                for j in range(n):
+                    ax.text(j, i, f"{mat[i, j]:.2f}", ha="center", va="center",
+                            color="white" if mat[i, j] < 0.6 else "black", fontsize=8)
+            ax.set_title("Pairwise method agreement (ARI, time-aligned)")
+            fig.colorbar(im, ax=ax, fraction=0.046)
+            fig.tight_layout()
+            figures.append(fig_to_base64(fig)); plt.close(fig)
+        except Exception as exc:
+            figures.append(f"<p>agreement matrix failed: {_escape(str(exc))}</p>")
 
     # (3) bout-duration panels per method
     for name, d in data.items():
