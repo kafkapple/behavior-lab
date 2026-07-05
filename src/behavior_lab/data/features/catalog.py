@@ -65,6 +65,16 @@ POSE_SOURCES: tuple[ModuleSpec, ...] = (
         strengths=("current local datasets use one common format", "works without pose-estimator installs"),
         caveats=("dataset coordinate frames and units differ; normalize before cross-dataset comparison"),
     ),
+    ModuleSpec(
+        name="Unified ingestion",
+        category="pose_source",
+        input_format="any keypoint file — DeepLabCut CSV/H5, SLEAP .slp/.h5, npz (auto-detect)",
+        output_format="list[BehaviorSequence] + standard metadata['provenance'] (+ optional manifest.jsonl)",
+        module_path="behavior_lab.data.ingestion.ingest",
+        dependencies=("numpy", "pandas", "h5py"),
+        strengths=("one consistent standard for arbitrary new files", "provenance + checksum + preprocessing recorded", "append-only manifest for management"),
+        caveats=("video->keypoints stays external (run pose estimator first); units/coordinate_frame None unless supplied"),
+    ),
 )
 
 
