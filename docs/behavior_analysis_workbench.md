@@ -57,6 +57,7 @@ Generated from `behavior_lab.data.features.catalog`:
 | pca_hmm_fallback | (T,K,D) | HMM state labels | `behavior_lab.models.discovery.moseq._PCAHMMFallback` | lightweight MoSeq-like temporal baseline | not a replacement for full keypoint-MoSeq SLDS |
 | SUBTLE | (T,K,D) | hierarchical motif labels | `behavior_lab.models.discovery.subtle_wrapper.SUBTLE` | time-frequency motifs<br>strong for spontaneous 3D movement | macOS native package can be unstable; subprocess isolation recommended |
 | hBehaveMAE | windowed keypoints | hierarchical action/movement/activity clusters | `behavior_lab.models.discovery.behavemae.BehaveMAE` | pretrained representation comparison<br>hierarchical behavior discovery | dataset-specific input shape/checkpoint compatibility matters |
+| VAME | (T,K,D) egocentric-aligned pose | motif labels + RNN-VAE latent embedding | `behavior_lab.models.discovery.vame.VAME` | self-supervised RNN-VAE representation<br>hierarchical motif→community structure | cluster count not automatic; latent is a black box; seed/window sensitive |
 
 ## Notebook Interface
 
