@@ -42,12 +42,20 @@ def _normalize(runs: Any) -> dict[str, dict]:
     return out
 
 
+def _resample(lab: np.ndarray, T: int) -> np.ndarray:
+    lab = np.asarray(lab)
+    return lab if len(lab) == T else lab[np.linspace(0, len(lab) - 1, T).astype(int)]
+
+
 def render_comparison_report(runs: Any, out_html: str | Path, *, fps: float = 30.0,
-                             title: str = "Behavior Method Comparison") -> Path:
+                             title: str = "Behavior Method Comparison",
+                             ground_truth: Any = None) -> Path:
     """Render ONE self-contained HTML comparing all methods.
 
-    Sections: (1) metrics table, (2) multi-method ethogram (aligned rasters),
-    (3) bout-duration panels. All figures embedded as base64 (no external files).
+    Sections: (1) metrics table (+ ARI/NMI vs ground_truth when given), (2)
+    multi-method ethogram, (2b) pairwise method agreement (ARI), (3) bout panels.
+    All figures embedded as base64. ``ground_truth`` = optional per-frame label
+    array for gold-standard ARI/NMI evaluation.
     """
     import matplotlib
     matplotlib.use("Agg")
@@ -58,9 +66,12 @@ def render_comparison_report(runs: Any, out_html: str | Path, *, fps: float = 30
     def _r(x, n=3):
         return round(float(x), n) if isinstance(x, (int, float)) and not isinstance(x, bool) else "—"
 
-    # (1) metrics table — quantitative per-method summary
+    gt = None if ground_truth is None else np.asarray(ground_truth)
+
+    # (1) metrics table — quantitative per-method summary (+ vs ground truth)
+    truth_cols = ["ARI (GT)", "NMI (GT)"] if gt is not None else []
     headers = ["Method", "Clusters", "Silhouette", "Bouts", "Mean bout (s)",
-               "Temporal consist.", "Entropy rate"]
+               "Temporal consist.", "Entropy rate"] + truth_cols
     rows: list[list[Any]] = []
     labels_dict: dict[str, np.ndarray] = {}
     for name, d in data.items():
@@ -76,8 +87,13 @@ def render_comparison_report(runs: Any, out_html: str | Path, *, fps: float = 30
         bm = compute_behavior_metrics(labels, fps=fps)
         durations = getattr(bm, "bout_durations", {}) or {}
         mean_bout = _r(np.mean(list(durations.values()))) if durations else "—"
-        rows.append([name, n_clusters, _r(sil), int(getattr(bm, "num_bouts", 0)), mean_bout,
-                     _r(getattr(bm, "temporal_consistency", None)), _r(getattr(bm, "entropy_rate", None))])
+        row = [name, n_clusters, _r(sil), int(getattr(bm, "num_bouts", 0)), mean_bout,
+               _r(getattr(bm, "temporal_consistency", None)), _r(getattr(bm, "entropy_rate", None))]
+        if gt is not None:
+            from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+            lab_a = _resample(labels, len(gt))
+            row += [_r(adjusted_rand_score(gt, lab_a)), _r(normalized_mutual_info_score(gt, lab_a))]
+        rows.append(row)
     metrics_html = _render_table(headers, rows)
 
     def _fig(ret):

@@ -20,3 +20,17 @@ def test_render_comparison_report_dict_input(tmp_path):
     assert "data:image/" in html  # at least the ethogram embedded
     # provided silhouette surfaces in the table
     assert "0.12" in html
+
+
+def test_render_comparison_report_ground_truth(tmp_path):
+    rng = np.random.default_rng(1)
+    gt = rng.integers(0, 4, 200)
+    runs = {
+        "perfect": {"labels": gt.copy()},           # matches GT -> ARI ~1
+        "random": {"labels": rng.integers(0, 4, 200)},
+    }
+    out = render_comparison_report(runs, tmp_path / "gt.html", fps=30.0, ground_truth=gt)
+    html = out.read_text()
+    assert "ARI (GT)" in html and "NMI (GT)" in html
+    # perfect method should score ARI ~1.0
+    assert "1.0" in html or "0.99" in html
