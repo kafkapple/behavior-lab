@@ -96,6 +96,18 @@ def test_ingest_with_preprocess_records_steps(tmp_path):
     assert seqs[0].metadata["provenance"]["preprocessing"] == ["scale2x"]
 
 
+def test_ingest_dannce_mat(tmp_path):
+    from scipy.io import savemat
+
+    mat = tmp_path / "save_data_AVG0.mat"
+    pred = np.random.default_rng(0).random((20, 3, 23)).astype(np.float32)  # (T,3,K)
+    savemat(mat, {"pred": pred, "sampleID": np.arange(20)})
+    seqs = ingest(mat, skeleton_name="kp23")
+    assert len(seqs) == 1
+    assert seqs[0].keypoints.shape == (20, 23, 3)  # coords axis moved last
+    assert seqs[0].metadata["provenance"]["source_format"] == "dannce_mat"
+
+
 def test_ingest_missing_file(tmp_path):
     with pytest.raises(FileNotFoundError):
         ingest(tmp_path / "nope.npz")

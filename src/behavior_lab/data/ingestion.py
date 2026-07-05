@@ -57,6 +57,7 @@ _EXT_FORMAT: dict[str, str] = {
     ".csv": "dlc_csv",
     ".npz": "npz",
     ".npy": "npz",
+    ".mat": "dannce_mat",
     ".h5": "_h5",
     ".hdf5": "_h5",
 }
@@ -138,11 +139,33 @@ def _load_npz(path: Path) -> list[BehaviorSequence]:
     return seqs
 
 
+def _load_dannce_mat(path: Path) -> list[BehaviorSequence]:
+    """DANNCE / s-DANNCE ``save_data_AVG*.mat`` -> one BehaviorSequence (T, K, 3).
+
+    The predicted 3D pose is stored as ``pred`` with shape (T, 3, K) (coords axis 1).
+    """
+    from scipy.io import loadmat
+
+    m = loadmat(path)
+    key = next((k for k in ("pred", "data", "points3d", "kp3d") if k in m), None)
+    if key is None:
+        keys = [k for k in m if not k.startswith("__")]
+        raise ValueError(f"{path.name}: no 3D-pose variable (pred/data). Found: {keys}")
+    arr = np.asarray(m[key], dtype=np.float32)
+    if arr.ndim != 3:
+        raise ValueError(f"{path.name}: expected 3D pose, got {arr.shape}")
+    # (T, 3, K) -> (T, K, 3): the size-3 coordinate axis is axis 1 for DANNCE.
+    if arr.shape[1] == 3 and arr.shape[2] != 3:
+        arr = arr.transpose(0, 2, 1)
+    return [BehaviorSequence(keypoints=arr, sample_id=path.stem)]
+
+
 FORMAT_LOADERS: dict[str, Callable[[Path], list[BehaviorSequence]]] = {
     "sleap": _load_sleap,
     "dlc_csv": _load_dlc,
     "dlc_h5": _load_dlc,
     "npz": _load_npz,
+    "dannce_mat": _load_dannce_mat,
 }
 
 
