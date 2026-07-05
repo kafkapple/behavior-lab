@@ -33,6 +33,28 @@ def test_sleap_analysis_h5_flatten(tmp_path: Path):
     assert seq.metadata["track_names"] == ["resident", "intruder"]
 
 
+def test_sleap_analysis_h5_frames_last_layout(tmp_path: Path):
+    """Real SLEAP analysis.h5 stores tracks as (tracks, xy, nodes, frames) — frames last."""
+    pytest.importorskip("h5py")
+    h5py = __import__("h5py")
+    path = tmp_path / "real.analysis.h5"
+    # (tracks=2, xy=2, nodes=5, frames=20); frames is the largest axis.
+    tracks = np.zeros((2, 2, 5, 20), dtype=np.float32)
+    tracks[0, 0] = 1.0  # track 0, x
+    tracks[1, 1] = 2.0  # track 1, y
+    scores = np.ones((2, 5, 20), dtype=np.float32)  # (tracks, nodes, frames)
+
+    with h5py.File(path, "w") as h5:
+        h5.create_dataset("tracks", data=tracks)
+        h5.create_dataset("point_scores", data=scores)
+        h5.create_dataset("node_names", data=np.array([f"n{i}".encode() for i in range(5)]))
+        h5.create_dataset("track_names", data=np.array([b"a", b"b"]))
+
+    seq = load_sleap_file(path, confidence_threshold=0.5).sequences[0]
+    # 20 frames, 5 nodes x 2 tracks flattened = 10, xy
+    assert seq.keypoints.shape == (20, 10, 2)
+
+
 def test_sleap_loader_factory_separate(tmp_path: Path):
     pytest.importorskip("h5py")
     h5py = __import__("h5py")

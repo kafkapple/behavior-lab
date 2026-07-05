@@ -141,20 +141,47 @@ def _load_slp_with_sleap_io(
     if max_instances == 0:
         raise ValueError(f"No instances found in {path}")
 
+    # Assign each instance a stable slot by its track NAME — SLEAP does not guarantee
+    # LabeledFrame.instances is ordered consistently by track across frames, so a
+    # positional slot silently swaps animal identities. Untracked instances fall back
+    # to a per-frame positional slot placed after the named tracks.
+    named_tracks: list[str] = []
+    max_untracked = 0
+    for lf in labeled_frames:
+        n_untracked = 0
+        for inst in getattr(lf, "instances", []):
+            nm = getattr(getattr(inst, "track", None), "name", None)
+            if nm is None:
+                n_untracked += 1
+            elif nm not in named_tracks:
+                named_tracks.append(nm)
+        max_untracked = max(max_untracked, n_untracked)
+    name_to_slot = {nm: i for i, nm in enumerate(named_tracks)}
+    n_slots = max(max_instances, len(named_tracks) + max_untracked)
+
     K = len(node_names) or _infer_num_nodes_from_slp(labeled_frames)
-    coords = np.full((T, max_instances, K, 2), np.nan, dtype=np.float32)
-    scores = np.full((T, max_instances, K), np.nan, dtype=np.float32)
+    coords = np.full((T, n_slots, K, 2), np.nan, dtype=np.float32)
+    scores = np.full((T, n_slots, K), np.nan, dtype=np.float32)
 
     for lf, frame_idx in zip(labeled_frames, frame_numbers):
-        for inst_idx, inst in enumerate(getattr(lf, "instances", [])):
+        untracked_slot = len(named_tracks)
+        for inst in getattr(lf, "instances", []):
+            nm = getattr(getattr(inst, "track", None), "name", None)
+            if nm is not None:
+                slot = name_to_slot[nm]
+            else:
+                slot = untracked_slot
+                untracked_slot += 1
             pts = _instance_points(inst)
             n = min(K, pts.shape[0])
-            coords[frame_idx, inst_idx, :n, : pts.shape[1]] = pts[:n, :2]
+            coords[frame_idx, slot, :n, : pts.shape[1]] = pts[:n, :2]
             inst_scores = _instance_scores(inst)
             if inst_scores is not None:
-                scores[frame_idx, inst_idx, : min(K, len(inst_scores))] = inst_scores[:K]
+                scores[frame_idx, slot, : min(K, len(inst_scores))] = inst_scores[:K]
 
-    track_names = [f"track_{i}" for i in range(max_instances)]
+    track_names = named_tracks + [
+        f"track_{len(named_tracks) + i}" for i in range(n_slots - len(named_tracks))
+    ]
     return _sequences_from_coords(
         coords,
         scores,
@@ -234,15 +261,20 @@ def _normalize_sleap_tracks(tracks: np.ndarray) -> np.ndarray:
     arr = np.asarray(tracks, dtype=np.float32)
     if arr.ndim != 4:
         raise ValueError(f"Expected SLEAP tracks to be 4-D, got {arr.shape}")
-    # The coordinate (xy/xyz) axis is the trailing axis in SLEAP analysis
-    # exports (frames, nodes, tracks, xy). Search from the end so a nodes or
-    # tracks count of 2/3 is not mistaken for the coordinate axis.
-    dim_axis = next((i for i in reversed(range(arr.ndim)) if arr.shape[i] in (2, 3)), None)
+    # SLEAP analysis .h5 stores tracks raw as (tracks, xy, nodes, frames) — frames
+    # LAST, not first. The frame axis is by far the largest dimension, so identify
+    # it robustly and move it to the front (works whether frames is first or last).
+    frame_axis = int(np.argmax(arr.shape))
+    arr = np.moveaxis(arr, frame_axis, 0)
+    # Coordinate (xy/xyz) axis: trailing remaining axis of size 2/3, so a nodes or
+    # tracks count of 2/3 is not mistaken for it. (Ambiguous only for <=3-node
+    # skeletons with 2 tracks — prefer sleap-io / .slp import there.)
+    dim_axis = next((i for i in reversed(range(1, arr.ndim)) if arr.shape[i] in (2, 3)), None)
     if dim_axis is None:
         raise ValueError(f"Could not locate coordinate dimension in tracks shape {arr.shape}")
     arr = np.moveaxis(arr, dim_axis, -1)
     if arr.shape[1] > arr.shape[2]:
-        # Typical SLEAP analysis export is (frames, nodes, tracks, xy).
+        # Normalized target is (frames, tracks, nodes, xy): more nodes than tracks.
         arr = arr.transpose(0, 2, 1, 3)
     return arr[..., :2]
 
@@ -259,6 +291,8 @@ def _normalize_sleap_scores(scores: np.ndarray, coords_shape: tuple[int, int, in
         t_axis = next((i for i, size in enumerate(arr.shape) if size == T), 0)
         axes.remove(t_axis)
         arr = np.moveaxis(arr, t_axis, 0)
+        if arr.shape == (T, M, K):
+            return arr
         if arr.shape == (T, K, M):
             return arr.transpose(0, 2, 1)
     raise ValueError(f"Could not align point_scores shape {arr.shape} with coords {coords_shape}")

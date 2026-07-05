@@ -158,10 +158,11 @@ def ego_centric_dyadic(
     intr_axis = intr_ego[:, KP["neck"], :] - intr_ego[:, KP["tail_base"], :]
     intr_axis_unit_raw = _safe_angle(intr_axis)
     intr_axis_unit, _ = _forward_fill_nan(intr_axis_unit_raw)
-    # in ego frame the resident axis is exactly (0, 1), so cos Δθ = sin component of intruder axis
-    # using right-hand rule: cos Δθ = intr_axis · (0,1) = intr_axis_y, sin Δθ = intr_axis_x
+    # in ego frame the resident axis is exactly (0, 1). For the signed angle Δθ from
+    # (0,1) to the intruder axis (cosα, sinα): cos Δθ = dot = sinα = intr_axis_y;
+    # sin Δθ = cross((0,1),(cosα,sinα)) = -cosα = -intr_axis_x (handedness matters).
     cos_dtheta = intr_axis_unit[:, 1]
-    sin_dtheta = intr_axis_unit[:, 0]
+    sin_dtheta = -intr_axis_unit[:, 0]
 
     # approach speed: d(d_com_com)/dt (negative = approaching)
     d_com_pad = np.concatenate([d_com_com[:1], d_com_com])
