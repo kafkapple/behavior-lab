@@ -10,6 +10,7 @@ from .nwucla import NWUCLALoader
 from .subtle import SUBTLELoader
 from .shank3ko import Shank3KOLoader
 from .mabe22 import MABe22Loader
+from .sleap import SLEAPLoader
 
 LOADER_REGISTRY: dict[str, type] = {
     "calms21": CalMS21Loader,
@@ -27,6 +28,9 @@ LOADER_REGISTRY: dict[str, type] = {
     "shank3ko_mouse": Shank3KOLoader,
     "mabe22": MABe22Loader,
     "mabe": MABe22Loader,
+    "sleap": SLEAPLoader,
+    "sleap_h5": SLEAPLoader,
+    "sleap_slp": SLEAPLoader,
 }
 
 
@@ -60,6 +64,7 @@ __all__ = [
     "SUBTLELoader",
     "Shank3KOLoader",
     "MABe22Loader",
+    "SLEAPLoader",
     "get_loader",
     "register_loader",
     "LOADER_REGISTRY",

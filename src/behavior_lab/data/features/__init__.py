@@ -14,6 +14,16 @@ import numpy as np
 from .features import FeatureExtractor, extract_features
 from .pipeline import FeaturePipeline
 from .temporal import aggregate_temporal
+from .catalog import (
+    DISCOVERY_METHODS,
+    FEATURE_BLOCKS,
+    POSE_SOURCES,
+    ModuleSpec,
+    as_markdown_table,
+    list_discovery_methods,
+    list_feature_blocks,
+    list_pose_sources,
+)
 
 
 @runtime_checkable
@@ -67,11 +77,24 @@ def _lazy_cebra():
     return CEBRABackend
 
 
+def _lazy_morlet():
+    from .morlet_backend import MorletCWTBackend
+    return MorletCWTBackend
+
+
 __all__ = [
     "FeatureBackend",
     "SkeletonBackend",
     "FeatureExtractor",
     "FeaturePipeline",
+    "ModuleSpec",
+    "POSE_SOURCES",
+    "FEATURE_BLOCKS",
+    "DISCOVERY_METHODS",
+    "as_markdown_table",
+    "list_pose_sources",
+    "list_feature_blocks",
+    "list_discovery_methods",
     "aggregate_temporal",
     "extract_features",
 ]
