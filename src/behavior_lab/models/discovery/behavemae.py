@@ -110,6 +110,24 @@ class BehaveMAE:
             decoder_embed_dim=128, decoder_depth=1, decoder_num_heads=1,
             sep_pos_embed=True,
         ),
+        'calms21': dict(
+            # Our from-scratch pretrain (260705): 2 mice × 7 keypoints × 2D = 14 feat
+            input_size=(90, 2, 14), in_chans=1, init_embed_dim=64,
+            init_num_heads=2, stages=(2, 3), out_embed_dims=(64, 128),
+            q_strides=[(3, 1, 1)], mask_unit_attn=(True, False),
+            patch_kernel=(3, 1, 14), patch_stride=(3, 1, 14), patch_padding=(0, 0, 0),
+            decoder_embed_dim=128, decoder_depth=1, decoder_num_heads=1,
+            sep_pos_embed=True,
+        ),
+        'ntu': dict(
+            # Our from-scratch pretrain (260705): 1 person × 25 keypoints × 3D = 75 feat
+            input_size=(90, 1, 75), in_chans=1, init_embed_dim=64,
+            init_num_heads=2, stages=(2, 3), out_embed_dims=(64, 128),
+            q_strides=[(3, 1, 1)], mask_unit_attn=(True, False),
+            patch_kernel=(3, 1, 75), patch_stride=(3, 1, 75), patch_padding=(0, 0, 0),
+            decoder_embed_dim=128, decoder_depth=1, decoder_num_heads=1,
+            sep_pos_embed=True,
+        ),
     }
 
     def __init__(self, model=None, config: Optional[Dict] = None):
