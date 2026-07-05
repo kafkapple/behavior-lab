@@ -100,6 +100,16 @@ class BehaveMAE:
             decoder_embed_dim=128, decoder_depth=1, decoder_num_heads=1,
             sep_pos_embed=True,
         ),
+        'shot7m2': dict(
+            # Checkpoint: input_size=(400, 1, 72), 1 humanoid × 24 keypoints × 3D
+            # (24 joints selected/reordered from 26 via SPLIT_INDS in the BehaveMAE repo)
+            input_size=(400, 1, 72), in_chans=1, init_embed_dim=96,
+            init_num_heads=2, stages=(2, 3, 4), out_embed_dims=(78, 128, 256),
+            q_strides=[(2, 1, 4), (2, 1, 6)], mask_unit_attn=(True, False, False),
+            patch_kernel=(2, 1, 3), patch_stride=(2, 1, 3), patch_padding=(0, 0, 0),
+            decoder_embed_dim=128, decoder_depth=1, decoder_num_heads=1,
+            sep_pos_embed=True,
+        ),
     }
 
     def __init__(self, model=None, config: Optional[Dict] = None):
