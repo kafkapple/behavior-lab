@@ -171,4 +171,58 @@ th{{background:#f4f4f4}}h1{{font-size:1.3rem}}h2{{font-size:1rem;margin-top:22px
     return out
 
 
-__all__ = ["render_comparison_report"]
+def render_cluster_gallery(keypoints: np.ndarray, runs: Any, skeleton_name: str,
+                           out_html: str | Path, *, fps: float = 30.0, n_frames: int = 150,
+                           max_clusters: int = 8, title: str = "Per-cluster behavior gallery") -> Path:
+    """Per-method x per-cluster representative skeleton GIF gallery (qualitative).
+
+    For each discovered cluster, animates the longest contiguous bout of that
+    cluster as a keypoint-skeleton GIF (reusing ``generate_cluster_animations``).
+    Lets you *see* what each syllable/cluster looks like, per method.
+
+    Args:
+        keypoints: full ``(T, K, D)`` array the labels were computed on.
+        runs: DiscoveryRun list or ``{method: {"labels": ndarray}}``.
+        skeleton_name: skeleton for edge rendering (e.g. "calms21").
+    """
+    from ..core.skeleton import get_skeleton
+    from .html_report import _escape, generate_cluster_animations
+
+    skel = get_skeleton(skeleton_name)
+    data = _normalize(runs)
+    out = Path(out_html)
+    gif_dir = out.parent / "_cluster_gifs"
+
+    sections = []
+    for name, d in data.items():
+        labels = np.asarray(d["labels"])
+        # generate_cluster_animations maps labels[i] -> keypoints[i]; if the method
+        # ran on a shorter slice, align by resampled indices.
+        sample_idx = None
+        if len(labels) != len(keypoints):
+            sample_idx = np.linspace(0, len(keypoints) - 1, len(labels)).astype(int)
+        try:
+            anims = generate_cluster_animations(
+                keypoints, labels, skel, gif_dir / name,
+                sample_indices=sample_idx, n_frames=n_frames, fps=fps, max_clusters=max_clusters)
+        except Exception as exc:
+            sections.append(f"<h2>{_escape(name)}</h2><p>gallery failed: {_escape(str(exc))}</p>")
+            continue
+        cards = "".join(
+            f'<figure style="margin:6px;display:inline-block;text-align:center">'
+            f'<img src="{a["src"]}" style="max-width:220px;border:1px solid #ccc;border-radius:6px"/>'
+            f'<figcaption style="font-size:12px;color:#555">cluster {_escape(str(a["label"]))}</figcaption></figure>'
+            for a in anims)
+        sections.append(f'<h2>{_escape(name)} ({len(anims)} clusters)</h2><div>{cards or "(no clusters)"}</div>')
+
+    html = (f"<!doctype html><html><head><meta charset='utf-8'><title>{_escape(title)}</title>"
+            "<style>body{font-family:-apple-system,sans-serif;margin:20px;color:#1e293b}"
+            "h1{font-size:1.3rem}h2{font-size:1rem;margin-top:20px}</style></head><body>"
+            f"<h1>{_escape(title)}</h1><p>대표 bout의 keypoint-skeleton 애니메이션 (방법별 클러스터). fps={fps}.</p>"
+            + "".join(sections) + "</body></html>")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    return out
+
+
+__all__ = ["render_comparison_report", "render_cluster_gallery"]

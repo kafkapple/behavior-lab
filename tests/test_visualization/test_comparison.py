@@ -1,7 +1,11 @@
 """Test the unified comparison-report module."""
 import numpy as np
+import pytest
 
-from behavior_lab.visualization.comparison import render_comparison_report
+from behavior_lab.visualization.comparison import (
+    render_cluster_gallery,
+    render_comparison_report,
+)
 
 
 def test_render_comparison_report_dict_input(tmp_path):
@@ -34,3 +38,17 @@ def test_render_comparison_report_ground_truth(tmp_path):
     assert "ARI (GT)" in html and "NMI (GT)" in html
     # perfect method should score ARI ~1.0
     assert "1.0" in html or "0.99" in html
+
+
+def test_render_cluster_gallery(tmp_path):
+    pytest.importorskip("imageio")
+    rng = np.random.default_rng(2)
+    kp = rng.random((300, 14, 2)).astype("float32")
+    labels = np.repeat(rng.integers(0, 3, 30), 10)
+    out = render_cluster_gallery(
+        kp, {"kmeans": {"labels": labels}}, "calms21", tmp_path / "gal.html",
+        fps=15, n_frames=20, max_clusters=3)
+    assert out.exists()
+    html = out.read_text()
+    assert "kmeans" in html
+    assert "cluster" in html or "gallery failed" in html
