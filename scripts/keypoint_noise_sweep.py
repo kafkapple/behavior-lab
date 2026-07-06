@@ -24,6 +24,7 @@ from gradcam_calms21_stgcn import per_class_importance
 from behavior_lab.data.loaders.calms21 import CLASS_NAMES
 from behavior_lab.models.graph.baselines import STGCN
 from behavior_lab.training import Trainer
+from behavior_lab.training.trainer import set_seed, load_checkpoint
 
 REMAINING = ["left_ear", "right_ear", "left_hip", "right_hip"]  # nose already done (F1=0.4327, see research note)
 EPOCHS = 8
@@ -46,6 +47,9 @@ def run_one(keypoint: str, seed: int = 42) -> dict:
     output_dir = f"outputs/calms21_stgcn_{keypoint}_noised" + (f"_seed{seed}" if seed != 42 else "")
     _, _, train_loader, test_loader = build_loaders(False, 32, 4000, 1200, data_path)
 
+    # Trainer.train() seeds too late to control weight init (model already constructed) --
+    # see train_calms21_stgcn.py for the same fix.
+    set_seed(seed)
     model = STGCN(num_classes=4, num_joints=7, num_persons=2, in_channels=2, skeleton="calms21")
     trainer = Trainer(model, train_loader, test_loader, cfg={
         "device": "cpu", "num_epoch": EPOCHS, "batch_size": 32,
@@ -55,6 +59,7 @@ def run_one(keypoint: str, seed: int = 42) -> dict:
         "lr_steps": [max(2, EPOCHS - 4), max(3, EPOCHS - 2)],
     })
     trainer.train()
+    load_checkpoint(model, f"{output_dir}/checkpoints/best_model.pt", device="cpu")  # last-epoch != best
 
     metrics, test_labels = evaluate(model, test_loader, torch.device("cpu"))
     baseline_f1 = majority_baseline_f1(test_labels)

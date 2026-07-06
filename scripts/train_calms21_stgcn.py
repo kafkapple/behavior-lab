@@ -26,6 +26,7 @@ from behavior_lab.data.feeders.skeleton_feeder import get_feeder
 from behavior_lab.data.loaders.calms21 import CLASS_NAMES
 from behavior_lab.models.graph.baselines import STGCN
 from behavior_lab.training import Trainer
+from behavior_lab.training.trainer import set_seed, load_checkpoint
 from behavior_lab.evaluation import compute_classification_metrics
 
 DEFAULT_DATA_PATH = "data/calms21/calms21_aligned.npz"
@@ -98,6 +99,9 @@ def main():
     print(f"Train: {len(train_loader.dataset)}/{len(train_set)} seqs (subsampled) | "
           f"Test: {len(test_loader.dataset)}/{len(test_set)} seqs")
 
+    # Trainer.train() seeds torch/numpy on its first line -- too late to control weight
+    # init, since the model below is already constructed by then. Seed here instead.
+    set_seed(args.seed)
     model = STGCN(num_classes=4, num_joints=7, num_persons=2, in_channels=2, skeleton="calms21")
 
     trainer = Trainer(model, train_loader, test_loader, cfg={
@@ -113,6 +117,12 @@ def main():
     elapsed = time.time() - t0
     print(f"\nTrained {args.epochs} epochs in {elapsed:.1f}s ({elapsed/args.epochs:.1f}s/epoch). "
           f"Trainer best val acc={best_acc:.4f}")
+
+    # trainer.train() only checkpoints the best epoch to disk -- self.model is left at
+    # the LAST epoch's weights, which can be worse (no early stopping here). Reload best
+    # before reporting/evaluating, so this script's own numbers match what a later
+    # separate gradcam_calms21_stgcn.py run (which always loads best_model.pt) sees.
+    load_checkpoint(model, f"{args.output_dir}/checkpoints/best_model.pt", device="cpu")
 
     metrics, test_labels = evaluate(model, test_loader, torch.device("cpu"))
     baseline_f1 = majority_baseline_f1(test_labels)

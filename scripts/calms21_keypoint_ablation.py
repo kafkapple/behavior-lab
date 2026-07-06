@@ -61,7 +61,6 @@ def run_config(kp: np.ndarray, gt: np.ndarray, keep_names: list[str], seed: int)
 
 def main():
     kp, gt = load_calms21()
-    rng = np.random.default_rng(0)
     anatomy_subsets = anatomy_prior_subsets()
 
     results = []  # rows: scheme, n_keep_per_animal, seed, ari, silhouette
@@ -75,7 +74,11 @@ def main():
         if n_keep == len(JOINT_NAMES):
             continue
         for mask_seed in MASK_SEEDS:
-            keep_names = list(rng.choice(JOINT_NAMES, size=n_keep, replace=False))
+            # Fresh RNG per mask_seed -- a single shared rng across the loop (code-review
+            # finding, 260706) made mask_seed control only the clustering random_state,
+            # not the keypoint mask itself (which came from one continuing stream).
+            mask_rng = np.random.default_rng(mask_seed)
+            keep_names = list(mask_rng.choice(JOINT_NAMES, size=n_keep, replace=False))
             r = run_config(kp, gt, keep_names, seed=mask_seed)
             results.append({"scheme": "random_paired", "n_keep": n_keep, **r})
 

@@ -62,7 +62,10 @@ class STGradCAM:
         cam = F.relu((weights * self.activations).sum(dim=1))            # (N*M, T, V)
         N, M = x.shape[0], x.shape[-1]
         cam = cam.view(N, M, cam.shape[-2], cam.shape[-1])
-        cam = cam / (cam.amax(dim=(1, 2, 3), keepdim=True) + 1e-8)
+        # Normalize per-(sample, mouse), not per-sample -- otherwise mouse0's scale gets
+        # contaminated by mouse1's activation magnitude, biasing the cross-sample average
+        # we report as "mouse0 keypoint importance" (code-review finding, 260706).
+        cam = cam / (cam.amax(dim=(2, 3), keepdim=True) + 1e-8)
         return cam.detach().cpu().numpy(), pred.detach().cpu().numpy()
 
 
