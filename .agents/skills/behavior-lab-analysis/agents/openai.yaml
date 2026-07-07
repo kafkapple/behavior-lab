@@ -1,0 +1,4 @@
+interface:
+  display_name: "Behavior Lab Analysis"
+  short_description: "Analyze behavior-lab workflows"
+  default_prompt: "Use $behavior-lab-analysis to review behavior-lab analysis, outputs, and verification."
