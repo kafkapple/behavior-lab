@@ -40,30 +40,34 @@ def make_noised_npz(keypoint: str) -> str:
     return dst
 
 
-def run_one(keypoint: str, seed: int = 42) -> dict:
+def run_one(keypoint: str, seed: int = 42, device: str = "cpu") -> dict:
     data_path = f"data/calms21/calms21_aligned_{keypoint}_noised.npz"
     if not os.path.exists(data_path):
         data_path = make_noised_npz(keypoint)
     output_dir = f"outputs/calms21_stgcn_{keypoint}_noised" + (f"_seed{seed}" if seed != 42 else "")
-    _, _, train_loader, test_loader = build_loaders(False, 32, 4000, 1200, data_path)
+    _, _, train_loader, val_loader, test_loader = build_loaders(False, 32, 4000, 1200, data_path)
 
     # Trainer.train() seeds too late to control weight init (model already constructed) --
-    # see train_calms21_stgcn.py for the same fix.
+    # see train_calms21_stgcn.py for the same fix. val_loader (held out from train) is the
+    # model-selection target; test_loader is reserved for the final eval only (no leakage).
     set_seed(seed)
     model = STGCN(num_classes=4, num_joints=7, num_persons=2, in_channels=2, skeleton="calms21")
-    trainer = Trainer(model, train_loader, test_loader, cfg={
-        "device": "cpu", "num_epoch": EPOCHS, "batch_size": 32,
+    trainer = Trainer(model, train_loader, val_loader, cfg={
+        "device": device, "num_epoch": EPOCHS, "batch_size": 32,
         "output_dir": output_dir, "patience": EPOCHS, "seed": seed,
         "learning_rate": 0.1, "warmup_epochs": 1, "momentum": 0.9, "nesterov": True,
         "weight_decay": 0.0004, "lr_decay_rate": 0.1,
         "lr_steps": [max(2, EPOCHS - 4), max(3, EPOCHS - 2)],
     })
     trainer.train()
-    load_checkpoint(model, f"{output_dir}/checkpoints/best_model.pt", device="cpu")  # last-epoch != best
+    eval_device = torch.device(device if torch.cuda.is_available() else "cpu")
+    load_checkpoint(model, f"{output_dir}/checkpoints/best_model.pt", device=str(eval_device))
+    model.to(eval_device)
 
-    metrics, test_labels = evaluate(model, test_loader, torch.device("cpu"))
+    metrics, test_labels = evaluate(model, test_loader, eval_device)
     baseline_f1 = majority_baseline_f1(test_labels)
 
+    model.cpu()  # Grad-CAM path (per_class_importance) feeds CPU tensors -- keep model on CPU for it
     importance, counts = per_class_importance(model, test_loader)
     top_per_class = {CLASS_NAMES[c]: JOINT_NAMES[imp.mean(axis=0).argmax()] for c, imp in importance.items()}
 
@@ -80,13 +84,14 @@ def main():
                           "~25-30min -- looping several in one process risks getting killed "
                           "mid-run, see Next in the research note. Always pass this one at a time.")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--device", type=str, default="cpu", help="cpu | cuda")
     args = ap.parse_args()
     keypoints = [args.keypoint] if args.keypoint else REMAINING
 
     results = []
     for kp in keypoints:
         print(f"\n=== noising {kp} (seed={args.seed}) ===")
-        r = run_one(kp, seed=args.seed)
+        r = run_one(kp, seed=args.seed, device=args.device)
         results.append(r)
         print(f"{kp}: F1-macro={r['f1_macro']:.4f} (baseline {r['baseline_f1']:.4f}, "
               f"signal {r['signal']:+.4f}) top-per-class={r['top_per_class']}")
