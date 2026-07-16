@@ -115,10 +115,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data_path", type=str, default=DEFAULT_DATA_PATH)
     ap.add_argument("--output_dir", type=str, default=DEFAULT_OUTPUT_DIR)
+    ap.add_argument("--ego_center", action="store_true",
+                    help="MUST match the train run's --ego_center, else Grad-CAM sees a different input frame")
     args = ap.parse_args()
     ckpt_path = f"{args.output_dir}/checkpoints/best_model.pt"
 
-    test_set = get_feeder("calms21", data_path=args.data_path, split="test")
+    test_set = get_feeder("calms21", data_path=args.data_path, split="test", ego_center=args.ego_center)
     loader = torch.utils.data.DataLoader(test_set, batch_size=32, shuffle=False)
 
     model = STGCN(num_classes=4, num_joints=7, num_persons=2, in_channels=2, skeleton="calms21")

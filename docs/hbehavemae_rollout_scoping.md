@@ -62,3 +62,29 @@ rollout would not) or **occlusion**. Reserve rollout only if the specific intere
 "where does the SSL encoder's attention go," which is a different research question. Priority:
 low — the ST-GCN conclusions (supervised signal real; data-quantity underpowered; noise effect
 retracted) stand without this cross-check.
+
+## Resolution 260716 (`/deliberate --moa --xcheck` 9-call, unanimous)
+This scoping doc's "don't rollout" call was escalated to a full multi-model deliberation and
+**hardened to: drop the hBehaveMAE cross-check entirely as validation.** Not just rollout —
+options C (linear-probe) and D (occlusion) were also rejected, on grounds the scoping `--devil`
+under-weighted:
+- **Circular**: ST-GCN and hBehaveMAE consume the *same* pose input, so any agreement on
+  tail_base can be a shared-input artifact, not independent validation (3/3 auditors, Critical).
+- **Unfalsifiable-in-practice**: no outcome (agree or disagree) would change any decision or
+  conclusion — zero information value as framed.
+
+**Root cause found (code-verified, supersedes the cross-check):** the tail_base importance is
+most likely a **coordinate-system artifact**. `src/behavior_lab/data/preprocessing/pipeline.py`
+normalizes with `Normalizer(center_joint=0)` = nose-centering; tail_base (index 6) is the node
+farthest from the nose → mechanically the max-variance node → any attribution (Grad-CAM
+included) is pulled toward it regardless of biology.
+
+**Replacement action (P1, approved):** a coordinate-origin-shift test on the *existing* ST-GCN
+pipeline (re-center to neck/centroid, retrain 5-seed, ~1-2 GPU-h) — no hBehaveMAE. Falsifiable:
+if tail_base collapses out of top-3 while accuracy holds (±2-5pp) → artifact confirmed. Tracked
+in vault note `260716_behaviorlab_calms21_tailbase_coordinate_artifact.md`; deliberation record
+`_Agent/audit/260716_hbehavemae_deliberation.md`.
+
+**hBehaveMAE, if pursued later:** reframe as a *separate* SSL-representation-utility question
+(label-efficiency / retrieval vs raw-pose baselines — does SSL recover structure the ARI≈0
+clustering missed), explicitly NOT a validation of tail_base, and same-dataset caveat applies.

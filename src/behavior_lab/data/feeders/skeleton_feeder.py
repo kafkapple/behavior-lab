@@ -35,6 +35,7 @@ class SkeletonFeeder(Dataset):
         random_rot: bool = False,
         use_velocity: bool = False,
         debug: bool = False,
+        ego_center: bool = False,
     ):
         self.data_path = Path(data_path)
         self.split = split
@@ -44,6 +45,7 @@ class SkeletonFeeder(Dataset):
         self.random_rot_flag = random_rot
         self.use_velocity = use_velocity
         self.debug = debug
+        self.ego_center = ego_center
 
         self.data: np.ndarray = None  # (N, C, T, V, M)
         self.label: np.ndarray = None  # (N,)
@@ -83,6 +85,14 @@ class SkeletonFeeder(Dataset):
         if self.debug:
             self.data = self.data[:100]
             self.label = self.label[:100]
+
+        if self.ego_center:
+            # Subtract each frame's global centroid (mean over all joints AND persons) so the
+            # model can't exploit absolute arena position; inter-person geometry and within-
+            # person pose are both preserved. Zero-padding frames stay zero (their centroid is
+            # 0, so 0-0=0). data: (N, C, T, V, M).
+            centroid = self.data.mean(axis=(3, 4), keepdims=True)
+            self.data = self.data - centroid
 
     def _reshape_flat(self, data: np.ndarray) -> np.ndarray:
         """Reshape (N, T, flat_features) to (N, C, T, V, M).

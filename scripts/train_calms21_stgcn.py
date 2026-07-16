@@ -71,9 +71,9 @@ def stratified_val_split(subset, val_frac: float = 0.15, seed: int = 0):
 
 
 def build_loaders(debug: bool, batch_size: int, max_train: int = None, max_test: int = None,
-                   data_path: str = DEFAULT_DATA_PATH, val_frac: float = 0.15):
-    train_set = get_feeder("calms21", data_path=data_path, split="train", debug=debug)
-    test_set = get_feeder("calms21", data_path=data_path, split="test", debug=debug)
+                   data_path: str = DEFAULT_DATA_PATH, val_frac: float = 0.15, ego_center: bool = False):
+    train_set = get_feeder("calms21", data_path=data_path, split="train", debug=debug, ego_center=ego_center)
+    test_set = get_feeder("calms21", data_path=data_path, split="test", debug=debug, ego_center=ego_center)
     train_subset = stratified_subset(train_set, max_train)
     test_subset = stratified_subset(test_set, max_test)
     train_final, val_subset = stratified_val_split(train_subset, val_frac)
@@ -117,12 +117,15 @@ def main():
     ap.add_argument("--device", type=str, default="cpu", help="cpu | cuda (Trainer falls back to cpu if cuda unavailable)")
     ap.add_argument("--shuffle_labels", action="store_true",
                     help="null control: permute TRAIN labels only (val/test kept real) -> F1 should collapse to chance")
+    ap.add_argument("--ego_center", action="store_true",
+                    help="subtract per-frame global centroid: removes absolute arena-position leakage, "
+                         "keeps inter-mouse geometry + pose (H1' coordinate-artifact test)")
     args = ap.parse_args()
 
     max_train = None if args.debug else args.max_train
     max_test = None if args.debug else args.max_test
     train_set, test_set, train_loader, val_loader, test_loader = build_loaders(
-        args.debug, args.batch_size, max_train, max_test, args.data_path)
+        args.debug, args.batch_size, max_train, max_test, args.data_path, ego_center=args.ego_center)
     print(f"Train: {len(train_loader.dataset)} | Val: {len(val_loader.dataset)} (held-out for "
           f"model selection) | Test: {len(test_loader.dataset)} seqs")
 
