@@ -199,10 +199,12 @@ figure{{margin:0}} img{{width:100%;border-radius:6px;display:block}}
 img.w{{margin-top:1rem}} figcaption{{font-size:.82rem;color:#666;margin-top:.35rem}}
 .box{{background:#f6f7f9;border:1px solid #e4e4e8;border-radius:8px;padding:.8rem 1rem;margin:.8rem 0}}
 code{{font-size:.88em}} .k{{font-variant-numeric:tabular-nums}}
+.ssot{{font-size:.85rem;color:#666;border-left:3px solid #4c8bf5;padding:.5rem .8rem;margin:1.2rem 0;background:#f6f7f9;border-radius:0 6px 6px 0}}
 </style>
 <h1>SBeA — 저자 DLC 모델 → DLT 삼각측량 → SAM2 마스크</h1>
 <p class="sub">세션 <b>{session}</b> · {T} 프레임 × {n_cam} 카메라 · {K} 관절 · likelihood 임계 {thr}</p>
 
+<p class="ssot">좌표·규약 단일 진입점 → <code>behavior-lab/docs/dev/README.md §2</code> (포즈 텐서 <code>(T,K,D)</code>·카메라 규약·스켈레톤 정의). 이 리포트의 수치는 그 정본을 따른다.</p>
 <h2>1. 요약</h2>
 <table>
 <tr><th>단계</th><th>결과</th></tr>
