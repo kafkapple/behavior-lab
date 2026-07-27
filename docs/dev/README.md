@@ -30,30 +30,15 @@
 
 ---
 
-## 2. 좌표 · 규약 SSOT
+## 2. 좌표 · 규약
 
-> **좌표 규약 단일 진입점 = 이 절.** 인용 주소는 `behavior-lab/docs/dev/README.md §2`.
-> 별도 규약 문서를 새로 만들지 않는다 — 정의는 코드에 있어야 드리프트하지 않고, 여기는 "어느 코드냐"만 가리킨다.
-> 좌표 관련 질문은 무조건 이 표에서 출발할 것.
-
-가장 자주 사고가 나는 축. **코드 정본이 있으면 코드가 우선** — 문서만 있으면 드리프트한다.
-
-| 규약 | 코드 정본 | 스펙 문서 |
-|---|---|---|
-| **포즈 텐서 `(T,K,D)`** — T=프레임, K=관절, D=좌표차원(2\|3) | `behavior-lab/src/behavior_lab/core/tensor_format.py` (+회귀 테스트 `tests/test_core/test_tensor_format.py`) | `behavior-lab/docs/architecture.md` §Data Format Specification |
-| **GCN 텐서 `(N,C,T,V,M)`** | 위 파일 `sequence_to_graph` / `graph_to_sequence` | 위 문서 §Conversion Rules |
-| **GS-LRM 카메라·좌표계** (OpenCV, World Z-up, fx=548.99) | — | `BehaviorSplatter/docs/camera_conventions.md` |
-| **M5 좌표 변환 상수** (`M5_SCENE_CENTER`, `M5_DISTANCE_SCALE`) | `BehaviorSplatter/src/behaviorsplatter/notebooks/kp_utils.py` L47-48 — **하드코딩 금지, import 할 것** | `BehaviorSplatter/CLAUDE.md` §Camera Conventions |
-| **DANNCE 투영 규약** (MATLAB K 비전치, cx·cy 3행) | `sdannce-poc/src/sdannce_utils/projection.py` | `sdannce-poc/docs/theory/projection_convention.md` |
-| **SBeA P 행렬 + camera↔P 순서** | `sdannce-poc/segmentation/kp_sam2_sources.py` `_cal_sbea_p_matrix` | `sdannce-poc/configs/segmentation/sbea.yaml` 헤더 |
-| **KP22 스켈레톤** (마우스 22관절) | `BehaviorSplatter/src/behaviorsplatter/temporal_deform/keypoints_22.py` `KP22_NAMES`·`SKELETON_BONES` | 업스트림 정의 `FaceLift/configs/keypoints/mouse_22.yaml` · 요약 `BehaviorSplatter/docs/keypoint_skeleton_conventions.md` |
-| **rat23 스켈레톤** (s-DANNCE) | `sdannce-poc/src/sdannce_utils/constants.py` | — |
-| **SBeA 16관절** | `behavior-lab/scripts/sbea_dlc_triangulate.py` `BODYPARTS` (저자 CSV 헤더 순서) | — |
-
-**알아둘 소프트스팟**
-- `BehaviorSplatter/scripts/preprocess_m5_subject_centered.py` L29-30 은 M5 상수를 import 하지 않고 재정의한다. 현재 값·수식은 동일해 문제 없으나, 한쪽만 고치면 갈라진다.
-- s-DANNCE `.mat` 캘리브 파싱이 sdannce-poc(MATLAB 유지)와 BehaviorSplatter(OpenCV 전치) 두 곳에 있다. **수학적 등가이며 의도적 분리** — 근거는 `repo_boundary.md §의도적 중복 1건`.
-- SBeA `camera-{i}.mp4` 는 `cam_mat_all[:,:,i]` 와 대응하지 않는다(미문서화). 세션마다 `sbea_dlc_triangulate.py` 가 24순열을 재투영 오차로 자동 판정하고, 그 결과를 config `camera_order` 에 기록해 생산자·소비자가 같은 값을 쓰게 한다.
+> **단일 진입점 = `behavior-lab/docs/conventions.md`.**
+> 포즈 텐서 `(T,K,D)` · 스켈레톤 3종(KP22/rat23/SBeA16) · 카메라·투영 규약 3종 ·
+> 마스크 npz 키 · 소프트스팟까지 전부 거기 있다.
+>
+> 표를 여기에 두지 않는 이유: 두 벌이면 갈라진다. 그 문서의 값은
+> `behavior-lab/tests/test_conventions_doc.py` 가 실제 소스와 대조하므로 코드보다 뒤처질 수 없다.
+> 좌표 관련 질문은 예외 없이 거기서 출발할 것.
 
 ---
 

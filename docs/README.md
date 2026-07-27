@@ -49,6 +49,7 @@ get_model('name')
 
 | Document | 핵심 내용 | 백링크 |
 |----------|----------|--------|
+| **[Conventions](conventions.md)** | **좌표·규약 단일 진입점** — 포즈 텐서 `(T,K,D)`, 스켈레톤 3종, 카메라·투영, 마스크 키. 값은 `tests/test_conventions_doc.py` 가 소스와 대조 | ← architecture, 전 레포 |
 | **[Behavior Analysis PRD](behavior_analysis_prd.md)** | 프로젝트 목표, 범위, 운영 원칙, 평가 계약 | ← workbench, theory |
 | **[Overview](overview.md)** | 연구 질문, 가설 (H1-H4), 3-paradigm 파이프라인 | ← taxonomy, theory/* |
 | **[Architecture](architecture.md)** | 모듈 맵, 데이터 포맷, Hydra config, skeleton registry | ← taxonomy, overview |

@@ -204,7 +204,7 @@ code{{font-size:.88em}} .k{{font-variant-numeric:tabular-nums}}
 <h1>SBeA — 저자 DLC 모델 → DLT 삼각측량 → SAM2 마스크</h1>
 <p class="sub">세션 <b>{session}</b> · {T} 프레임 × {n_cam} 카메라 · {K} 관절 · likelihood 임계 {thr}</p>
 
-<p class="ssot">좌표·규약 단일 진입점 → <code>behavior-lab/docs/dev/README.md §2</code> (포즈 텐서 <code>(T,K,D)</code>·카메라 규약·스켈레톤 정의). 이 리포트의 수치는 그 정본을 따른다.</p>
+<p class="ssot">좌표·규약 단일 진입점 → <code>behavior-lab/docs/conventions.md</code> — 포즈 텐서 <code>(T,K,D)</code> · 스켈레톤(KP22/rat23/SBeA16) · 카메라·투영 규약. 그 문서의 값은 <code>tests/test_conventions_doc.py</code> 가 소스와 대조하므로 이 리포트와 드리프트할 수 없다.</p>
 <h2>1. 요약</h2>
 <table>
 <tr><th>단계</th><th>결과</th></tr>
