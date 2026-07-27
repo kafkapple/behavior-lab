@@ -9,16 +9,16 @@ Steps:
 """
 from __future__ import annotations
 import sys
-sys.path.insert(0, "/home/joon/dev/behavior-lab-kp/src")
-sys.path.insert(0, "/home/joon/dev/behavior-lab-kp/scripts")
+sys.path.insert(0, "/home/joon/dev/behavior-lab/src")
+sys.path.insert(0, "/home/joon/dev/behavior-lab/scripts")
 from pathlib import Path
 import numpy as np
 import pandas as pd
 from render_kp_overlay import load_cameras
 
-DATA = Path("/home/joon/dev/behavior-lab-kp/data")
+DATA = Path("/home/joon/dev/behavior-lab/data")
 PRED = Path("/node_data/joon/behavior-lab-kp-benchmark/predictions")
-OUT = Path("/home/joon/dev/behavior-lab-kp/outputs/kp_benchmark")
+OUT = Path("/home/joon/dev/behavior-lab/outputs/kp_benchmark")
 OUT.mkdir(parents=True, exist_ok=True)
 PROB_MIN = 0.10
 N_FRAMES = 18000

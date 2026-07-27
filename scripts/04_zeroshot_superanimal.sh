@@ -18,8 +18,8 @@ set -euo pipefail
 
 CONDA_ENV="${CONDA_ENV:-dlc3}"
 GPU="${CUDA_VISIBLE_DEVICES:-6}"
-REPO_ROOT="${REPO_ROOT:-/home/joon/dev/behavior-lab-kp}"
-DATA_ROOT="${DATA_ROOT:-/home/joon/dev/behavior-lab-kp/data}"
+REPO_ROOT="${REPO_ROOT:-/home/joon/dev/behavior-lab}"
+DATA_ROOT="${DATA_ROOT:-/home/joon/dev/behavior-lab/data}"
 VIDEO_DIR="${VIDEO_DIR:-/node_data/joon/data/raw/markerless_mouse_1_nerf/videos_undist}"
 OUT_DIR="${OUT_DIR:-/node_data/joon/behavior-lab-kp-benchmark/predictions}"
 TAG="dlc_superanimal_zeroshot_hrnet_w32"
