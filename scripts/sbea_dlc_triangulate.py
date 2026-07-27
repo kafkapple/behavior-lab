@@ -24,11 +24,15 @@ from __future__ import annotations
 
 import argparse
 import itertools
+import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
 import scipy.io as sio
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # importable either way
+import sbea_lr_resolve as lr  # noqa: E402
 
 BODYPARTS = ["nose", "left_ear", "right_ear", "neck", "left_front_limb",
              "right_front_limb", "left_hind_limb", "right_hind_limb",
@@ -110,6 +114,22 @@ def median_residual(kp2d: np.ndarray, Plist: list[np.ndarray], prob_min: float,
     return float(np.median(res)) if res else float("inf")
 
 
+def solve_all(kp2d: np.ndarray, Ps: list[np.ndarray], prob_min: float):
+    """Triangulate every (frame, joint): (T, K, 3) points and (T, K) mean residual."""
+    T, K = kp2d.shape[1], kp2d.shape[2]
+    kp3d = np.full((T, K, 3), np.nan)
+    resid = np.full((T, K), np.nan)
+    for t in range(T):
+        for k in range(K):
+            X = triangulate(kp2d[:, t, k, :2], kp2d[:, t, k, 2], Ps, prob_min)
+            kp3d[t, k] = X
+            if np.isfinite(X).all():
+                errs = [np.linalg.norm(reproject(X, P) - kp2d[c, t, k, :2])
+                        for c, P in enumerate(Ps) if kp2d[c, t, k, 2] >= prob_min]
+                resid[t, k] = np.mean(errs) if errs else np.nan
+    return kp3d, resid
+
+
 def solve_camera_order(kp2d: np.ndarray, Ps: list[np.ndarray], prob_min: float):
     """Which P belongs to which video file?
 
@@ -138,6 +158,11 @@ def main() -> None:
     ap.add_argument("--end", type=int, default=600)
     ap.add_argument("--step", type=int, default=3)
     ap.add_argument("--prob-min", type=float, default=0.6)
+    ap.add_argument("--resolve-lr", action="store_true",
+                    help="relabel bilateral joints so the four views agree "
+                         "(partial fix — read sbea_lr_resolve's docstring first)")
+    ap.add_argument("--lr-lambda", type=float, default=lr.DEFAULT_LAMBDA,
+                    help="switch penalty for --resolve-lr; 0 flickers badly")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
 
@@ -163,18 +188,18 @@ def main() -> None:
     order, best_res, ident_res = solve_camera_order(kp2d, Ps, a.prob_min)
     Ps = [Ps[i] for i in order]
 
-    T, K = len(frames), n_joints
-    kp3d = np.full((T, K, 3), np.nan)
-    resid = np.full((T, K), np.nan)
-    for t in range(T):
-        for k in range(K):
-            X = triangulate(kp2d[:, t, k, :2], kp2d[:, t, k, 2], Ps, a.prob_min)
-            kp3d[t, k] = X
-            if np.isfinite(X).all():
-                errs = [np.linalg.norm(reproject(X, P) - kp2d[c, t, k, :2])
-                        for c, P in enumerate(Ps) if kp2d[c, t, k, 2] >= a.prob_min]
-                resid[t, k] = np.mean(errs) if errs else np.nan
+    if a.resolve_lr:
+        # print the independent check alongside, because the relabelling minimises
+        # reprojection error and so cannot be judged by it — see sbea_lr_resolve
+        before = solve_all(kp2d, Ps, a.prob_min)[0]
+        kp2d, switches = lr.resolve(kp2d, Ps, a.prob_min, BODYPARTS[:n_joints],
+                                    triangulate, reproject, lam=a.lr_lambda)
+        after = solve_all(kp2d, Ps, a.prob_min)[0]
+        print(f"L/R resolve (lam={a.lr_lambda:g}): {switches} pattern switches over "
+              f"{len(frames)} frames | {lr.report(before, after, BODYPARTS[:n_joints])}")
 
+    kp3d, resid = solve_all(kp2d, Ps, a.prob_min)
+    K = n_joints
     valid = np.isfinite(kp3d).all(axis=2)
     print(f"3D  done: {kp3d.shape}, valid {valid.mean():.1%}, "
           f"reproj residual median {np.nanmedian(resid):.2f} px")
@@ -186,7 +211,8 @@ def main() -> None:
         reproj_residual_px=resid, frame_indices=np.array(frames),
         keypoint_names=np.array(BODYPARTS[:K]), keypoints_2d=kp2d, prob_min=a.prob_min,
         camera_order=np.array(order), P_matrices=np.stack(Ps),
-        residual_identity_px=ident_res, residual_best_px=best_res)
+        residual_identity_px=ident_res, residual_best_px=best_res,
+        lr_resolved=a.resolve_lr)
     print(f"wrote {dst}")
 
 
