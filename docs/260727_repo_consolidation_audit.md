@@ -68,9 +68,13 @@ mac `behavior-lab` = gpu03 와 동일 HEAD, 워킹트리 clean → 이미 동기
 
 → **중복이 아니라 설계된 분리**. 통합하면 이 경계 문서가 무효화됨.
 
-**단, SSOT 충돌 1건**: behavior-tools 가 "SAM 어노테이션" 소유권을 주장하지만 `annotator/` 는 199 LOC 스텁이고 주석이 이미 사라진 경로를 가리킴 —
-`"TODO: Port from gpu03:~/dev/mouse-super-resolution/sam_annotator"` (해당 디렉토리 gpu03에 **없음**, 확인 완료).
-반면 sdannce-poc 는 SAM2 기반 2,852 LOC 실동작 구현 보유.
+**단, SSOT 충돌 1건 — 260727 해소**: behavior-tools 가 "SAM 어노테이션" 소유권을 주장했으나 실체는 SAM1 기반이었음.
+⚠️ **정정**: 최초 감사에서 이를 "199 LOC 스텁"으로 적었으나 오독이었다 — 본문은 `sam_model_registry`/`SamPredictor` 를 쓰는
+완성 코드였고, 스텁처럼 보인 건 docstring 에 남은 `"TODO: Port from gpu03:~/dev/mouse-super-resolution/sam_annotator"`
+한 줄 때문이었다(해당 경로는 실제로 없음, 확인 완료).
+실질 근거는 다른 데 있었다: (a) 레포 안팎 어디서도 import 되지 않음, (b) 의존 패키지 `segment-anything` 이 gpu03 어느
+env 에도 미설치 → 실행 불가, (c) sdannce-poc 에 SAM2 실동작 구현 존재.
+→ behavior-tools `annotator/` 삭제 + 경계 문서의 소유권 행을 sdannce-poc 로 이관 (behavior-tools `e98c208`).
 
 ---
 
@@ -98,8 +102,9 @@ rm -rf ~/dev/behavior-lab-kp ~/dev/behavior-lab_stale_260705
 ```
 Step 1·2 완료 확인 후에만. 두 디렉토리 모두 gpu03 전용이라 mac 영향 없음.
 
-**Step 4 — behavior-tools 경계 정정 (mac, 문서만)**
-`docs/behavior_lab_boundary.md` 의 "SAM 어노테이션 = behavior-tools" 행에 실상 반영 — 스텁이며 실동작 구현은 sdannce-poc 소재임을 명시하거나, sdannce-poc `segmentation/` 을 정본으로 승격.
+**Step 4 — behavior-tools 경계 정정 — ✅ 완료 (`e98c208`)**
+`annotator/` 삭제 + pyproject extra 제거 + `docs/behavior_lab_boundary.md` 소유권 행을 sdannce-poc 로 이관.
+`superres/` 는 유지 — 대체재가 없고 코드도 완성 상태(같은 stale TODO 만 제거).
 
 ---
 
@@ -126,7 +131,7 @@ Social DANNCE 3D 키포인트 PoC. 상위 프로젝트 = BehaviorSplatter (FaceL
 |---|---|---|
 | 6뷰 뷰어 / 마스크 어노테이션 UI | **고유** | 다른 어느 repo에도 대응물 없음 |
 | DANNCE 투영 규약 (`projection.py` + `docs/theory/projection_convention.md`) | **고유** | behavior-lab 은 3D 재구성 규약을 다루지 않음 |
-| SAM2 분할 | **SSOT 충돌** | behavior-tools 가 소유권 주장하나 스텁 (§1.3) |
+| SAM2 분할 | **해소됨** | behavior-tools 의 SAM1 모듈 삭제, 소유권 sdannce-poc 로 이관 (§1.3) |
 | 클러스터링 (`scripts/run_clustering_poc.py`) | **실제 중복 (경미)** | KMeans/HDBSCAN + TPI·엔트로피·bout 지표. behavior-lab 은 VAME·MoSeq·B-SOiD·SUBTLE·BehaveMAE 보유 + **이미 `outputs/sdannce/{vame,kpms}/labels.npy` 산출** + `experiments/pipeline.py:44` 에 `"sdannce"` DatasetSpec 등록. 경계 문서상 "비지도 행동 발견 = behavior-lab" |
 
 **단, 통합의 전제조건이 아직 미충족**: behavior-lab `data/loaders/` 에 s-DANNCE 로더가 **없음** (calms21·li2023·mabe22·mammal_mouse·ntu_rgbd·nwucla·rat7m·shank3ko·sleap·subtle 만 존재). `pipeline.py` 는 sdannce 를 rat7m 스켈레톤에 매핑하는 스펙 한 줄뿐.
