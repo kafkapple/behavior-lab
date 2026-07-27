@@ -37,6 +37,10 @@
 - **해부학 배선 규칙**(3종 공통): 전지는 흉추/목에, 후지는 천추/꼬리뿌리에 붙는다. 네 다리를 몸통 중앙 한 점에
   모으지 않는다. 260702 에 KP22 에서 정정했고 SBeA16 도 같은 기준으로 배선했다.
 - SBeA16 관절 순서는 저자 배포 CSV 헤더 순서를 그대로 따른다(바꾸면 DLC 출력과 어긋난다).
+- **SBeA16 좌우 대칭쌍 5개**(`sbea_lr_resolve.py` — `SYM_PAIRS`): 귀·앞다리·뒷다리·앞발톱·뒷발톱.
+  저자 DLC 는 카메라마다 이 쌍의 좌/우를 다르게 붙이며, 그게 재투영 잔차의 지배 성분이다
+  (260727, `scripts/diag_sbea_residual.py`). 완화는 카메라 간 *일관성*만 보장하고
+  **어느 쪽이 해부학적 왼쪽인지는 검증되지 않았다** — 검출기 다수결을 승계한다.
 
 ## 3. 카메라 · 투영
 
@@ -75,6 +79,7 @@ rat23_names: 23
 rat23_edges: 22
 sbea16_bodyparts: 16
 sbea16_edges: 15
+sbea16_sym_pairs: 5
 m5_scene_center: [59.672, 51.517, 107.099]
 m5_distance_scale: 0.008772357
 tensor_format_api: ["sequence_to_graph", "graph_to_sequence"]

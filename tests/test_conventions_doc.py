@@ -70,6 +70,8 @@ def test_sbea16(checked):
                      "BODYPARTS") == checked["sbea16_bodyparts"]
     assert _list_len(REPO / "scripts/render_sbea_report.py",
                      "EDGES") == checked["sbea16_edges"]
+    assert _list_len(REPO / "scripts/sbea_lr_resolve.py",
+                     "SYM_PAIRS") == checked["sbea16_sym_pairs"]
 
 
 def test_m5_constants(checked):
