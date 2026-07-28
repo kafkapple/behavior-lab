@@ -104,11 +104,14 @@
 
 | 항목 | 관찰 | 위협 모델 | 판단 |
 |---|---|---|---|
-| `/node_data` 94% (455G 여유) | HOT 티어 포화 임박 | 학습 중 checkpoint/outputs 쓰기 실패 → 런 중단. FaceLift 6view 급 산출물 1~2회분 여유 | 🟡 모니터 — COLD 이관 후보 = `HOT:preprocessed/FaceLift_mouse` 9.1G(COLD에 동일 이름 존재, 중복 여부 확인 필요) |
+| `/node_data` 94% (455G 여유) | HOT 티어 포화 임박 | 학습 중 checkpoint/outputs 쓰기 실패 → 런 중단. FaceLift 6view 급 산출물 1~2회분 여유 | 🟡 모니터 — `HOT:preprocessed/FaceLift_mouse` 9.1G 는 **중복 아님**(260728 확인: HOT=`M5/M5_4/M5_5`, COLD=`M5f1/M5f1_smoke` — 내용 상이) |
 | omnibench·omnivideobench | 파일 0~8K | 벤치마크 스크립트가 빈 디렉토리를 "다운로드됨"으로 오인 가능 | 🟡 다운로드 미완 — 사용 전 재확인 필요 |
 | video-mme | 메타데이터만 | 위와 동일 | 🟡 |
 | cnn_subspace_auditory | zip 미해제 | 사용 시점에 4.3G 해제 필요, HOT 여유와 무관(COLD 소재) | 🟢 |
-| `HOT:derived/`, `HOT:preprocessed/markerless_mouse_2`, `HOT:preprocessed/WK1_v2_sc_fx1000` | 0 바이트 빈 디렉토리 | 없음 | 🟢 정리 대상 |
+| `HOT:derived/` | 0 바이트 빈 디렉토리 | 없음 | 🟢 정리 대상 |
+| `HOT:preprocessed/markerless_mouse_2`, `HOT:preprocessed/WK1_v2_sc_fx1000` | ~~0 바이트 빈 디렉토리~~ → **COLD 향 symlink** (260728 정정) | 삭제 시 `~/data/preprocessed/` 경유 config 전부 파손 | 🔴 **삭제 금지** — `du`가 symlink를 따라가지 않아 0으로 보였을 뿐 |
 | `~/dev/datasets` 스텁 | 이름이 데이터셋 허브처럼 보이나 실제로는 링크 1개 | 신규 세션·협업자가 "데이터셋 여기 있음"으로 오독 | 🟡 이 문서로 포인터 정정 |
 
-**미확인 (실사 범위 밖)**: `HOT:preprocessed/FaceLift_mouse`(9.1G) 와 `COLD:preprocessed/FaceLift_mouse` 의 내용 동일성 — 중복 여부는 체크섬 비교 필요, 이번 실사에서 미수행.
+**해소 (260728)**: `HOT:preprocessed/FaceLift_mouse`(9.1G) vs `COLD:preprocessed/FaceLift_mouse`(16G) = **서로 다른 split** (HOT `M5`/`M5_4`/`M5_5`, COLD `M5f1`/`M5f1_smoke`). 중복 아니므로 이관·삭제 대상 아님.
+
+**교차 볼륨 동명 항목 전수 확인 (260728)**: HOT↔COLD 동명 5건은 **전부 symlink**이며 실물 중복은 0건. 목록·정본 = `~/dev/BehaviorSplatter/docs/DATASET_LOCATIONS.md`.

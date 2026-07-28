@@ -55,7 +55,7 @@ Both on the same NVMe — the distinction is access pattern, not location:
 
 - Archive-only. Symlinked from original location for backward compatibility
 - `hf_cache` (127G): Re-downloadable model weights. Lowest preservation priority
-- `quarantine/`: Staging area for items pending review (30-day hold → delete or classify)
+- ~~`quarantine/`: Staging area for items pending review (30-day hold → delete or classify)~~ — **폐지 (2026-07-28)**: 마지막 격리분 2건이 예정 삭제일(2026-04-22)을 97일 초과해 방치 → 삭제하고 디렉토리 자체를 없앰. 30-day hold가 실제로 집행되지 않아 무기한 보관소로 변질됨. 재도입 시 만료 강제 수단(cron 등) 동반 필요
 - All files default permissions (755/644). No special chmod
 
 ---
@@ -110,7 +110,7 @@ Both on the same NVMe — the distinction is access pattern, not location:
 |------|-----:|-------|
 | hf_cache/hub/ | 126G | HuggingFace models (re-downloadable) |
 | checkpoints/FaceLift/ | 68G | H7v2 ckpt-8000/9000 + 8 gslrm + mouse_M5t2 (all symlinked) |
-| quarantine/ | 5.4G | Legacy wandb 2.6G + gaussian samples 2.8G |
+| ~~quarantine/~~ | ~~5.4G~~ | **삭제 완료 2026-07-28** (Legacy wandb 2.6G + gaussian samples 2.8G, 예정 삭제일 2026-04-22 경과) |
 | wandb_runs/ | 3.2G | Old W&B experiment runs |
 | outputs/FaceLift/_archive/ | 463M | Archived FaceLift outputs |
 
@@ -225,7 +225,8 @@ du -sh outputs/              # check size
 | node_data 99%→80% | ✅ Resolved | 42G archived (2026-03-26), 1.4T free |
 | wandb split (node_data + node_data_2) | ⚠️ Pending | Consolidate under single WANDB_DIR |
 | hf_cache 127G on HDD | ℹ️ Acceptable | 1-time load latency only. Audit unused models |
-| quarantine 5.4G | ⚠️ Pending | Review → merge into proper COLD subdirs or delete |
+| quarantine 5.4G | ✅ Resolved (2026-07-28) | 삭제 완료, quarantine 개념 폐지 (§2 참조) |
+| `~/data/preprocessed/WK1_v2_sc_fx1000` symlink 오연결 | ✅ Resolved (2026-07-28) | 권장(subject_centered) 이름이 비권장(square_min) 데이터를 가리킴 → 재연결 + `WK1_fx1000_full` symlink 신설. 상세 = `~/dev/BehaviorSplatter/docs/DATASET_LOCATIONS.md` |
 | sdannce-poc/flux outputs on HOME | ℹ️ Low priority | Archive when projects complete |
 
 ---
@@ -234,8 +235,18 @@ du -sh outputs/              # check size
 
 ### Monthly
 - [ ] `df -h /home /node_data /node_data_2` — check capacity
-- [ ] Review quarantine (30-day hold rule)
 - [ ] Broken symlink check (§4 health check command)
+- [ ] **Mis-pointed** symlink check — 이름과 대상 basename 불일치 탐지. broken 체크로는 안 잡히는 유형 (260728 WK1 사고). 260728 전수 실행 결과 잔여 0건:
+
+```bash
+for base in ~/data ~/data/preprocessed ~/data/shared /node_data/joon/checkpoints/FaceLift/gslrm; do
+  for l in "$base"/*; do
+    [ -L "$l" ] || continue
+    t=$(readlink -f "$l")
+    [ "$(basename "$l")" = "$(basename "$t")" ] || echo "MISMATCH: $l -> $t"
+  done
+done
+```
 
 ### Per Experiment Completion
 - [ ] Move intermediate checkpoints (non-best) → COLD
