@@ -17,17 +17,28 @@ Fixing it is less simple than finding it, and the failures are worth stating:
     direction: a mislabelled joint triangulates to a midline compromise, which is
     smooth *because* it is wrong. The metric rewards the artifact.
   * Bone length is the honest check. Limb segments are near-rigid, so a wrong
-    assignment stretches them however the point moved. Under Viterbi smoothing
-    the robust CV of the bilateral segments falls 0.265 -> 0.183 (rec10-M2) and
-    0.237 -> 0.199 (rec10-M7) at lam=20, while the midline control is unchanged.
+    assignment stretches them however the point moved.
 
-So this helps, but partially: it does not bring the residual down to the ~19-20 px
-floor the midline joints already sit at, and the left/right *length symmetry*
-check does not improve consistently across the two sessions. Treat SBeA 3D as
-usable for SAM2 prompting, not for quantitative limb kinematics.
+READ THIS BEFORE TURNING IT ON. On a two-session, 200-frame sample the bone check
+looked convincing (rCV 0.265 -> 0.183 and 0.237 -> 0.199). It did not hold up. The
+260728 full-length sweep — all 20 individual sessions, 6603 frames each,
+~76k observations per session — says:
 
-lam=20 was chosen as the value that improves both sessions rather than either
-session's own optimum (M2 prefers 160, M7 prefers 20).
+    reprojection error (the objective)   improved 20/20, median 24.7 -> 23.1 px
+    bone rCV (independent physics)       improved 14/20, WORSENED 6/20,
+                                         median 0.236 -> 0.231  (about -2%)
+    midline control                      unmoved 0/20, as designed
+
+So the relabelling reliably lowers the quantity it optimises and barely moves the
+quantity that would show it is physically right. lam=20 was picked on the same two
+sessions the 200-frame numbers came from, which is why those numbers flattered it.
+This is the same "objective improves, physics does not follow" pattern the per-frame
+version failed on, just less severe — it is a marginal fix, not a working one.
+
+Default is off, and it should stay off unless you re-measure on your own sessions
+with `scripts/sweep_sbea_sessions.py`. It does not reach the ~19-20 px floor the
+midline joints already sit at. Treat SBeA 3D as usable for SAM2 prompting, not for
+quantitative limb kinematics.
 """
 from __future__ import annotations
 
