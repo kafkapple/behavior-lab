@@ -30,7 +30,7 @@ Server-wide 3-tier storage strategy for `/home/joon/` on gpu03.
 ├──────┼──────────────────┼──────────────────────────────────┼──────────────────────────────────────────┤
 │ COLD │ /node_data_2 HDD │ Rarely accessed, archive         │ _archive, old checkpoints, hf_cache       │
 │      │                  │ + re-downloadable large caches   │ /node_data_2/joon/{checkpoints,outputs,   │
-│      │                  │                                  │  hf_cache,wandb_runs,quarantine}           │
+│      │                  │                                  │  hf_cache,wandb_runs}                      │
 ├──────┼──────────────────┼──────────────────────────────────┼──────────────────────────────────────────┤
 │ HOME │ / NVMe (879G)    │ Code & config only               │ git repos, conda envs, pip cache          │
 │      │                  │ Outputs = archival candidates     │ /home/joon/dev/<project>/                 │
@@ -55,7 +55,10 @@ Both on the same NVMe — the distinction is access pattern, not location:
 
 - Archive-only. Symlinked from original location for backward compatibility
 - `hf_cache` (127G): Re-downloadable model weights. Lowest preservation priority
-- ~~`quarantine/`: Staging area for items pending review (30-day hold → delete or classify)~~ — **폐지 (2026-07-28)**: 마지막 격리분 2건이 예정 삭제일(2026-04-22)을 97일 초과해 방치 → 삭제하고 디렉토리 자체를 없앰. 30-day hold가 실제로 집행되지 않아 무기한 보관소로 변질됨. 재도입 시 만료 강제 수단(cron 등) 동반 필요
+- `quarantine/`: Staging area for items pending review (30-day hold → delete or classify). **프로토콜 유지** — 정본 = Obsidian `2602_AMILab_Work/.../gpu03 Storage Management.md §삭제 안전 프로토콜`
+  - 2026-07-28 현재 **비어 있음**(디렉토리 미생성). 마지막 격리분 2건을 삭제하며 정리 — 예정 삭제일 2026-04-22를 **97일 초과** 방치돼 있었다
+  - 🔴 **실패한 건 개념이 아니라 만료 집행이다.** 30-day hold를 아무도 확인하지 않아 무기한 보관소로 변질됐다. 아래 §7 월간 체크리스트의 만료 점검을 실제로 돌릴 것 — 안 돌리면 같은 상태로 되돌아간다
+  - 재사용 시 `mkdir -p /node_data_2/joon/quarantine` 후 `YYMMDD_대상명/` 규칙 유지 (날짜가 만료 판정 근거)
 - All files default permissions (755/644). No special chmod
 
 ---
@@ -225,7 +228,7 @@ du -sh outputs/              # check size
 | node_data 99%→80% | ✅ Resolved | 42G archived (2026-03-26), 1.4T free |
 | wandb split (node_data + node_data_2) | ⚠️ Pending | Consolidate under single WANDB_DIR |
 | hf_cache 127G on HDD | ℹ️ Acceptable | 1-time load latency only. Audit unused models |
-| quarantine 5.4G | ✅ Resolved (2026-07-28) | 삭제 완료, quarantine 개념 폐지 (§2 참조) |
+| quarantine 5.4G | ✅ Resolved (2026-07-28) | 격리분 2건 삭제 완료(만료 97일 초과). **프로토콜은 유지**하고 만료 점검을 §7에 추가 — §2 참조 |
 | `~/data/preprocessed/WK1_v2_sc_fx1000` symlink 오연결 | ✅ Resolved (2026-07-28) | 권장(subject_centered) 이름이 비권장(square_min) 데이터를 가리킴 → 재연결 + `WK1_fx1000_full` symlink 신설. 상세 = `~/dev/BehaviorSplatter/docs/DATASET_LOCATIONS.md` |
 | sdannce-poc/flux outputs on HOME | ℹ️ Low priority | Archive when projects complete |
 
@@ -235,6 +238,8 @@ du -sh outputs/              # check size
 
 ### Monthly
 - [ ] `df -h /home /node_data /node_data_2` — check capacity
+- [ ] **Quarantine 만료 점검** — 30-day hold를 실제로 집행하는 유일한 지점. 260322 격리분이 97일 초과 방치된 원인이 이 점검 부재였다:
+      `find /node_data_2/joon/quarantine -maxdepth 1 -mindepth 1 -mtime +30 2>/dev/null` → 결과가 있으면 삭제 또는 정식 위치로 분류
 - [ ] Broken symlink check (§4 health check command)
 - [ ] **Mis-pointed** symlink check — 이름과 대상 basename 불일치 탐지. broken 체크로는 안 잡히는 유형 (260728 WK1 사고). 260728 전수 실행 결과 잔여 0건:
 
