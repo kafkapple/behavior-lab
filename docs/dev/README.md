@@ -21,7 +21,7 @@
 | **behavior-tools** | 영상 분할 · 프레임 추출 · 이미지 큐레이션 | `behavior-tools/docs/README.md` | mac only |
 | **FaceLift** | 업스트림 레퍼런스 (KP22 정의 보유) | — | mac + gpu03 |
 | **pose-splatter** | 별개 논문 구현 (arXiv 2505.18342) | `README.md` | gpu03 only |
-| ~~mouse-kp-benchmark~~ | **deprecated** → behavior-lab 로 대체 | — | mac only |
+| ~~mouse-kp-benchmark~~ | **deprecated** → behavior-lab 로 대체 | — | GitHub only (로컬 클론 260728 삭제) |
 
 **누가 무엇을 소유하는가** = 경계 문서 3부작 (서로 참조, 내용 중복 없음):
 `sdannce-poc/docs/repo_boundary.md` ·
