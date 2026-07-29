@@ -230,6 +230,9 @@ du -sh outputs/              # check size
 | hf_cache 127G on HDD | ℹ️ Acceptable | 1-time load latency only. Audit unused models |
 | quarantine 5.4G | ✅ Resolved (2026-07-28) | 격리분 2건 삭제 완료(만료 97일 초과). **프로토콜은 유지**하고 만료 점검을 §7에 추가 — §2 참조 |
 | `~/data/preprocessed/WK1_v2_sc_fx1000` symlink 오연결 | ✅ Resolved (2026-07-28) | 권장(subject_centered) 이름이 비권장(square_min) 데이터를 가리킴 → 재연결 + `WK1_fx1000_full` symlink 신설. 상세 = `~/dev/BehaviorSplatter/docs/DATASET_LOCATIONS.md` |
+| `sam3_{test,options}` 13M | ✅ 결정: **보존** (2026-07-29) | 260728 정리 후보에 올랐으나 제외 확정. 완료된 SAM3 프롬프트 선택 실험(`sam3_options_experiment.py`)의 유일한 근거이고 회수량 13M은 무의미. `sam3_multimask_masks/` 부재가 확인된 뒤라 잔존 provenance 가치가 더 큼 |
+| `sam3_multimask_masks/{wk1_full,wk1_largest,s1d1_full}` 부재 | ⚠️ Pending | 루트 자체가 없음(260728 실측). **WK1·s1d1 재전처리만 불가**, 기존 preprocessed 산출물은 정상. `DATASET_INDEX.yaml` 3곳에 부재 표시 완료. 재전처리 필요 시 마스크 재생성 선행 |
+| `regen_260517_*` 320M | ✅ Resolved (2026-07-28) | 논문 재현 자산(유일본)이 백업 없는 `/node_data_2`에 방치 → `/home/joon/archives/paper_regen_260517/`(NFS, 백업됨)로 md5 전수 대조 후 이관 |
 | sdannce-poc/flux outputs on HOME | ℹ️ Low priority | Archive when projects complete |
 
 ---
