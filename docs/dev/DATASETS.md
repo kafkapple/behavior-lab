@@ -9,7 +9,8 @@
 
 - `~/dev/datasets` 는 **데이터셋 폴더가 아님** — 심볼릭 링크 1개짜리 스텁. 실제 데이터는 `/node_data/joon/data`(~33G) + `/node_data_2/joon/data`(~297G).
 - 총 5개 도메인 32개 데이터셋 — 행동/스켈레톤 11 · 3D 재구성 12 · VLM/AV 벤치마크 4 · 로보틱스 5 · 신경/오디오 1.
-- 즉시 조치 필요 3건: 빈 벤치마크 2개(omnibench·omnivideobench) · 미해제 zip 1개(cnn_subspace_auditory) · `/node_data` 94% 포화.
+- 즉시 조치 필요 2건: 빈 벤치마크 2개(omnibench·omnivideobench) · `/node_data` 94% 포화.
+- cnn_subspace_auditory는 gpu03 퇴역 전 로컬 mac으로 이관 완료(260729, §6).
 
 ---
 
@@ -96,7 +97,9 @@
 
 | 데이터셋 | 경로 | 용량 | 상태 |
 |---|---|---:|---|
-| cnn_subspace_auditory | `COLD:cnn_subspace_auditory/recordings.zip` | 4.3G | ⚠️ **미해제 zip 1개** — `~/dev/datasets/` 의 유일한 심링크 대상 |
+| cnn_subspace_auditory | mac: `~/dev/neural_information_processing/projects/cnn_subspace_auditory/data/recordings/` (68 site .tgz) | 4.2G | ✅ 260729 로컬 이관 완료 — md5 일치 확인(`3c5f5b785bc31f2cab561dfc52fee101`). gpu03 원본(`COLD:cnn_subspace_auditory/recordings.zip`, `~/dev/datasets/`의 유일한 심링크 대상)은 삭제 안 하고 그대로 둠 — gpu03 퇴역 시 자연 소멸 예정 |
+
+용도: Wingert et al. (2026) *CNN models describe the encoding subspace of local circuits in auditory cortex* 재현. NEMS 포맷 auditory cortex 실제 recording 68 site. 상세 = `neural_information_processing/projects/cnn_subspace_auditory/research_note.md` (SSOT).
 
 ---
 
@@ -107,7 +110,7 @@
 | `/node_data` 94% (455G 여유) | HOT 티어 포화 임박 | 학습 중 checkpoint/outputs 쓰기 실패 → 런 중단. FaceLift 6view 급 산출물 1~2회분 여유 | 🟡 모니터 — `HOT:preprocessed/FaceLift_mouse` 9.1G 는 **중복 아님**(260728 확인: HOT=`M5/M5_4/M5_5`, COLD=`M5f1/M5f1_smoke` — 내용 상이) |
 | omnibench·omnivideobench | 파일 0~8K | 벤치마크 스크립트가 빈 디렉토리를 "다운로드됨"으로 오인 가능 | 🟡 다운로드 미완 — 사용 전 재확인 필요 |
 | video-mme | 메타데이터만 | 위와 동일 | 🟡 |
-| cnn_subspace_auditory | zip 미해제 | 사용 시점에 4.3G 해제 필요, HOT 여유와 무관(COLD 소재) | 🟢 |
+| cnn_subspace_auditory | ~~zip 미해제~~ → 260729 로컬 mac 이관 + 해제 완료 | 없음 | 🟢 해결됨 |
 | `HOT:derived/` | 0 바이트 빈 디렉토리 | 없음 | 🟢 정리 대상 |
 | `HOT:preprocessed/markerless_mouse_2`, `HOT:preprocessed/WK1_v2_sc_fx1000` | ~~0 바이트 빈 디렉토리~~ → **COLD 향 symlink** (260728 정정) | 삭제 시 `~/data/preprocessed/` 경유 config 전부 파손 | 🔴 **삭제 금지** — `du`가 symlink를 따라가지 않아 0으로 보였을 뿐 |
 | `~/dev/datasets` 스텁 | 이름이 데이터셋 허브처럼 보이나 실제로는 링크 1개 | 신규 세션·협업자가 "데이터셋 여기 있음"으로 오독 | 🟡 이 문서로 포인터 정정 |
