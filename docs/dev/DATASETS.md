@@ -30,11 +30,11 @@
 
 | 데이터셋 | 경로 (root 기준) | 용량 | 포맷·구조 |
 |---|---|---:|---|
-| CalMS21 원본 | `HOT:calms21_dl/task1_classic_classification/` | 2.7G | JSON ×4 — train 1.2G / test 632M / taskprog feature train 685M·test 354M |
-| CalMS21 BehaveMAE용 | `HOT:calms21_bmae/calms21_train.npy` | 48M | object-npy `{sequences: 246개 시퀀스}` |
-| MABe22 | `HOT:mabe22_dl/user_train.npy` | 814M | object-npy `{vocabulary, sequences}` |
-| NTU RGB+D 60 | `HOT:ntu_dl/ntu60_3danno.pkl` | 1.2G | pkl `{split: 6분할(xsub/xset/xview × train/val), annotations: 56,578개}`, 항목키 `frame_dir·label·keypoint·total_frames` |
-| NTU BehaveMAE 서브셋 | `HOT:ntu_bmae/ntu_train.npy` | 15M | object-npy `{sequences: 500개}` |
+| CalMS21 원본 | `HOT:raw/calms21_dl/task1_classic_classification/` | 2.7G | JSON ×4 — train 1.2G / test 632M / taskprog feature train 685M·test 354M |
+| CalMS21 BehaveMAE용 | `HOT:raw/calms21_bmae/calms21_train.npy` | 48M | object-npy `{sequences: 246개 시퀀스}` |
+| MABe22 | `HOT:raw/mabe22_dl/user_train.npy` | 814M | object-npy `{vocabulary, sequences}` |
+| NTU RGB+D 60 | `HOT:raw/ntu_dl/ntu60_3danno.pkl` | 1.2G | pkl `{split: 6분할(xsub/xset/xview × train/val), annotations: 56,578개}`, 항목키 `frame_dir·label·keypoint·total_frames` |
+| NTU BehaveMAE 서브셋 | `HOT:raw/ntu_bmae/ntu_train.npy` | 15M | object-npy `{sequences: 500개}` |
 | SHOT7M2 | `HOT:shot7m2/test/` | 3.4G | npy ×3 — poses `{sequences:{keypoints}}` · benchmark_labels·actions `{frame_number_map: 2,720 에피소드, label_array, vocabulary, task_type}` |
 | s-DANNCE WK1 (SCN2A M1) | `HOT:sdannce/wk1/SCN2A_WK1_2022_09_16_M1/` | 1.1G | `videos/ COM/ SDANNCE/ calibration/` + `meta.json` 624K + 다운로드 스크립트 |
 | SBeA | `COLD:external/SBeA/` | 29G | `individual/ social/ sbea_release_assets/` |
@@ -83,12 +83,12 @@
 
 | 데이터셋 | 경로 | 용량 |
 |---|---|---:|
-| LIBERO 원본 | `HOT:libero_pro/libero_datasets/` | 6.0G |
-| lpwm_frames_expert_goal_mini | `HOT:libero_pro/` | 165M |
-| lpwm_frames_action_mini | `HOT:libero_pro/` | 24M |
-| lpwm_frames_mini | `HOT:libero_pro/` | 24M |
-| lpwm_frames_smoke | `HOT:libero_pro/` | 96K |
-| lpwm markerless_mouse_1 파생 | `HOT:mouse/{_mini,_smoke12}` | 69M |
+| LIBERO 원본 | `HOT:raw/libero_pro/libero_datasets/` | 6.0G |
+| lpwm_frames_expert_goal_mini | `HOT:raw/libero_pro/` | 165M |
+| lpwm_frames_action_mini | `HOT:raw/libero_pro/` | 24M |
+| lpwm_frames_mini | `HOT:raw/libero_pro/` | 24M |
+| lpwm_frames_smoke | `HOT:raw/libero_pro/` | 96K |
+| lpwm markerless_mouse_1 파생 | `HOT:preprocessed/lpwm_markerless_mouse_1_{mini,smoke12}` | 69M |
 
 ---
 
