@@ -51,7 +51,12 @@
 | 결과 폴더 SSOT (`~/results/{project}/`) | `CLAUDE.md` §5 |
 | 코딩 원칙 | `CODING_PRINCIPLES.md` |
 
-빠른 좌표: `~/data` → `/node_data/joon/data` (심링크). `~/dev/datasets` 는 심링크 1개짜리 스텁이지 데이터셋 허브가 아니다.
+빠른 좌표:
+- `~/data` — gpu03에서는 `/node_data/joon/data` 심링크, **mac에서는 실디렉토리**(1.4G). 머신 전역 데이터 허브.
+- `behavior-lab/data/` — repo-local 파생 캐시(mac 156M, 전부 `.gitignore:22 /data/`). `~/data` 와 **역할이 다른 별개 저장소**이며 내용 중복 아님 (260802 실사: 상대경로 겹침 0, 동일파일 1개뿐 = `mammal_mouse/.../keypoints_22_3d.npz`, `kp_benchmark_v0.1.md:93` scp 착지점으로 의도된 사본).
+- `~/dev/datasets` — 심링크 1개짜리 스텁이지 데이터셋 허브가 아니다.
+
+경로 변경 주의: repo 스크립트 50줄/18파일이 `REPO_ROOT/"data"` 를 하드코딩(`test_e2e.py` 18줄 최다). `${paths.data_dir}` (env `BEHAVIOR_LAB_DATA`) 경유는 11줄뿐이므로 env만 바꿔선 이전 불가.
 
 ---
 
