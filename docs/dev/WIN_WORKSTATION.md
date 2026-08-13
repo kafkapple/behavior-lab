@@ -7,12 +7,15 @@
 
 ## 0. 열린 이슈
 
-- **SBeA `social` 30세션 부재** — gpu03 삭제, win 미보유. S3(social 처리) 착수 불가. 재취득 = 저자 배포처.
+- **SBeA `social` 30세션 부재** — gpu03 삭제, win 미보유. S3(social 처리) 착수 불가.
+  재취득 수단은 확보됨: `scripts/sbea_acquisition/download_sbea.sh social <target> 4` (~16.8 GB).
 - **SHOT7M2 데이터 3.4G 부재** — gpu03 `/node_data/joon/data/shot7m2/` 삭제됨, win 미보유.
   `scripts/shot7m2_probe.py`·`scripts/bmae_probe_cv3.py` 가 이 죽은 경로를 참조 중.
   가중치(`checkpoints/hBehaveMAE_Shot7M2.pth` 111M)는 확보돼 있으므로 데이터만 재취득하면 복구.
 - **코드 내 gpu03 절대경로 29곳** 미치환 (`/node_data/joon` 23 · `/node_data_2/joon` 6). §5 참조.
-- **torch 계열 미설치** — `tests/test_models/test_behavemae.py` 만 실행 불가. §4 참조.
+- **ICML 재현 런 원본 4.3G 미확보** — gpu03 `~/scratch/icml_reproduction_runs`. 260814 에 수치
+  파일(`results.json`·`dim_sweep.json`·`regen_canonical_d50.json` 5건)과 전체 파일 매니페스트만
+  회수했다(`…/gpu03_offserver_260813/icml_repro_meta_260814/`). ply·npz 벌크는 재생성 전제로 포기.
 - **S1(저자 파이프라인 클론) 미착수** — 260729 핸드오프의 최우선 항목이 그대로 남음.
 
 ## 1. 하드웨어 대조
@@ -43,6 +46,8 @@
 | KP 벤치마크 DLC 프로젝트 | `/mnt/d/data/derived/gpu03_offserver_260812/behavior-lab-kp-benchmark` | 9.4G · 6,879파일 |
 | BehaveMAE 가중치 | `/mnt/d/data/behavior-lab/checkpoints/` | MABe22 233M · Shot7M2 111M |
 | conda env 스냅샷 | 레포 `env_snapshots/*.yml` | dlc2·dlc3·sdannce·vame·kpms |
+| SBeA 취득 매니페스트·러너 | 레포 `scripts/sbea_acquisition/` | figshare 직링크 100행/150행 |
+| gpu03 홈 잡스크립트 아카이브 | `…/gpu03_offserver_260813/icml_repro_meta_260814/gpu03_home_scripts_260814.tgz` | 14파일. inspect_*·viz_*·install_* |
 
 > 검증 방법 = 크기 매니페스트 대조(`find -type f -printf "%s %p\n"` 양쪽 정렬 후 diff).
 > `behavior_lab_essentials_260813` 은 gpu03↔win 77파일 전건 일치를 260814 확인했다.
@@ -59,17 +64,23 @@
 
 ## 4. 셋업 — 260814 완료 상태
 
-env `behavior-lab` (python 3.11) 생성·설치 완료. **`pytest` 86 passed · 1 skipped**
-(`tests/test_models/test_behavemae.py` 는 torch 미설치로 제외).
+env `behavior-lab` (python 3.11). **`pytest` 93 passed** = gpu03 기준선과 동일.
+torch `2.13.0+cu130` · `cuda.is_available() True` · RTX 3060 인식.
 
 ```bash
 # WSL 안에서. conda activate 가 비대화형 셸에서 미적용되는 일이 잦아 절대경로를 쓴다
 P=~/miniconda3/envs/behavior-lab/bin/python
-cd ~/dev/behavior-lab && $P -m pytest -q --ignore=tests/test_models/test_behavemae.py
+cd ~/dev/behavior-lab
 
-# torch 계열은 아직 미설치 (대용량 다운로드라 보류). 필요해지면:
+git submodule update --init --recursive          # ← 신규 클론이면 필수
+cd external/BehaveMAE && git apply ../../patches/BehaveMAE_260813.patch && cd ../..
 $P -m pip install -e ".[dev]"
+$P -m pytest -q                                   # 93 passed
 ```
+
+- **서브모듈 2단계를 빼면 `test_behavemae.py` 2건이 반드시 깨진다.** BehaveMAE 는 upstream
+  (amathislab) 이라 push 권한이 없어, 로컬 수정분이 패치로만 존재한다.
+- `PYTHONPATH` 수동 export 는 불필요 — `pyproject.toml` 의 pytest `pythonpath` 가 잡는다(`e63068c`).
 
 - 형제 레포도 같이 맞춰야 규약 드리프트 테스트가 통과한다. 260814 정렬분:
   `sdannce-poc` 최신 pull · `FaceLift` 브랜치 **`refactor/mouse-extensions`** 체크아웃
