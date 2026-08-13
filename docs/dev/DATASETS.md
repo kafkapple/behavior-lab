@@ -121,3 +121,29 @@
 - ⚠️ **삭제하지 말 것** — 이름은 `configs`·`registry.py`·테스트 등 **6곳 이상이 참조**한다(`M5_4` 6건 / `M5_5` 6건). 심링크 대체가 올바른 조치였고 이름은 유지돼야 한다.
 
 **교차 볼륨 동명 항목 전수 확인 (260728)**: HOT↔COLD 동명 5건은 **전부 symlink**이며 실물 중복은 0건. 목록·정본 = `~/dev/BehaviorSplatter/docs/DATASET_LOCATIONS.md`.
+
+
+---
+
+# ⚠️ 260812 대규모 정리 반영 (이 섹션이 위 260727 실사보다 우선)
+
+> 인수인계·스토리지 정리로 배치가 크게 바뀜. 상세 = `/node_data/dataset/animal_behavior/HANDOFF_260812.md` + Obsidian `260812_gpu03_storage_cleanup_plan.md`.
+
+## 위치 맵 (260812 이후)
+
+| 경로 | 실체 | 상태 |
+|---|---|---|
+| `/node_data/dataset/animal_behavior/` | 행동 데이터 통합 기준점 22G (+HANDOFF 노트) | KEEP, 타계정 읽기 가능 |
+| `/node_data_2/dataset/animal_behavior/` | FaceLift_mouse_6view 117G · d7_experiments 38G (shared/ 심링크의 실체 — 공용 트리로 이동됨) | KEEP |
+| `/node_data/dataset/CLAY_EVAL_package/` | CLAY 평가 패키지 5.2G (구 `/node_data/joon/` → 이동, 구경로 심링크 유지) | KEEP |
+| 개인 win `D:\data\` | COLD 백업 ~310G (raw 통합·derived/gpu03_offserver_260812) | 오프서버 백업 |
+| `_quarantine_*` (nd·nd2·home) | 삭제 대기 ~512G (sweep 벌크·캐시·구 outputs) | 260814 소거 예정 |
+
+## 260727 실사 대비 정정 (drift)
+
+1. SBeA 29G → **12G** (social 하위 소멸, individual만 잔존 → win 백업 후 삭제 예정)
+2. HOT `benchmarks/`(avhbench 4.4G 포함) — **소멸** (§4 표는 과거 기록)
+3. FaceLift_mouse_6view의 `m5_data` — **소멸**, 현재 실체는 gaussians 117G (산출물)
+4. COLD preprocessed 31G → 16G — win `preprocessed_gpu03_260812.tar`로 백업 후 삭제 예정
+5. 외부 공개셋(PAIR-R24M·SBeA·markerless_mouse_2·NTU)은 win `D:\data\raw\` 백업 후 서버 삭제 예정 — 재취득은 각 공개 배포처
+6. `raw = 자체 촬영` 분류(STORAGE_GUIDE 계보)는 근거 문서 부재로 폐기 — raw = 데이터셋 원본 통칭

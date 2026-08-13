@@ -282,3 +282,11 @@ COLD data is static — on-demand `stor` is sufficient.
 ---
 
 *Created: 2026-03-25 | Updated: 2026-03-26 | gpu03 Storage Management Guide v1.1*
+
+---
+
+# 260812 갱신
+
+- 3-tier 배치 대개편: sweep 벌크·캐시 격리(~512G, 260814 소거), COLD→개인 win 백업, 공유 데이터 공용 트리 이동. 상세 = DATASETS.md §260812 + /node_data/dataset/animal_behavior/HANDOFF_260812.md
+- §1 표의 "HOME=/ NVMe" 는 stale — /home/joon 은 현재 NFS(10.2.11.1:/home/joon, 27T 풀)
+- quarantine 실경로(260812) = /node_data/joon/_quarantine_260812 · /node_data_2/joon/_quarantine_nd2_260812 · /home/joon/_quarantine_260812
