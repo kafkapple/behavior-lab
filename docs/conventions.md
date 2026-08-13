@@ -33,7 +33,7 @@
 | **rat23** (s-DANNCE) | 23 | 22 | `sdannce-poc/src/sdannce_utils/constants.py` — `KP_NAMES`·`SKELETON_EDGES` | sdannce-poc, s-DANNCE 세션 |
 | **SBeA16** | 16 | 15 | `behavior-lab/scripts/sbea_dlc_triangulate.py` — `BODYPARTS`·`render_sbea_report.py::EDGES` | SBeA |
 
-- KP22 업스트림 정의: `FaceLift/configs/keypoints/mouse_22.yaml` (가장 풍부) · 요약 `BehaviorSplatter/docs/keypoint_skeleton_conventions.md`
+- KP22 업스트림 정의: `FaceLift/configs/keypoints/mouse_22.yaml` (가장 풍부) · 요약 `BehaviorSplatter/docs/geometry/keypoint_skeleton_conventions.md`
 - **해부학 배선 규칙**(3종 공통): 전지는 흉추/목에, 후지는 천추/꼬리뿌리에 붙는다. 네 다리를 몸통 중앙 한 점에
   모으지 않는다. 260702 에 KP22 에서 정정했고 SBeA16 도 같은 기준으로 배선했다.
 - SBeA16 관절 순서는 저자 배포 CSV 헤더 순서를 그대로 따른다(바꾸면 DLC 출력과 어긋난다).
@@ -50,7 +50,7 @@
 
 | 대상 | 규약 | 정본 |
 |---|---|---|
-| **GS-LRM / BehaviorSplatter** | OpenCV (X-right, Y-down, Z-forward), World Z-up. `u = fx·X/Z + cx` | `BehaviorSplatter/docs/camera_conventions.md` |
+| **GS-LRM / BehaviorSplatter** | OpenCV (X-right, Y-down, Z-forward), World Z-up. `u = fx·X/Z + cx` | `BehaviorSplatter/docs/geometry/camera_conventions.md` |
 | **DANNCE / s-DANNCE** | MATLAB — K 를 **전치하지 않고** cx·cy 가 3행. `M = [R;t] @ K`, `pts_h @ M` | `sdannce-poc/src/sdannce_utils/projection.py` · 스펙 `sdannce-poc/docs/theory/projection_convention.md` |
 | **SBeA** | 3×4 P 행렬 직접 사용(분해 불필요). 왜곡 계수 **미배포** | `sdannce-poc/segmentation/kp_sam2_sources.py::_cal_sbea_p_matrix` |
 
