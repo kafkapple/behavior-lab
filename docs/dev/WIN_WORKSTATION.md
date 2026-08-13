@@ -12,6 +12,7 @@
   `scripts/shot7m2_probe.py`·`scripts/bmae_probe_cv3.py` 가 이 죽은 경로를 참조 중.
   가중치(`checkpoints/hBehaveMAE_Shot7M2.pth` 111M)는 확보돼 있으므로 데이터만 재취득하면 복구.
 - **코드 내 gpu03 절대경로 29곳** 미치환 (`/node_data/joon` 23 · `/node_data_2/joon` 6). §5 참조.
+- **torch 계열 미설치** — `tests/test_models/test_behavemae.py` 만 실행 불가. §4 참조.
 - **S1(저자 파이프라인 클론) 미착수** — 260729 핸드오프의 최우선 항목이 그대로 남음.
 
 ## 1. 하드웨어 대조
@@ -56,17 +57,25 @@
 - gpu03 개인폴더 잔여(`exp_ve_pose_2608`·`g1_kp_magnitude`·`logs`·`outputs_*`·`results`·`paper_repro`)
   → 전부 `/mnt/d/data/derived/gpu03_offserver_260812/` 하위에 존재.
 
-## 4. 셋업 절차
+## 4. 셋업 — 260814 완료 상태
+
+env `behavior-lab` (python 3.11) 생성·설치 완료. **`pytest` 86 passed · 1 skipped**
+(`tests/test_models/test_behavemae.py` 는 torch 미설치로 제외).
 
 ```bash
-# WSL 안에서
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate behavior-lab            # 260814 생성 (python 3.11)
-cd ~/dev/behavior-lab
-pip install -e ".[dev]"                # torch 포함, 대용량 다운로드
-pytest -q                              # 기준선 확보용
+# WSL 안에서. conda activate 가 비대화형 셸에서 미적용되는 일이 잦아 절대경로를 쓴다
+P=~/miniconda3/envs/behavior-lab/bin/python
+cd ~/dev/behavior-lab && $P -m pytest -q --ignore=tests/test_models/test_behavemae.py
+
+# torch 계열은 아직 미설치 (대용량 다운로드라 보류). 필요해지면:
+$P -m pip install -e ".[dev]"
 ```
 
+- 형제 레포도 같이 맞춰야 규약 드리프트 테스트가 통과한다. 260814 정렬분:
+  `sdannce-poc` 최신 pull · `FaceLift` 브랜치 **`refactor/mouse-extensions`** 체크아웃
+  (`main` 에는 `configs/keypoints/mouse_22.yaml` 이 없다) · `BehaviorSplatter` 브랜치 **`dev`**.
+- FaceLift 브랜치 전환 시 `git fetch origin "+refs/heads/*:refs/remotes/origin/*"` 선행.
+  win 클론이 single-branch 라 원격 브랜치가 안 보인다.
 - 파이프라인 전용 env 는 `env_snapshots/{dlc2,dlc3,sdannce,vame,kpms}.yml` 로 재생성.
   gpu03 리눅스 빌드 기준이라 win 에서 그대로 solve 되지 않을 수 있다 — 실패 시 핀을 완화할 것.
 - `dlc2` 는 gpu03 에서도 tensorflow-cpu 였다(Blackwell 커널 미지원). RTX 3060 이라고 나아지지 않는다.
