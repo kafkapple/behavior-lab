@@ -44,10 +44,14 @@
 
 ## 3. 데이터 · 스토리지
 
+> 🔴 **2026-08-14 이후 = win 개인 서버가 작업 거점.** gpu03 접속 종료(AMILab 오프보딩).
+> 현행 경로 정본 = **`WIN_WORKSTATION.md`**. 아래 두 문서의 `/node_data` 표기는 그 시점부터 사료다.
+
 | 주제 | 정본 |
 |---|---|
-| 데이터셋 온디스크 실사 (32개, 도메인별 경로·용량·포맷·shape) | `DATASETS.md` |
-| 스토리지 3-tier 정책 (NFS vs NVMe vs HDD, 쓰기 경로 규칙) | `STORAGE_GUIDE.md` |
+| win 개인 서버 경로·셋업·부재 자산 (**현행**) | `WIN_WORKSTATION.md` |
+| 데이터셋 온디스크 실사 (32개, 도메인별 경로·용량·포맷·shape) | `DATASETS.md` (gpu03 기준, 사료) |
+| 스토리지 3-tier 정책 (NFS vs NVMe vs HDD, 쓰기 경로 규칙) | `STORAGE_GUIDE.md` (gpu03 기준, 사료) |
 | 결과 폴더 SSOT (`~/results/{project}/`) | `CLAUDE.md` §5 |
 | 코딩 원칙 | `CODING_PRINCIPLES.md` |
 
