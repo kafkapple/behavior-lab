@@ -15,10 +15,10 @@ an `individual/` recording.
 Env: conda `dlc2` (DLC 2.3.11 + TF 2.12.1). `dlc3` has no TF backend.
 
 Usage:
-    /home/joon/anaconda3/envs/dlc2/bin/python scripts/sbea_dlc_triangulate.py \\
-        --root /node_data_2/joon/data/external/SBeA/individual \\
+    "${PY:-$HOME/miniconda3/envs/dlc2/bin/python}" scripts/sbea_dlc_triangulate.py \\
+        --root /mnt/d/data/raw/SBeA/individual \\
         --session rec10-M2-20221108 --end 600 --step 3 \\
-        --out /node_data/joon/data/sbea_kp3d
+        --out /mnt/d/data/derived/mac_backups_260813/gpu03_nonM5_260813/sbea_kp3d
 """
 from __future__ import annotations
 
@@ -152,7 +152,7 @@ def main() -> None:
     ap.add_argument("--root", type=Path, required=True)
     ap.add_argument("--session", required=True)
     ap.add_argument("--snapshot", type=Path, default=Path(
-        "/node_data_2/joon/data/external/SBeA/sbea_release_assets/"
+        "/mnt/d/data/raw/SBeA/sbea_release_assets/"
         "fig2_data/well-trained models/dlc/snapshot-1030000"))
     ap.add_argument("--start", type=int, default=0)
     ap.add_argument("--end", type=int, default=600)

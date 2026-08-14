@@ -8,17 +8,24 @@ Steps:
 5. Re-save results.csv + per_kp_error.csv.
 """
 from __future__ import annotations
+import os
 import sys
-sys.path.insert(0, "/home/joon/dev/behavior-lab/src")
-sys.path.insert(0, "/home/joon/dev/behavior-lab/scripts")
 from pathlib import Path
+
+# 260814: gpu03 홈 절대경로(/home/joon/dev/behavior-lab/...)를 박아뒀던 것을 파일 위치에서
+# 유도하도록 바꿨다. 서버가 사라져 구 경로는 죽었고, 유도 가능한 값은 애초에 하드코딩할 이유가 없다.
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
 import numpy as np
 import pandas as pd
 from render_kp_overlay import load_cameras
 
-DATA = Path("/home/joon/dev/behavior-lab/data")
-PRED = Path("/node_data/joon/behavior-lab-kp-benchmark/predictions")
-OUT = Path("/home/joon/dev/behavior-lab/outputs/kp_benchmark")
+DATA = Path(os.environ.get("BEHAVIOR_LAB_DATA", REPO / "data"))
+PRED = Path(os.environ.get(
+    "BL_KP_BENCH",
+    "/mnt/d/data/derived/gpu03_offserver_260812/behavior-lab-kp-benchmark")) / "predictions"
+OUT = REPO / "outputs/kp_benchmark"
 OUT.mkdir(parents=True, exist_ok=True)
 PROB_MIN = 0.10
 N_FRAMES = 18000

@@ -68,7 +68,7 @@ def collect(kp2d: np.ndarray, Ps, prob_min: float):
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--npz", type=Path, default=Path(
-        "/node_data/joon/data/sbea_kp3d/rec10-M2-20221108-kp3d.npz"))
+        "/mnt/d/data/derived/mac_backups_260813/gpu03_nonM5_260813/sbea_kp3d/rec10-M2-20221108-kp3d.npz"))
     ap.add_argument("--width", type=int, default=1288)
     ap.add_argument("--height", type=int, default=964)
     a = ap.parse_args()

@@ -15,10 +15,10 @@
 # Usage: scripts/run_sbea_all_sessions.sh [root] [outdir] [n_parallel]
 set -u
 
-ROOT="${1:-/node_data_2/joon/data/external/SBeA/individual}"
-OUT="${2:-/node_data/joon/data/sbea_kp3d_full}"
+ROOT="${1:-/mnt/d/data/raw/SBeA/individual}"
+OUT="${2:-/mnt/d/data/derived/mac_backups_260813/gpu03_nonM5_260813/sbea_kp3d_full}"
 JOBS="${3:-6}"
-PY=/home/joon/anaconda3/envs/dlc2/bin/python
+PY="${PY:-$HOME/miniconda3/envs/dlc2/bin/python}"   # 260814: gpu03 절대경로 → env 경유
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOGDIR="$OUT/logs"          # /node_data, never NFS — high-frequency writes
 

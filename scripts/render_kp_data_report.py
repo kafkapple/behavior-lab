@@ -287,7 +287,7 @@ commit cd37772  docs(kp_benchmark): correct Li GT count + add MAMMAL alignment n
 <h2>7. What's next</h2>
 <p><b>C ✅ + B ✅ done.</b> A (DLC training) ready to launch on gpu03 GPU 4 + GPU 5 (both 97 GB free, idle).</p>
 <ol>
-<li><b>A1 — ResNet50 training</b>: <code>CUDA_VISIBLE_DEVICES=4 bash scripts/01_train_dlc_resnet50.sh</code> on gpu03. ~30–60 min, 20 k iter on 2880 × 6 = 17 k labeled images. Output to <code>/node_data/joon/behavior-lab-kp-benchmark/kp_benchmark_dlc_resnet50_imagenet</code>.</li>
+<li><b>A1 — ResNet50 training</b>: <code>CUDA_VISIBLE_DEVICES=4 bash scripts/01_train_dlc_resnet50.sh</code> on gpu03. ~30–60 min, 20 k iter on 2880 × 6 = 17 k labeled images. Output to <code>/mnt/d/data/derived/gpu03_offserver_260812/behavior-lab-kp-benchmark/kp_benchmark_dlc_resnet50_imagenet</code>.</li>
 <li><b>A2 — SuperAnimal training</b> (can run in parallel on GPU 5): <code>CUDA_VISIBLE_DEVICES=5 bash scripts/02_train_dlc_superanimal.sh</code>. SuperAnimal-TopViewMouse weight init via <code>create_training_dataset(weight_init="modelzoo:superanimal_topviewmouse")</code>.</li>
 <li><b>Inference</b>: <code>deeplabcut.analyze_videos()</code> on 6 videos → per-view 2D predictions → triangulate to 3D → npz with key <code>keypoints_3d</code>.</li>
 <li><b>Evaluate</b>: <code>python scripts/benchmark_kp_dlc.py</code> → results.csv + bootstrap 95% CI on (in-dist MAMMAL test, OOD Li GT) for both predictors.</li>

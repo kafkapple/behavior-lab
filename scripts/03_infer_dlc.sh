@@ -16,16 +16,16 @@ set -euo pipefail
 
 CONDA_ENV="${CONDA_ENV:-dlc3}"
 GPU="${CUDA_VISIBLE_DEVICES:-4}"
-PROJECT_ROOT="${PROJECT_ROOT:-/node_data/joon/behavior-lab-kp-benchmark}"
-DATA_ROOT="${DATA_ROOT:-/home/joon/dev/behavior-lab/data}"
-REPO_ROOT="${REPO_ROOT:-/home/joon/dev/behavior-lab}"
-VIDEO_DIR="${VIDEO_DIR:-/node_data/joon/data/raw/markerless_mouse_1_nerf/videos_undist}"
+PROJECT_ROOT="${PROJECT_ROOT:-/mnt/d/data/derived/gpu03_offserver_260812/behavior-lab-kp-benchmark}"
+DATA_ROOT="${DATA_ROOT:-$REPO_ROOT/data}"
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+VIDEO_DIR="${VIDEO_DIR:-/mnt/d/data/raw/markerless_mouse_1_nerf/videos_undist}"
 TAG="${TAG:-dlc_resnet50_imagenet}"
-OUT_DIR="${OUT_DIR:-/node_data/joon/behavior-lab-kp-benchmark/predictions}"
+OUT_DIR="${OUT_DIR:-/mnt/d/data/derived/gpu03_offserver_260812/behavior-lab-kp-benchmark/predictions}"
 
 echo "=== [03_infer_dlc TAG=$TAG] start $(date -Iseconds) ==="
 
-source /home/joon/anaconda3/etc/profile.d/conda.sh
+source "${CONDA_SH:-$HOME/miniconda3/etc/profile.d/conda.sh}"
 conda activate "$CONDA_ENV"
 export CUDA_VISIBLE_DEVICES="$GPU"
 mkdir -p "$OUT_DIR"

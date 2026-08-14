@@ -1,4 +1,10 @@
 import sys; sys.path.insert(0,"src")
+# 🔴 260814: shot7m2 데이터(3.4G)와 outputs_bmae 체크포인트는 gpu03 정리로 **양쪽 다 소실**됐다.
+# 가중치 checkpoints/hBehaveMAE_Shot7M2.pth 는 있으나 입력 데이터가 없어 현재 실행 불가.
+# 재취득 후 아래 env 로 경로를 주입할 것 (기본값은 죽은 gpu03 경로가 아니라 빈 값 → 즉시 실패).
+import os as _os
+BMAE_OUT = _os.environ.get("BL_BMAE_OUT", "")
+SHOT7M2 = _os.environ.get("BL_SHOT7M2", "")
 import numpy as np, glob, warnings; warnings.filterwarnings("ignore")
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
@@ -9,8 +15,8 @@ from behavior_lab.models import get_model
 SPLIT=[0,1,6,11,2,3,4,5,7,8,9,10,14,19,20,21,15,16,17,18,22,23,24,25]
 def load(ds):
     if ds=="shot7m2":
-        P=np.load("/node_data/joon/data/shot7m2/test/test_dictionary_poses.npy",allow_pickle=True).item()["sequences"]
-        eps=P[list(P.keys())[0]]; L=np.load("/node_data/joon/data/shot7m2/test/benchmark_labels.npy",allow_pickle=True).item()
+        P=np.load(f"{SHOT7M2}/test/test_dictionary_poses.npy",allow_pickle=True).item()["sequences"]
+        eps=P[list(P.keys())[0]]; L=np.load(f"{SHOT7M2}/test/benchmark_labels.npy",allow_pickle=True).item()
         la=np.asarray(L["label_array"]); fnm=L["frame_number_map"]; kps=[];gts=[];tot=0
         for e in list(eps.keys()):
             if e not in fnm: continue
@@ -22,7 +28,7 @@ def load(ds):
         kp=(kp-kp.mean((0,1),keepdims=True))/(kp.std((0,1),keepdims=True)+1e-6)
         return kp,gt,"checkpoints/hBehaveMAE_Shot7M2.pth","shot7m2",400
     kp=np.nan_to_num(np.load(f"outputs/{ds}/kp.npz")["keypoints"][:8000]).astype(np.float32)
-    gt=np.load(f"outputs/{ds}/labels.npy")[:8000]; ck=sorted(glob.glob(f"/node_data/joon/outputs_bmae/{ds}/checkpoint-*.pth"))[-1]
+    gt=np.load(f"outputs/{ds}/labels.npy")[:8000]; ck=sorted(glob.glob(f"{BMAE_OUT}/{ds}/checkpoint-*.pth"))[-1]
     if ds=="ntu": kp=(kp-kp.mean((0,1),keepdims=True))/(kp.std((0,1),keepdims=True)+1e-6)
     else: kp=(kp-512.)/512.
     return kp,gt,ck,ds,90

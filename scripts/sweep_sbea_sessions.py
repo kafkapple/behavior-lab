@@ -13,7 +13,7 @@ Two traps this encodes, both hit during 260727-28:
   * Spearman alone says whether a radial trend exists but not whether it matters.
     The binned quintile medians are printed next to it for the effect size.
 
-Usage: python scripts/sweep_sbea_sessions.py /node_data/joon/data/sbea_kp3d_full
+Usage: python scripts/sweep_sbea_sessions.py /mnt/d/data/derived/mac_backups_260813/gpu03_nonM5_260813/sbea_kp3d_full
 """
 import sys
 from pathlib import Path

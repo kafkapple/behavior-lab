@@ -6,9 +6,9 @@ Inputs are the artefacts the pipeline already writes, so this adds no state:
 
 Usage:
     python scripts/render_sbea_report.py \\
-        --npz /node_data/joon/data/sbea_kp3d/rec10-M2-20221108-kp3d.npz \\
-        --video-root /node_data_2/joon/data/external/SBeA/individual \\
-        --masks /node_data/joon/data/sbea_masks/rec10-M2 \\
+        --npz /mnt/d/data/derived/mac_backups_260813/gpu03_nonM5_260813/sbea_kp3d/rec10-M2-20221108-kp3d.npz \\
+        --video-root /mnt/d/data/raw/SBeA/individual \\
+        --masks /mnt/d/data/derived/mac_backups_260813/gpu03_nonM5_260813/sbea_masks/rec10-M2 \\
         --out outputs/sbea_report.html
 """
 from __future__ import annotations

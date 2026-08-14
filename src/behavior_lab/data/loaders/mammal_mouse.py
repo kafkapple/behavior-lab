@@ -51,8 +51,9 @@ class MammalMouseLoader:
         if not self.npz_path.exists():
             raise FileNotFoundError(
                 f"MAMMAL npz not found: {self.npz_path}\n"
-                f"Hint: scp gpu03:/home/joon/data/results/MAMMAL_mouse/"
-                f"v012345_kp22_20260126/keypoints_22_3d.npz <local_path>"
+                f"Hint (260814, gpu03 종료 후): 사본은 "
+                f"~/data/results/MAMMAL_mouse/v012345_kp22_20260126/keypoints_22_3d.npz "
+                f"및 repo data/mammal_mouse/ 에 있다. 구 `scp gpu03:` 안내는 폐기."
             )
 
         data = np.load(self.npz_path)
