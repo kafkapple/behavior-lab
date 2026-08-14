@@ -14,7 +14,13 @@
 - **S1(저자 파이프라인 클론) 미착수** — 260729 핸드오프의 최우선 항목이 그대로 남음.
   **S3(social) 은 260814 데이터 확보로 블로킹 해소**, 단 S1 이 여전히 선행 조건이다.
 
-> 🟢 260814 해소: SBeA `social` 30세션(17G, 150파일) 재취득 — 매니페스트 대조 150/150 SKIP 확인.
+> 🟢 260814 해소 3건 — 모두 매니페스트/해시 대조로 판정했다.
+> - SBeA `social` 30세션 17G/150파일 재취득 (150/150 SKIP)
+> - ICML 재현 런 4.23 GiB/19파일 (gpu03↔win 크기 매니페스트 일치)
+> - gpu03 홈 6디렉토리 521 MiB/16,281파일 (gpu03↔mac 일치 + mac↔win SHA-256 `ef2aab47…` 일치)
+>
+> ⇒ **gpu03 에서 회수할 것은 더 남아 있지 않다.** 서버 흔적 소거(삭제)는 별건이며
+> 오프보딩 트래커의 v8 SHA-256 게이트 소관이다 — 이 문서 범위 밖.
 
 ## 1. 하드웨어 대조
 
@@ -47,6 +53,8 @@
 | conda env 스냅샷 | 레포 `env_snapshots/*.yml` | dlc2·dlc3·sdannce·vame·kpms |
 | SBeA 취득 매니페스트·러너 | 레포 `scripts/sbea_acquisition/` | figshare 직링크 100행/150행 |
 | gpu03 홈 잡스크립트 아카이브 | `…/gpu03_offserver_260813/icml_repro_meta_260814/gpu03_home_scripts_260814.tgz` | 14파일. inspect_*·viz_*·install_* |
+| ICML 재현 런 전량 | `…/gpu03_offserver_260813/icml_reproduction_runs_full_260814/` | 4.23 GiB · 19파일. 2런(20260429·20260516) |
+| gpu03 홈 6디렉토리 | `…/gpu03_offserver_260813/gpu03_home6_260814/gpu03_home6_260814.tgz` | 521 MiB · 16,281파일. archives·outputs·wandb·backups·models·downloads |
 
 > 검증 방법 = 크기 매니페스트 대조(`find -type f -printf "%s %p\n"` 양쪽 정렬 후 diff).
 > `behavior_lab_essentials_260813` 은 gpu03↔win 77파일 전건 일치를 260814 확인했다.
@@ -130,12 +138,30 @@ conda env create -f env_snapshots/sdannce.yml  # SAM2 마스크
 ```
 gpu03 리눅스 빌드 기준이라 solve 실패 가능. 그때는 핀을 완화하되 **yml 원본은 수정하지 말 것**(당시 상태 기록물).
 
-**gpu03 홈 잡스크립트 아카이브**
+**gpu03 홈 회수분 (tgz 2종)**
 ```bash
-tar tzf /mnt/d/data/derived/mac_backups_260813/gpu03_offserver_260813/\
-icml_repro_meta_260814/gpu03_home_scripts_260814.tgz
+B=/mnt/d/data/derived/mac_backups_260813/gpu03_offserver_260813
+tar tzf $B/icml_repro_meta_260814/gpu03_home_scripts_260814.tgz   # 잡스크립트 14파일
+tar tzf $B/gpu03_home6_260814/gpu03_home6_260814.tgz              # 홈 6디렉토리 16,281파일
 ```
-`inspect_*`·`viz_*`·`install_*` 14파일. 레포에 안 넣은 탐색용 스크립트라 필요할 때만 꺼내 쓴다.
+- 잡스크립트 = `inspect_*`·`viz_*`·`install_*`. 레포에 안 넣은 탐색용이라 필요할 때만 꺼낸다.
+- 홈 6디렉토리 안에서 **가장 값나가는 것 = `backups/bs_presync_260729/{tools_never_committed,uncommitted}.tgz`**.
+  이름 그대로 어디에도 커밋된 적 없는 산물이다. 중첩 tgz 이므로 꺼낸 뒤 한 번 더 푼다.
+- `icml_repro_meta_260814/` 의 json 5건은 `icml_reproduction_runs_full_260814/` 의 부분집합이다(전량 회수로 대체됨).
+
+**ICML 재현 런** (2런: `20260429_1757` · `20260516_1755`)
+```bash
+ls $B/icml_reproduction_runs_full_260814/icml_reproduction_runs/
+```
+런당 실체 = `results.json` · `dim_sweep.json` · `logs/*.log` · `per_frame/{ps,gs}_per_frame.npz`
+(각 1129.8 / 1037.7 MiB). 20260429 에는 `verification_report.md`, 20260516 에는 `regen_canonical_d50.json` 추가.
+수치만 필요하면 json 으로 충분하고, npz 는 per-frame 재현용이다.
+
+> ⚠️ **각 런의 `ps_npz`·`gs_ply_a0.3`·`gs_maskcarve_16k` 는 파일이 아니라 심링크였다** —
+> gpu03 `/node_data/dataset/animal_behavior/shared/…` 로 나간다. 사본에서는 **끊겨 있다**.
+> 대상 실체(2.6G + 12G + 13G = 27.6 GiB)는 랩 공용 볼륨에 남아 후임자에게 인계되며,
+> 우리 쪽 재생성 경로도 있다(`FaceLift/inference_mouse.py` ckpt→PLY · `cinematic_sequence.py::build_count_match_mask`).
+> 즉 **입력 가우시안은 이 사본에 없고, 있는 것은 그 입력으로 계산된 per-frame 결과다.**
 
 ## 6. 코드 내 gpu03 경로
 
