@@ -14,10 +14,16 @@
 - **S1(저자 파이프라인 클론) 미착수** — 260729 핸드오프의 최우선 항목이 그대로 남음.
   **S3(social) 은 260814 데이터 확보로 블로킹 해소**, 단 S1 이 여전히 선행 조건이다.
 
-> 🟢 260814 해소 3건 — 모두 매니페스트/해시 대조로 판정했다.
-> - SBeA `social` 30세션 17G/150파일 재취득 (150/150 SKIP)
-> - ICML 재현 런 4.23 GiB/19파일 (gpu03↔win 크기 매니페스트 일치)
-> - gpu03 홈 6디렉토리 521 MiB/16,281파일 (gpu03↔mac 일치 + mac↔win SHA-256 `ef2aab47…` 일치)
+> 🟢 260814 회수 — 전부 매니페스트/해시 대조로 판정했다(서술 아님).
+>
+> | 회수분 | 규모 | 판정 |
+> |---|---|---|
+> | SBeA `social` 30세션 | 17G · 150파일 | 150/150 SKIP |
+> | ICML 재현 런 | 4.23 GiB · 19파일 | gpu03↔win 일치 |
+> | gpu03 홈 6디렉토리 | 521 MiB · 16,281파일 | gpu03↔mac 일치 + SHA-256 `ef2aab47…` |
+> | FaceLift gaussians 3종 | 30.55 GiB · 7,920파일 | gpu03↔win 일치 |
+> | 인계볼륨 잔여 6항목 | 3.6 GiB · 77,715파일 | gpu03↔mac 일치 |
+> | git stash 20 + bundle | 4.4 MiB | SHA-256 `7b6b3f2f…` |
 >
 > ⇒ **gpu03 에서 회수할 것은 더 남아 있지 않다.** 서버 흔적 소거(삭제)는 별건이며
 > 오프보딩 트래커의 v8 SHA-256 게이트 소관이다 — 이 문서 범위 밖.
@@ -34,7 +40,15 @@
 
 - ssh 진입 시 **기본 쉘이 PowerShell** — bash 명령은 `wsl -e bash -lc '...'` 로 감쌀 것.
 - 중첩 따옴표가 자주 깨진다. 긴 명령은 base64 로 감싸 전달하면 안정적.
-- `rsync` 는 win 쪽에 없다. mac→win 전송은 `scp <파일> kafkapple-win:D:/경로/`.
+  ⚠️ **단 stdin 을 쓰는 원격 명령에는 base64 우회를 쓰지 말 것** — `echo B64 | base64 -d | bash`
+  는 bash 의 stdin 이 그 파이프가 되어 `tar xf -` 로 스트림이 도달하지 않는다(260814 실패).
+- `rsync` 는 win 쪽에 없다. mac→win 전송 = `scp <파일> kafkapple-win:D:/경로/`,
+  디렉토리는 `tar cf - -C SRC dir | ssh kafkapple-win "wsl -e bash -lc 'cd DST && tar xf -'"`.
+- 🔴 **소파일 수천 개는 rsync 대신 tar 스트림.** 260814 실측: rsync 파일별 왕복이 병목이라
+  3,600파일에 8시간 추정 → tar 스트림으로 12분. 대용량 단일 파일은 rsync(재개 가능)가 낫다.
+- 🔴 **클론 직후 브랜치 upstream 을 확인할 것.** win FaceLift 는 upstream 미설정이라
+  `git pull --ff-only` 가 "Already up to date" 를 찍고 **아무것도 안 했다**(4커밋 뒤처짐, 260814 발견).
+  single-branch 클론이면 `git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"` 도 필요.
 
 ## 2. 자산 위치 매핑 (WSL 경로 기준)
 
@@ -55,6 +69,10 @@
 | gpu03 홈 잡스크립트 아카이브 | `…/gpu03_offserver_260813/icml_repro_meta_260814/gpu03_home_scripts_260814.tgz` | 14파일. inspect_*·viz_*·install_* |
 | ICML 재현 런 전량 | `…/gpu03_offserver_260813/icml_reproduction_runs_full_260814/` | 4.23 GiB · 19파일. 2런(20260429·20260516) |
 | gpu03 홈 6디렉토리 | `…/gpu03_offserver_260813/gpu03_home6_260814/gpu03_home6_260814.tgz` | 521 MiB · 16,281파일. archives·outputs·wandb·backups·models·downloads |
+| **FaceLift gaussians 3종** | `…/gpu03_offserver_260813/FaceLift_gaussians_260814/` | **30.55 GiB · 7,920파일**. gpu03↔win 전건 일치 |
+| **git 로컬 전용분** | 〃 `gpu03_home6_260814/git_local_only_260814.tgz` | 4.4 MiB. **BS stash 15 · FaceLift stash 5 · PS-official unpushed bundle** |
+| BS 논문 figures·metrics | 〃 `gpu03_home6_260814/bs_paper_artifacts_260814.tgz` | 446 KiB |
+| 인계볼륨 잔여 6항목 | `…/gpu03_offserver_260813/handover_vol_260814/` | 3.6 GiB · 77,715파일. `pose_splatter_official_260807`(2.4G)·`raw`·`synthetic`·`ps_m5_baseline_260724_full`·`results`·`env_snapshots` |
 
 > 검증 방법 = 크기 매니페스트 대조(`find -type f -printf "%s %p\n"` 양쪽 정렬 후 diff).
 > `behavior_lab_essentials_260813` 은 gpu03↔win 77파일 전건 일치를 260814 확인했다.
@@ -130,6 +148,30 @@ ln -sf /mnt/d/data/behavior-lab/checkpoints/hBehaveMAE_MABe22.pth  checkpoints/
 ln -sf /mnt/d/data/behavior-lab/checkpoints/hBehaveMAE_Shot7M2.pth checkpoints/
 ```
 ⚠️ Shot7M2 는 **가중치만** 있다. 대응 데이터 3.4G 는 부재라 `scripts/shot7m2_probe.py` 는 아직 못 돈다(§0).
+
+**FaceLift gaussians (cinematic 렌더·BS ve_pipeline 입력)**
+```bash
+export FL_GAUSSIAN_ROOT=/mnt/d/data/derived/mac_backups_260813/gpu03_offserver_260813/FaceLift_gaussians_260814
+# 이 값이 없으면 config 의 ${FL_GAUSSIAN_ROOT} 가 리터럴로 남아 FileNotFoundError 로 조기 실패한다
+```
+| 하위 | frames | 소비처 |
+|---|---:|---|
+| `M5t2_6view_alpha03_v3_maskcarve16k` | 3,600 | BS `canonical.yaml`(논문 정본) · cinematic FINAL paper preset |
+| `filtered/a0.3_t0.2` | 3,600 | BS host config ×5 · `extract_per_frame_npz.py` |
+| `ply_a0.3` | 720 (test·val) | BS `canonical_compare.py` |
+
+260814 서버 정리로 `base_uniform_v2_6view_v2`·`match_16k`·`alpha10_maskcarve16k`·`filtered/a0.067`
+4종(86.37 GiB)은 삭제했다. 소비처 0 판정이며 stage 1~3 재생성 가능 —
+근거·재생성 절차 = FaceLift `docs/theory/GAUSSIAN_FILTERING_THEORY.md §4.1`.
+
+**git 로컬 전용분 (stash·bundle) — push 로는 절대 안 나가는 것**
+```bash
+tar tzf $B/gpu03_home6_260814/git_local_only_260814.tgz
+# BehaviorSplatter/stash_{0..14}.patch  FaceLift/stash_{0..4}.patch
+# pose-splatter-official/unpushed.bundle
+# 복원 = git apply <stash_N.patch>  /  git fetch <bundle> <branch>
+```
+🔴 stash 는 `git push` 대상이 아니다. 서버를 놓기 전 반드시 별도 회수해야 하는 유일한 git 자산.
 
 **파이프라인 전용 conda env**
 ```bash
