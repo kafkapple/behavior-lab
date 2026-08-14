@@ -7,16 +7,14 @@
 
 ## 0. 열린 이슈
 
-- **SBeA `social` 30세션 부재** — gpu03 삭제, win 미보유. S3(social 처리) 착수 불가.
-  재취득 수단은 확보됨: `scripts/sbea_acquisition/download_sbea.sh social <target> 4` (~16.8 GB).
 - **SHOT7M2 데이터 3.4G 부재** — gpu03 `/node_data/joon/data/shot7m2/` 삭제됨, win 미보유.
   `scripts/shot7m2_probe.py`·`scripts/bmae_probe_cv3.py` 가 이 죽은 경로를 참조 중.
   가중치(`checkpoints/hBehaveMAE_Shot7M2.pth` 111M)는 확보돼 있으므로 데이터만 재취득하면 복구.
-- **코드 내 gpu03 절대경로 29곳** 미치환 (`/node_data/joon` 23 · `/node_data_2/joon` 6). §5 참조.
-- **ICML 재현 런 원본 4.3G 미확보** — gpu03 `~/scratch/icml_reproduction_runs`. 260814 에 수치
-  파일(`results.json`·`dim_sweep.json`·`regen_canonical_d50.json` 5건)과 전체 파일 매니페스트만
-  회수했다(`…/gpu03_offserver_260813/icml_repro_meta_260814/`). ply·npz 벌크는 재생성 전제로 포기.
+- **코드 내 gpu03 절대경로 29곳** 미치환 (`/node_data/joon` 23 · `/node_data_2/joon` 6). §6 참조.
 - **S1(저자 파이프라인 클론) 미착수** — 260729 핸드오프의 최우선 항목이 그대로 남음.
+  **S3(social) 은 260814 데이터 확보로 블로킹 해소**, 단 S1 이 여전히 선행 조건이다.
+
+> 🟢 260814 해소: SBeA `social` 30세션(17G, 150파일) 재취득 — 매니페스트 대조 150/150 SKIP 확인.
 
 ## 1. 하드웨어 대조
 
@@ -39,6 +37,7 @@
 | 레포 | `~/dev/behavior-lab` | 260814 clone, `b8ea32a` |
 | 레포-로컬 데이터 캐시 | `/mnt/d/data/behavior-lab/` | 3,070 파일 (calms21·nwucla·mammal_mouse·markerless_mouse_1·splits) |
 | SBeA 원본 individual | `/mnt/d/data/raw/SBeA/individual` | 12G · 100파일 = 20세션 × (calib 1 + camera 4) |
+| SBeA 원본 social | `/mnt/d/data/raw/SBeA/social` | 17G · 150파일 = 30세션. **260814 figshare 재취득** |
 | SBeA release assets | `/mnt/d/data/raw/SBeA/sbea_release_assets` | 108M |
 | SBeA 3D 키포인트 20세션 | `/mnt/d/data/derived/mac_backups_260813/gpu03_nonM5_260813/sbea_kp3d_full` | 183M · 41파일. **재생성에 GPU 13.2h** |
 | SBeA 마스크 | 〃 `/sbea_masks` | 272파일 |
@@ -91,7 +90,54 @@ $P -m pytest -q                                   # 93 passed
   gpu03 리눅스 빌드 기준이라 win 에서 그대로 solve 되지 않을 수 있다 — 실패 시 핀을 완화할 것.
 - `dlc2` 는 gpu03 에서도 tensorflow-cpu 였다(Blackwell 커널 미지원). RTX 3060 이라고 나아지지 않는다.
 
-## 5. 코드 내 gpu03 경로
+## 5. 자산별 사용법
+
+§2 는 "어디 있나", 여기는 "어떻게 쓰나". 전부 WSL 기준, `P=~/miniconda3/envs/behavior-lab/bin/python`.
+
+**SBeA 원본 (individual 20 / social 30세션)**
+```bash
+# 재취득·무결성 확인 겸용 — 크기가 매니페스트와 맞으면 SKIP 만 찍힌다 (다운로드 0)
+./scripts/sbea_acquisition/download_sbea.sh individual /mnt/d/data/raw/SBeA/individual 4
+./scripts/sbea_acquisition/download_sbea.sh social     /mnt/d/data/raw/SBeA/social     4
+```
+DL/FAIL 이 한 줄이라도 나오면 그 파일이 손상·부분본이다. **이게 SBeA 원본의 유일한 검증 절차다.**
+
+**SBeA 3D 키포인트 (재생성 GPU 13.2h — 지우지 말 것)**
+```bash
+KP3D=/mnt/d/data/derived/mac_backups_260813/gpu03_nonM5_260813/sbea_kp3d_full
+$P scripts/sweep_sbea_sessions.py "$KP3D"                              # 20세션 잔차 재확인
+$P scripts/diag_sbea_residual.py --npz "$KP3D/rec10-M2-20221108-kp3d.npz"   # 단일세션 진단
+```
+
+**카메라 intrinsics 추정 (독립 3방법 대조)**
+```bash
+SBEA_DIR=/mnt/d/data/raw/SBeA/individual SBEA_SESSION=rec1-M7-20221108 \
+  $P scripts/estimate_sbea_intrinsics.py
+```
+
+**BehaveMAE 가중치**
+```bash
+# 코드가 REPO/checkpoints/ 를 본다. 실물은 D: 에 두고 링크로 잇는다
+ln -sf /mnt/d/data/behavior-lab/checkpoints/hBehaveMAE_MABe22.pth  checkpoints/
+ln -sf /mnt/d/data/behavior-lab/checkpoints/hBehaveMAE_Shot7M2.pth checkpoints/
+```
+⚠️ Shot7M2 는 **가중치만** 있다. 대응 데이터 3.4G 는 부재라 `scripts/shot7m2_probe.py` 는 아직 못 돈다(§0).
+
+**파이프라인 전용 conda env**
+```bash
+conda env create -f env_snapshots/dlc2.yml     # SBeA DLC (tensorflow-cpu)
+conda env create -f env_snapshots/sdannce.yml  # SAM2 마스크
+```
+gpu03 리눅스 빌드 기준이라 solve 실패 가능. 그때는 핀을 완화하되 **yml 원본은 수정하지 말 것**(당시 상태 기록물).
+
+**gpu03 홈 잡스크립트 아카이브**
+```bash
+tar tzf /mnt/d/data/derived/mac_backups_260813/gpu03_offserver_260813/\
+icml_repro_meta_260814/gpu03_home_scripts_260814.tgz
+```
+`inspect_*`·`viz_*`·`install_*` 14파일. 레포에 안 넣은 탐색용 스크립트라 필요할 때만 꺼내 쓴다.
+
+## 6. 코드 내 gpu03 경로
 
 - 29곳이 `/node_data/joon`(23) · `/node_data_2/joon`(6) 을 하드코딩한다.
   주요 파일 = `scripts/{sbea_dlc_triangulate,diag_sbea_residual,sweep_sbea_sessions,triangulate_full}.py`,
@@ -101,7 +147,7 @@ $P -m pytest -q                                   # 93 passed
 - 별개 사안: 레포 스크립트 50줄/18파일이 `REPO_ROOT/"data"` 를 하드코딩한다.
   `${paths.data_dir}`(env `BEHAVIOR_LAB_DATA`) 경유는 11줄뿐이라 env 만 바꿔선 이전되지 않는다 (`README.md` §3).
 
-## 6. 되돌아보기
+## 7. 되돌아보기
 
 gpu03 자산은 **8/12~8/13 두 차례 rsync 로 이미 win 에 내려와 있었다.** 이 세션이 한 일은
 새 이관이 아니라 역대조(서버 목록 → 로컬 원장 차집합)와 누락 3건(conda yml 5종, Shot7M2 가중치,
