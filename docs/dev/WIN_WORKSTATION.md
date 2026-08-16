@@ -7,9 +7,14 @@
 
 ## 0. 열린 이슈
 
-- **SHOT7M2 데이터 3.4G 부재** — gpu03 `/node_data/joon/data/shot7m2/` 삭제됨, win 미보유.
-  `scripts/shot7m2_probe.py`·`scripts/bmae_probe_cv3.py` 가 이 죽은 경로를 참조 중.
-  가중치(`checkpoints/hBehaveMAE_Shot7M2.pth` 111M)는 확보돼 있으므로 데이터만 재취득하면 복구.
+- 🟡 **SHOT7M2 데이터 3.4G 부재 — 출처 확보, 재취득은 보류(YAGNI 판정 260816).**
+  배포처 = HuggingFace `amathislab/SHOT7M2` (공개). 필요해지면 1커맨드로 복구된다:
+  `git clone https://huggingface.co/datasets/amathislab/SHOT7M2 <dest>` 후
+  `BL_SHOT7M2=<dest>` 주입. 가중치(`hBehaveMAE_Shot7M2.pth` 111M)는 이미 확보.
+  **지금 받지 않는 이유**: 소비처가 `scripts/shot7m2_probe.py` 하나뿐이고 그것도 파이프라인·
+  테스트 어디에서도 참조되지 않는 일회성 linear probe 다. 나머지 `bmae_probe_cv3.py` 는
+  데이터를 받아도 못 돈다 — `BL_BMAE_OUT`(학습 산출 체크포인트)이 소실됐고 그건 **재다운로드
+  불가·재학습만 가능**하다. 3.4G 를 받아도 복구되는 건 절반뿐이다.
 - **코드 내 gpu03 절대경로 29곳** 미치환 (`/node_data/joon` 23 · `/node_data_2/joon` 6). §6 참조.
 - ✅ **S1 완료 (260816) — 판정: 저자 기준선 부재.** 논문은 3D 재투영 잔차 절대값을 보고하지
   않는다. 저자 코드는 클론했으나 자체 로직 54개가 `.pyd`(Windows DLL) 컴파일 바이너리다.

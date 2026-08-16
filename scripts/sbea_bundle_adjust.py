@@ -122,7 +122,14 @@ def score(xy, mask, Ps, names, shape) -> dict:
     kp3d = X.reshape(*shape, 3)
     cv = lambda b: lr.robust_cv(lr.bone_lengths(kp3d, b, names))
     return {"reproj_px": float(np.nanmedian(res)),
-            "bone_rcv": cv(lr.BONES), "ctrl_rcv": cv(lr.CTRL_BONES)}
+            "bone_rcv": cv(lr.BONES), "ctrl_rcv": cv(lr.CTRL_BONES),
+            "per_joint": np.nanmedian(res.reshape(*shape, -1), axis=(0, 2))}
+
+
+def split_by_side(per_joint: np.ndarray, names: list[str]) -> tuple[float, float]:
+    """Midline vs bilateral joint residual — the 19.9 / 27.8 px split from 260727."""
+    side = np.array([n.startswith(("left_", "right_")) for n in names])
+    return float(np.nanmedian(per_joint[~side])), float(np.nanmedian(per_joint[side]))
 
 
 def fit(sessions: list[tuple], base: list[tuple]) -> np.ndarray:
@@ -183,16 +190,23 @@ def main() -> None:
 
         for tag, fs in (("FIT", fit_f), ("HELD-OUT", held_f)):
             print(f"    {tag}")
+            pj = []
             for f in fs:
                 xy, mask, Ps0, names, shape = loaded[f]
                 b = score(xy, mask, Ps0, names, shape)
                 c = score(xy, mask, Ps_ba, names, shape)
+                pj.append((b["per_joint"], c["per_joint"]))
                 verdict = ("PASS" if c["reproj_px"] < b["reproj_px"] and
                            c["bone_rcv"] <= b["bone_rcv"] + 1e-4 else "FAIL")
                 print(f"      {f.name.split('-kp3d')[0]:<22} "
                       f"reproj {b['reproj_px']:6.2f} -> {c['reproj_px']:6.2f} px | "
                       f"bone rCV {b['bone_rcv']:.3f} -> {c['bone_rcv']:.3f} | "
                       f"ctrl {b['ctrl_rcv']:.3f} -> {c['ctrl_rcv']:.3f} | {verdict}")
+            names = loaded[fs[0]][3]
+            mb, sb = split_by_side(np.median([p[0] for p in pj], axis=0), names)
+            ma, sa = split_by_side(np.median([p[1] for p in pj], axis=0), names)
+            print(f"      {'-> midline / bilateral':<22} "
+                  f"{mb:5.1f} / {sb:5.1f}  ->  {ma:5.1f} / {sa:5.1f} px")
 
     print("\nVerdict rule: reprojection down AND bone rCV not worse. Reprojection alone "
           "is the objective and cannot judge itself.")
