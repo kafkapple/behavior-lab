@@ -18,7 +18,7 @@ figshare 직링크 매니페스트 + 다운로드 러너. **260814 gpu03 홈 루
 | 파일 | 행 | 세션 | 용량 | 260814 보유 |
 |---|---:|---:|---:|---|
 | `sbea_individual_files.tsv` | 100 | 20 | ~11.2 GB | 🟢 `/mnt/d/data/raw/SBeA/individual` 100파일 |
-| `sbea_social_files.tsv` | 150 | 30 | ~16.8 GB | 🔴 **미보유** — S3 착수의 선행 조건 |
+| `sbea_social_files.tsv` | 150 | 30 | ~16.8 GB | 🟢 `/mnt/d/data/raw/SBeA/social` 150파일 (260814 재취득, 150/150 SKIP 대조) |
 
 TSV 열 = `파일명 \t 바이트수 \t URL`. 바이트수가 resume 판정 기준이므로 임의 편집 금지.
 

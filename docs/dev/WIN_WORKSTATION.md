@@ -11,8 +11,13 @@
   `scripts/shot7m2_probe.py`·`scripts/bmae_probe_cv3.py` 가 이 죽은 경로를 참조 중.
   가중치(`checkpoints/hBehaveMAE_Shot7M2.pth` 111M)는 확보돼 있으므로 데이터만 재취득하면 복구.
 - **코드 내 gpu03 절대경로 29곳** 미치환 (`/node_data/joon` 23 · `/node_data_2/joon` 6). §6 참조.
-- **S1(저자 파이프라인 클론) 미착수** — 260729 핸드오프의 최우선 항목이 그대로 남음.
-  **S3(social) 은 260814 데이터 확보로 블로킹 해소**, 단 S1 이 여전히 선행 조건이다.
+- ✅ **S1 완료 (260816) — 판정: 저자 기준선 부재.** 논문은 3D 재투영 잔차 절대값을 보고하지
+  않는다. 저자 코드는 클론했으나 자체 로직 54개가 `.pyd`(Windows DLL) 컴파일 바이너리다.
+  근거 = vault `[[260816_behaviorlab_sbea_author_baseline_absent]]` · 착수순서 = `docs/sbea_social_and_sdannce_status.md` §0·§4.
+- 🔴 **저자 코드 실행은 WSL 에서 불가** — `.pyd` 는 네이티브 Windows + Python 3.9 + CUDA 11.7
+  전용. 이 문서의 WSL 셋업(§4)과 **별개 env** 가 필요하다. 착수 전 비용 재산정할 것.
+- 🟢 **S3(social) 블로킹 해소** — 260814 데이터 확보. S1 선행 조건도 260816 로 해제.
+  단 `scripts/sbea_acquisition/README.md` 의 "social 미보유" 표기는 미갱신(드리프트).
 
 > 🟢 260814 회수 — 전부 매니페스트/해시 대조로 판정했다(서술 아님).
 >
