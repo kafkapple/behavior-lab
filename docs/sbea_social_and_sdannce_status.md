@@ -120,6 +120,32 @@ downstream 가치가 미검증이고, 통합하면 자유 파라미터가 파이
 
 > 근거 전문 = vault `[[260816_behaviorlab_sbea_bundle_adjustment]]`.
 
+### S0. 🔴 저자 코드는 GitHub 에서 받지 말 것 — 저자 공식 오프라인본을 쓴다
+
+**GitHub 클론은 파일이 빠져 있다.** 저자가 `README_SBeA_tracker.md` §"common bugs" 1번에
+직접 적어 둔 알려진 문제다 — *"It is a bug from GitHub. The file synchronization appears to be
+the problem. We still have not found a way to fix it. So we prepared an offline version."*
+
+| | GitHub 클론 | **저자 오프라인본 (정본)** |
+|---|---|---|
+| 취득 | `git clone https://github.com/YNCris/SBeA_release` | https://drive.google.com/file/d/1B7BWCUgwUnZdWeP4_rv_2byKJ22qZ4tY/view |
+| `train_utils/yolact/sbea_train.pyd` | ❌ **없음** | ✅ 있음 |
+| DCNv2 사전빌드 `_ext.cp39-win_amd64.pyd` | ❌ 없음 | ✅ 있음 |
+| 차집합 | — | offline 전용 파일 **31개** |
+| 증상 | `ModuleNotFoundError: No module named 'SocialBehaviorAtlas.train_utils.yolact.sbea_train'` | — |
+
+**받은 뒤 1줄 검증** (실패하면 잘못된 사본이다):
+
+```bash
+# 파일이 없으면 즉시 실패한다. 클론을 쓰고 있는지 여부를 이 명령이 판정한다.
+test -f "<SBeA_ROOT>/SocialBehaviorAtlas/train_utils/yolact/sbea_train.pyd" \
+  && echo "OK: 오프라인본" || echo "🔴 GitHub 클론 — 오프라인본으로 교체할 것"
+```
+
+⚠️ **260817 에 이걸 몰라 반나절을 썼다.** 클론으로 시작해 "배포본 결함"으로 단정했고,
+README 를 끝까지 읽고서야 저자가 이미 답을 적어 뒀음을 알았다. **저자 레포는 README 를
+끝까지 읽고 시작할 것** — 특히 "common bugs" 절.
+
 ### S2. 저자 pretrained 로 individual 세션 1개 재현 — 🔴 **260816 NO-GO**
 
 **착수 안 한다.** S2 의 목적은 "우리 24.7 px 이 왜 그런가" 진단이었는데 S2' 가 답했다

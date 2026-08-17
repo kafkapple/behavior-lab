@@ -126,6 +126,37 @@ $P -m pytest -q                                   # 93 passed
   gpu03 리눅스 빌드 기준이라 win 에서 그대로 solve 되지 않을 수 있다 — 실패 시 핀을 완화할 것.
 - `dlc2` 는 gpu03 에서도 tensorflow-cpu 였다(Blackwell 커널 미지원). RTX 3060 이라고 나아지지 않는다.
 
+## 4.5 저자 SBeA tracker 실행 env (`sbaw`) — win **네이티브**, WSL 아님
+
+`.pyd` 가 Windows DLL 이라 WSL·gpu03 등 리눅스에서는 **원리적으로 로드 불가**다.
+이 프로젝트에서 유일하게 네이티브 Windows 가 필요한 지점.
+
+```powershell
+# 1. 코드는 반드시 저자 오프라인본 (GitHub 클론은 파일 누락 — status doc §S0)
+#    https://drive.google.com/file/d/1B7BWCUgwUnZdWeP4_rv_2byKJ22qZ4tY/view
+# 2. env
+conda env create -f <SBeA_ROOT>\environment.yml -n sbaw   # py3.9.15 · torch 1.13.1 · cu117
+# 3. DCNv2 — Windows SDK 필요 (아래 참조)
+```
+
+🟢 **260817 실측 성공분**: `sbaw` = Python 3.9.15 · torch 1.13.1 · `cuda.is_available() True`
+(RTX 3060). `.pyd` 가 실제 로드된다.
+
+🔴 **남은 관문 = DCNv2 (`_C`) 빌드, 원인은 Windows SDK 미설치.**
+`Windows Kits\10` 자체가 없어 `corecrt.h` 가 없다. VS2022 BuildTools(14.42.34433)는 있으나
+`vcvars64.bat` 이 세팅하는 INCLUDE 가 MSVC 2경로뿐이다(SDK 경로 없음).
+
+- **Windows SDK 란**: Windows API + **Universal CRT 헤더**(`corecrt.h` 등) 모음. 리눅스의
+  `glibc-dev`/`build-essential` 에 해당한다. Windows 에서 C/C++ 를 컴파일하려면 **MSVC 툴셋과
+  별개로** 반드시 있어야 한다 — VS Build Tools 를 깔아도 SDK 컴포넌트를 안 고르면 없다.
+- **왜 우리 스택에 없었나**: 나머지 전 구간(WSL·gpu03)이 리눅스라 Windows 네이티브 컴파일을
+  한 적이 없다. `sbaw` 가 이 저장소 최초의 Windows 네이티브 빌드다.
+- 설치 = VS Installer 에서 "Windows 11 SDK" 컴포넌트 추가.
+- 부수 필요: nvcc 가 최신 VS 를 거부하면 `set NVCC_APPEND_FLAGS=-allow-unsupported-compiler`
+  (CUDA 가 오류 메시지에 직접 안내하는 우회. at-your-own-risk 이므로 기록해 둔다).
+- 빌드는 **`vcvars64.bat` 을 부른 셸에서 env 의 `python.exe` 를 직접** 호출할 것.
+  `conda run` 을 쓰면 환경이 정리되며 INCLUDE 가 사라진다(260817 실패 원인).
+
 ## 5. 자산별 사용법
 
 §2 는 "어디 있나", 여기는 "어떻게 쓰나". 전부 WSL 기준, `P=~/miniconda3/envs/behavior-lab/bin/python`.
