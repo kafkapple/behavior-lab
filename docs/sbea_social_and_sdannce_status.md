@@ -173,28 +173,41 @@ README 를 끝까지 읽고서야 저자가 이미 답을 적어 뒀음을 알�
 **입력 데이터 배치**: `*-caliParas.mat` + `*-camera-#.avi`.
 필드 `F1-F2-F3` = 녹화 일련번호 - 개체명(A1/A2) - 날짜. 우리 데이터는 `.mp4` 라 트랜스코딩 전제.
 
-### S2. 저자 3D 재구성으로 우리 DLT 대조 — 🟢 **260817 재개. 비용이 무너졌다**
+### S2. 저자 3D 재구성으로 우리 DLT 대조 — 🔴 **260817 저녁 정정: 우회 불가**
 
-**260816 의 NO-GO 는 "GUI + 2일 학습" 비용 전제였다. 그 전제가 틀렸다.**
-`sbaw` env 구축 후 모듈 API 를 조회하니 3D 재구성이 **평범한 함수로 노출돼 있다** —
-GUI 도, 분할도, identity 도, 학습도 필요 없다.
+> ⚠️ **이 절은 하루에 두 번 뒤집혔다. 최종 판정은 "우회 불가"다.**
+> 낮에 "API 가 함수로 노출됐으니 GUI·학습을 건너뛸 수 있다"고 적었는데, **시그니처만 보고
+> 호출 가능성을 추론한 것**이었다. 실제로 호출해 보니 아니었다.
 
-| 함수 | 시그니처 | 쓸모 |
-|---|---|---|
-| `merge_3d_poses.triangulate_batch` | `(csvlist, caliparam, camera_num, tempname3d)` | **2D csv + 캘리브만으로 삼각측량.** 우리가 가진 것 그대로 |
-| `merge_3d_poses.prepare_data` | `(caliparam, csvlist)` | 입력 준비 |
-| `merge_3d_poses.merge_3d_poses{,_fast}` | `(newvideopath)` | 파이프라인 진입점 |
-| `Rot_ground_screen.Rot_2_ground` | `(data3d, choice_order, filter_window)` | 지면 정렬 |
-| `Toc3d.to_c3d` · `mat2c3d` | `(FPS, csv_path, headernum)` | C3D 내보내기 |
+**실측 결과 — 두 진입점 모두 예외 없이 실행되고 아무것도 만들지 않는다(조용한 no-op).**
 
-**필요한 것 = 우리 2D 를 저자 csv 형식으로 내보내기 + `caliParas.mat`.** 둘 다 이미 있다.
-(우리 npz 의 `keypoints_2d` → 저자 DLC csv 헤더 3행 규약으로 저장)
+| 시도 | 결과 |
+|---|---|
+| `triangulate_batch(csvlist, cali, 4, prefix)` | 반환 `([[],[],[],[]], [])` — 0점 |
+| 저자 자신의 배포 csv 로 동일 호출 | **똑같이 0점** → 우리 csv 형식 문제 아님 |
+| 개체 1 / 2 / 카메라수 변형 7종 | 전부 0점 → **다개체 가설 기각** |
+| `merge_3d_poses(<workspace>)` | 예외 없이 `None`, 산출물 0 |
+
+**원인 = 3D 병합은 독립 함수가 아니라 파이프라인 5단계다.** `merge_3d_poses` 는
+워크스페이스의 **`temp/` 하위**를 읽는데, 거기 들어가야 할 것은 평범한 DLC csv 가 아니라
+**3~4단계(VisTR 분할 → 개체별 2D)가 만든 중간 산출물**이다.
+⇒ **분할·identity·학습을 건너뛰고 3D 만 빌려 쓰는 경로는 없다.** S2 는 다시 "전체 파이프라인"
+비용으로 돌아간다.
+
+🔴 **더 근본적인 문제 — 대조 대상 자체가 어긋난다.**
+논문 Fig. 1a: *"Phase 1 captures the videos of **free-social interactions of two mice**.
+Phase 2 captures the **identities** of each mouse in phase 1."*
+즉 우리가 20세션 3D 를 뽑은 **`individual` 은 Phase 2 = identity 학습용 촬영**이지
+3D 재구성 대상이 아니다. 저자 3D 경로는 **social(Phase 1)** 을 겨냥한다.
+⇒ "저자 3D vs 우리 DLT 를 individual 에서 비교" 는 **범주 오류**다. 성립하려면 social 이어야 하고,
+social 은 분할·identity 가 선행돼야 한다.
 
 🔴 **BA 주장 복원 — 이번엔 코드 근거다.** `merge_3d_poses` 가 `least_squares` ·
 `bundle_adjustment_sparsity` · `fun`(residual) 을 함께 노출한다 = **저자 3D 병합 경로에
 bundle adjustment 가 실제로 들어 있다.** 논문 Methods 3D 절에는 서술이 없어 260817 에
 "파일명 근거뿐" 이라며 강등했었는데, API 로 확인됐으므로 되살린다.
-⇒ 우리 S2'(BA 부재가 잔차 29% 설명)의 전제가 **강화**된다.
+⇒ 우리 S2'(BA 부재가 잔차 29% 설명)의 전제가 **강화**된다. 이 항목은 위 정정과 무관하게 유효하다 —
+API 존재는 실제 조회로 확인한 사실이고, 뒤집힌 것은 "그 API 를 우리가 호출해 쓸 수 있다"는 추론뿐이다.
 
 ⚠️ **260816 정정: 코드 판독으로는 아무것도 확인할 수 없다.** 전부 컴파일 바이너리다.
 남은 건 **블랙박스 실행 후 출력 대조**뿐이고, 선행 조건이 늘었다:
