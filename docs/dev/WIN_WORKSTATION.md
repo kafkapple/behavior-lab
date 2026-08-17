@@ -142,20 +142,48 @@ conda env create -f <SBeA_ROOT>\environment.yml -n sbaw   # py3.9.15 · torch 1.
 🟢 **260817 실측 성공분**: `sbaw` = Python 3.9.15 · torch 1.13.1 · `cuda.is_available() True`
 (RTX 3060). `.pyd` 가 실제 로드된다.
 
-🔴 **남은 관문 = DCNv2 (`_C`) 빌드, 원인은 Windows SDK 미설치.**
-`Windows Kits\10` 자체가 없어 `corecrt.h` 가 없다. VS2022 BuildTools(14.42.34433)는 있으나
-`vcvars64.bat` 이 세팅하는 INCLUDE 가 MSVC 2경로뿐이다(SDK 경로 없음).
+🟢 **260817 완료 — 저자 모듈 9/9 import 성공.** 설치 순서:
+
+```powershell
+# 1. 코드 = 저자 오프라인본 (필수, §S0)          D:\sbea_offline\SBeA-Windows-main
+# 2. conda env create -f environment.yml -n sbaw   py3.9.15 · torch 1.13.1+cu117
+# 3. Windows SDK           vs_installer modify --add ...Windows11SDK.22621
+# 4. 구 MSVC 툴셋           vs_installer modify --add ...VC.14.29.16.11.x86.x64
+# 5. DCNv2 빌드            아래 표 4번 참조 -> _C.cp39-win_amd64.pyd 생성
+# 6. conda install -n sbaw -c conda-forge ezc3d   (Toc3d 가 요구, PyPI 에 win 휠 없음)
+```
+
+검증 = 9개 모듈을 **각각 별도 프로세스에서** import. 한 프로세스에서 연달아 하면 첫 실패가
+패키지를 반쯤 초기화해 뒤 결과가 오염된다(260817 에 이 때문에 잘못된 결론을 냈다).
 
 - **Windows SDK 란**: Windows API + **Universal CRT 헤더**(`corecrt.h` 등) 모음. 리눅스의
   `glibc-dev`/`build-essential` 에 해당한다. Windows 에서 C/C++ 를 컴파일하려면 **MSVC 툴셋과
   별개로** 반드시 있어야 한다 — VS Build Tools 를 깔아도 SDK 컴포넌트를 안 고르면 없다.
 - **왜 우리 스택에 없었나**: 나머지 전 구간(WSL·gpu03)이 리눅스라 Windows 네이티브 컴파일을
   한 적이 없다. `sbaw` 가 이 저장소 최초의 Windows 네이티브 빌드다.
-- 설치 = VS Installer 에서 "Windows 11 SDK" 컴포넌트 추가.
-- 부수 필요: nvcc 가 최신 VS 를 거부하면 `set NVCC_APPEND_FLAGS=-allow-unsupported-compiler`
-  (CUDA 가 오류 메시지에 직접 안내하는 우회. at-your-own-risk 이므로 기록해 둔다).
-- 빌드는 **`vcvars64.bat` 을 부른 셸에서 env 의 `python.exe` 를 직접** 호출할 것.
-  `conda run` 을 쓰면 환경이 정리되며 INCLUDE 가 사라진다(260817 실패 원인).
+**DCNv2 빌드 — 260817 에 실제로 밟은 지뢰 4개, 순서대로**
+
+| # | 증상 | 원인 | 조치 |
+|---|---|---|---|
+| 1 | `ModuleNotFoundError: ... yolact.sbea_train` | GitHub 클론 파일 누락 | 저자 오프라인본 사용 (status doc §S0) |
+| 2 | `cl.exe` 못 찾음 | 개발자 셸 밖에서 빌드 | `vcvars64.bat` 호출 후 빌드 |
+| 3 | `corecrt.h: No such file` | **Windows SDK 미설치** | `vs_installer modify --add Microsoft.VisualStudio.Component.Windows11SDK.22621`. 성공 시 vcvars 의 INCLUDE 가 **2 → 7 경로**로 늘어난다(판정 지표) |
+| 4 | `STL1002: Unexpected compiler version, expected CUDA 12.4 or newer` | **MSVC 14.42 STL ↔ CUDA 11.8 비호환** | CUDA 를 올릴 수 없다(torch 1.13.1 = cu117 빌드). **구 MSVC 툴셋**을 side-by-side 설치 후 `vcvars64.bat -vcvars_ver=14.29` |
+
+```powershell
+# 최종 형태 — conda run 을 쓰지 말 것 (환경을 정리하며 INCLUDE 를 지운다, 260817 실패 원인)
+call "<VS>\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.29
+set NVCC_APPEND_FLAGS=-allow-unsupported-compiler
+set DISTUTILS_USE_SDK=1
+cd /d D:\sbea_offline\SBeA-Windows-main
+D:\conda\envs\sbaw\python.exe setup.py build_ext --inplace
+```
+
+- `NVCC_APPEND_FLAGS=-allow-unsupported-compiler` 는 CUDA 가 오류 메시지에 직접 안내하는
+  공식 우회다. at-your-own-risk 표기가 붙으므로 여기 기록해 둔다.
+- **성공 판정 = `_C*.pyd` 생성**. 없으면 빌드가 조용히 실패한 것이다.
+- ⚠️ 오프라인본에 `yolact/external/DCNv2/_ext.cp39-win_amd64.pyd` 사전빌드가 있으나
+  **이름·위치가 달라 `vistr` 의 `_C` 를 대체하지 못한다.** 빌드를 건너뛸 수 없다.
 
 ## 5. 자산별 사용법
 
