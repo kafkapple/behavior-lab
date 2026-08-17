@@ -351,6 +351,14 @@ VIZ_CONFIG = {
 
 ## 3축 동시 충족 매트릭스 (260817 신설)
 
+> 🔴 **260817 저녁 재정정 (`/fact --deep` 3-verifier)** — 같은 날 낮에 `datasets.md` 의
+> "84 fine-grained" 를 "11 behavioral + 3 interaction" 으로 **바꾼 것이 오히려 후퇴**였다.
+> 원전에는 **세 종류가 모두 있다**(11 coarse · 3 interaction · 84 fine). 한쪽만 적은 두 문서를
+> 다른 한쪽만 적은 형태로 교체한 셈이다. 이제 셋을 다 기재한다.
+> 교훈: **문서 간 불일치를 볼 때 "둘 중 하나가 틀렸다" 를 기본 가정으로 두지 말 것** —
+> 둘 다 부분적으로 맞을 수 있다.
+
+
 > **질문**: "멀티뷰 영상 + 3D 키포인트 + 행동 레이블" 셋을 다 가진 오픈 데이터셋이 있는가?
 > **답**: 있다. 다만 우리 로컬 자산 상태는 별개 문제다 — 아래 두 열을 구분해서 볼 것.
 > 스펙 정본(카메라·해상도·레이블 열 포함) = `_html/260619_datasets_comparison.html`.
@@ -359,7 +367,7 @@ VIZ_CONFIG = {
 |---|---|---|---|---|---|
 | **s-DANNCE lone** (SCN2A_WK1 M1) | 6 cam | ✅ 23 kp | ✅ **9클래스**(원전 확인) | 🟢 **충족** | 🔴 **레이블 미취득** · 마스크 부재(`sam3_multimask_masks/wk1_*`) |
 | **s-DANNCE social** (SCN2A_WK1) | 6 cam | ✅ 23 kp | ✅ 9클래스 + social 상호작용 | 🟢 **충족** | 🔴 미다운로드 · 마스크 null |
-| **PAIR-R24M** (18 pairs) | 6 cam | ✅ 12 kp/rat | ✅ **11 behavioral + 3 interaction** | 🟢 **충족** | 🔴 학습 대기 |
+| **PAIR-R24M** (18 pairs) | 6 cam | ✅ 12 kp/rat | ✅ **11 coarse + 3 interaction + 84 fine** | 🟢 **충족** | 🔴 학습 대기 |
 | **NTU RGB+D 60** (인간) | **3 cam** | ✅ Kinect skeleton | ✅ 60 actions | 🟡 **뷰 수 부족** | — · 3뷰는 BS 재구성(통상 6뷰)에 희소 |
 | markerless_mouse_1 (M5) | 6 cam | ✅ 22 kp | ❌ none | ❌ | 🟢 main |
 | Rat7M | 6 cam | ✅ MoCap | ❌ *"Unlabeled (discovery target)"* | ❌ | 🟢 보유 |
@@ -388,9 +396,9 @@ VIZ_CONFIG = {
 | Species | **랫 + 마우스 둘 다** (WT rats and mice · ASD 랫 계통 포함) |
 | Cameras | **6** (lone·social 양쪽) |
 | Joints | 23 |
-| **행동 레이블** | ✅ **전문가 주석 9클래스** — idle · sniff · groom · scrunch · active crouch · rearing · explore · locomotion · fast locomotion |
+| **행동 레이블** | ✅ **전문가 주석 9클래스** — idle · sniff · groom · **scrunched** · active crouch · **reared** · explore · locomotion · **fast**<br>🟡 클래스명 표기는 검증자 간 이견(‘scrunch/rearing/fast locomotion’ 형태로 인용되기도 함) — 취득 후 원본 파일로 확정할 것 |
 | Scale | 140M+ 3D poses · 80 animals |
-| Source | Harvard Dataverse · 코드 `github.com/tqxli/sdannce` |
+| Source | **취득처 = <https://dataverse.harvard.edu/dataverse/socialDANNCE_data>** · 코드 `github.com/tqxli/sdannce` · 논문 Cell **188(8), 2025-04-17** |
 | Status | 🔴 **레이블 미취득** — 우리 로컬 WK1 항목(`DATASET_INDEX.yaml: sdannce_wk1`)에는 `raw_data`·`mocap_path`·`preprocessed` 만 있고 **레이블 파일 경로가 없다** |
 
 > 🔴 **260817 정정** — 앞선 "s-DANNCE lone 은 레이블이 있는데 우리가 안 쓴다" 는 부정확했다.
@@ -404,8 +412,8 @@ VIZ_CONFIG = {
 |-------|-------|
 | Species | Rat (pairs) |
 | Markers | 12 per rat (24 total) |
-| Categories | **11 behavioral + 3 interaction** (🔴 260817 정정: 구 '84 fine-grained' 는 오기) |
-| Viewpoints | 24.3M 프레임 · 18 pairs · 원전은 "24 different viewpoints" 표기 (동시 카메라 6대와 별개 개념일 수 있음, 🟡) |
+| **레이블 (3종 전부 존재)** | ① **11 coarse behavioral** — Idle · SmallMovement · HeadTilt · Groom · Sniff · Investigate · RearUp · RearDown · CrouchExplore · Amble · Locomotion<br>② **3 inter-animal interaction** — Close · Explore · Chase<br>③ **84 fine behavioral** (클러스터, 본문에 개별 명명 없음. 예: Fine Behavior 62 = side-to-side head sweep) |
+| Scale | 24.3M 프레임 · 18 pairs / 36 rats · 원전 "24 different viewpoints" 표기는 동시 카메라 6대와 별개 개념일 수 있음 (🟡) |
 | Source | Figshare |
 | Status | Multi-animal 3D, future integration |
 
