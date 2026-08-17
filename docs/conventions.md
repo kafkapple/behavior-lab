@@ -7,6 +7,10 @@
 > 대조하므로, 코드를 바꾸고 문서를 안 고치면 **테스트가 깨진다**. 손으로 맞추지 말 것.
 >
 > 작성 2026-07-27 · 사본 위치 무관하게 읽히도록 모든 경로는 `~/dev/` 기준.
+>
+> **↩ 소유권 지도 (260817)**: 카메라 행렬·투영·cx/cy 정렬은 `BehaviorSplatter/docs/geometry/camera_conventions.md`,
+> 데이터셋 능력·레이블은 `docs/datasets.md`, 자산 현황은 `BehaviorSplatter/docs/data/README.md` 가 정본이다.
+> 전체 매핑 = vault `Modules/Datasets/Datasets — Recon Provenance SSOT MoC (정본).md` §0.
 
 ---
 

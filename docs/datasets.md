@@ -366,7 +366,7 @@ VIZ_CONFIG = {
 | 데이터셋 | 멀티뷰 | 3D kp | 행동 레이블 | 3축 | 로컬 자산 상태 |
 |---|---|---|---|---|---|
 | **s-DANNCE lone** (SCN2A_WK1 M1) | 6 cam | ✅ 23 kp | ✅ **9클래스**(원전 확인) | 🟢 **충족** | 🔴 **레이블 미취득** · 마스크 부재(`sam3_multimask_masks/wk1_*`) |
-| **s-DANNCE social** (SCN2A_WK1) | 6 cam | ✅ 23 kp | ✅ 9클래스 + social 상호작용 | 🟢 **충족** | 🔴 미다운로드 · 마스크 null |
+| **s-DANNCE social** (SOC1) | 6 cam | ✅ 23 kp | ✅ 9클래스 + social 상호작용 | 🟢 **충족** | 🔴 **원본·대체본 모두 소실**(BS `docs/data/README.md` 실측). 마스크는 SAM3 아닌 sdannce-poc `kp_sam2.py` 산출물이었고 함께 소실 → **Dataverse 재취득 필수** |
 | **PAIR-R24M** (18 pairs) | 6 cam | ✅ 12 kp/rat | ✅ **11 coarse + 3 interaction + 84 fine** | 🟢 **충족** | 🔴 학습 대기 |
 | **NTU RGB+D 60** (인간) | **3 cam** | ✅ Kinect skeleton | ✅ 60 actions | 🟡 **뷰 수 부족** | — · 3뷰는 BS 재구성(통상 6뷰)에 희소 |
 | markerless_mouse_1 (M5) | 6 cam | ✅ 22 kp | ❌ none | ❌ | 🟢 main |
@@ -383,7 +383,8 @@ VIZ_CONFIG = {
 2. **병목은 데이터 부재가 아니라 취득이다.** s-DANNCE lone 은 🟢 main 이지만
    **레이블을 받은 적이 없다** — `DATASET_INDEX.yaml: sdannce_wk1` 에 레이블 경로가 없고,
    `SDANNCE_SOC1_v1.yaml` 의 `exclude_hlac_classes` 는 *"(있을 시)"* 주석이 달린 예정 옵션이다.
-   마스크(`sam3_multimask_masks/wk1_*`)도 부재다. ⇒ **레이블 + 마스크 취득이 최우선.**
+   마스크(`sam3_multimask_masks/wk1_*`)도 부재다. SOC1 은 더 나빠서 **원본·대체본 모두 소실**이다.
+   ⇒ **Dataverse 에서 레이블 포함 재취득이 최우선이고, 마스크는 SAM3 로 재생성해 일관화한다.**
 3. **SBeA 는 3축 중 2축이 비어 있다** — 3D 키포인트는 우리가 만든 것이고(배포본엔 없음),
    행동 레이블은 애초에 없다(unsupervised 프레임워크). 레이블 기반 작업의 후보가 아니다.
 
@@ -420,6 +421,16 @@ VIZ_CONFIG = {
 ---
 
 ## Backlinks
+
+**↩ 타 저장소 정본 (260817 — 소유권 지도 = vault `Modules/Datasets/… SSOT MoC (정본).md` §0)**
+
+- **자산 현황**(지금 서버에서 쓸 수 있는 것) → `BehaviorSplatter/docs/data/README.md`
+- **재현 recipe·경로 계보** → vault `Modules/Datasets/Datasets — Recon Provenance SSOT MoC (정본).md`
+- **멀티뷰 스펙 비교·시각 자료** → vault `_html/260619_datasets_comparison.html`
+- **좌표·텐서·스켈레톤 규약** → [conventions.md](conventions.md) (드리프트 테스트로 소스와 동기)
+- **카메라 행렬·투영** → `BehaviorSplatter/docs/geometry/camera_conventions.md`
+
+---
 
 - [Architecture](architecture.md) — Module map, skeleton registry
 - [Model Taxonomy](model_taxonomy.md) — Which models work with which datasets
