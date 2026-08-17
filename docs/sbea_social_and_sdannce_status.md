@@ -146,6 +146,33 @@ test -f "<SBeA_ROOT>/SocialBehaviorAtlas/train_utils/yolact/sbea_train.pyd" \
 README 를 끝까지 읽고서야 저자가 이미 답을 적어 뒀음을 알았다. **저자 레포는 README 를
 끝까지 읽고 시작할 것** — 특히 "common bugs" 절.
 
+### S0.5 저자 tracker 실행 절차 (GUI 5단계) — 매뉴얼
+
+저자는 **GUI 전용**으로 배포한다. headless 배치 경로가 없으므로 자동화는 불가하고
+사람이 화면을 눌러야 한다. `gui/main.py` 는 260바이트 런처이고 나머지 화면은 `.pyd` 다.
+
+| 단계 | 하는 일 | 입력 | 출력 | 소요 |
+|---|---|---|---|---|
+| 1 | 프로젝트 생성/로드 | 경로+이름 | `configfile.yaml` · `datasets/` `evals/` `models/` | ~1분 |
+| 2 | 설정 | social·ID 데이터 경로 | 갱신된 `configfile.yaml` | ~30분 |
+| 3 | 로드·라벨·학습 | 위 설정 | 전처리 데이터 + 3모델 | **~2일**(병렬) |
+| 4 | 평가 (선택) | — | 평가 결과 | 영상 길이만큼 |
+| 5 | **Predict** | 새 영상 + 캘리브 | 아래 6종 | 영상 길이만큼 |
+
+**5단계 산출물**:
+
+| 파일 | 내용 |
+|---|---|
+| `*-rawresult.json` | video instance segmentation 원본 |
+| `*-correctedresult.json` | 프레임 간 연속성으로 보정한 분할 |
+| `*-predid.csv` · `*-corrpredid.csv` | identity 원본 / 연속성 보정본 |
+| `*-raw3d.mat` | 2개체 3D 스켈레톤, **identity 없음** |
+| `*-rot3d.mat` | 지면 정렬(월드 좌표계), identity 없음 |
+| **`*-id3d.mat`** | **지면 정렬 + identity — 최종 산출물** |
+
+**입력 데이터 배치**: `*-caliParas.mat` + `*-camera-#.avi`.
+필드 `F1-F2-F3` = 녹화 일련번호 - 개체명(A1/A2) - 날짜. 우리 데이터는 `.mp4` 라 트랜스코딩 전제.
+
 ### S2. 저자 pretrained 로 individual 세션 1개 재현 — 🔴 **260816 NO-GO**
 
 **착수 안 한다.** S2 의 목적은 "우리 24.7 px 이 왜 그런가" 진단이었는데 S2' 가 답했다
