@@ -357,10 +357,10 @@ VIZ_CONFIG = {
 
 | 데이터셋 | 멀티뷰 | 3D kp | 행동 레이블 | 3축 | 로컬 자산 상태 |
 |---|---|---|---|---|---|
-| **s-DANNCE lone** (SCN2A_WK1 M1) | 6 cam | ✅ 23 kp | ✅ **HLAC 9** | 🟢 **충족** | 🟡 마스크 부재(`sam3_multimask_masks/wk1_*`) |
-| **s-DANNCE social** (SCN2A_WK1) | 6 cam | ✅ 23 kp | ✅ HLAC 9 + HLJC social | 🟢 **충족** | 🔴 미다운로드 · 마스크 null |
+| **s-DANNCE lone** (SCN2A_WK1 M1) | 6 cam | ✅ 23 kp | ✅ **9클래스**(원전 확인) | 🟢 **충족** | 🔴 **레이블 미취득** · 마스크 부재(`sam3_multimask_masks/wk1_*`) |
+| **s-DANNCE social** (SCN2A_WK1) | 6 cam | ✅ 23 kp | ✅ 9클래스 + social 상호작용 | 🟢 **충족** | 🔴 미다운로드 · 마스크 null |
 | **PAIR-R24M** (18 pairs) | 6 cam | ✅ 12 kp/rat | ✅ **11 behavioral + 3 interaction** | 🟢 **충족** | 🔴 학습 대기 |
-| **NTU RGB+D 60** (인간) | 3 cam | ✅ Kinect skeleton | ✅ 60 actions | 🟢 **충족** | — |
+| **NTU RGB+D 60** (인간) | **3 cam** | ✅ Kinect skeleton | ✅ 60 actions | 🟡 **뷰 수 부족** | — · 3뷰는 BS 재구성(통상 6뷰)에 희소 |
 | markerless_mouse_1 (M5) | 6 cam | ✅ 22 kp | ❌ none | ❌ | 🟢 main |
 | Rat7M | 6 cam | ✅ MoCap | ❌ *"Unlabeled (discovery target)"* | ❌ | 🟢 보유 |
 | PoseSplatter mouse | 6 cam | ✅ 2D/3D bundled | ❌ none | ❌ | 🟢 보유 |
@@ -372,24 +372,31 @@ VIZ_CONFIG = {
 
 1. **3축을 다 만족하는 동물 데이터셋은 이미 3개 있다** — s-DANNCE(lone·social), PAIR-R24M.
    "그런 데이터가 없다" 는 전제는 틀렸다.
-2. **병목은 데이터 부재가 아니라 로컬 자산·활용이다.** s-DANNCE lone 은 🟢 main 인데
-   HLAC 레이블이 `SDANNCE_SOC1_v1.yaml` 의 *"(있을 시)"* 제외 옵션으로만 언급되고
-   **실제로 소비되지 않는다**. 마스크도 부재다.
+2. **병목은 데이터 부재가 아니라 취득이다.** s-DANNCE lone 은 🟢 main 이지만
+   **레이블을 받은 적이 없다** — `DATASET_INDEX.yaml: sdannce_wk1` 에 레이블 경로가 없고,
+   `SDANNCE_SOC1_v1.yaml` 의 `exclude_hlac_classes` 는 *"(있을 시)"* 주석이 달린 예정 옵션이다.
+   마스크(`sam3_multimask_masks/wk1_*`)도 부재다. ⇒ **레이블 + 마스크 취득이 최우선.**
 3. **SBeA 는 3축 중 2축이 비어 있다** — 3D 키포인트는 우리가 만든 것이고(배포본엔 없음),
    행동 레이블은 애초에 없다(unsupervised 프레임워크). 레이블 기반 작업의 후보가 아니다.
 
 ## Investigated (Not Yet Integrated)
 
-### s-DANNCE (Klibaite 2024)
+### s-DANNCE (Klibaite et al., **Cell 2025** — 구 표기 "2024" 정정 260817)
 
 | Field | Value |
 |-------|-------|
-| Species | Mouse |
+| Species | **랫 + 마우스 둘 다** (WT rats and mice · ASD 랫 계통 포함) |
+| Cameras | **6** (lone·social 양쪽) |
 | Joints | 23 |
-| Features | 9 HLACs (Hierarchical Linear Activity Categories) |
-| Scale | 140M+ poses |
-| Source | Harvard Dataverse |
-| Status | Large-scale, future integration |
+| **행동 레이블** | ✅ **전문가 주석 9클래스** — idle · sniff · groom · scrunch · active crouch · rearing · explore · locomotion · fast locomotion |
+| Scale | 140M+ 3D poses · 80 animals |
+| Source | Harvard Dataverse · 코드 `github.com/tqxli/sdannce` |
+| Status | 🔴 **레이블 미취득** — 우리 로컬 WK1 항목(`DATASET_INDEX.yaml: sdannce_wk1`)에는 `raw_data`·`mocap_path`·`preprocessed` 만 있고 **레이블 파일 경로가 없다** |
+
+> 🔴 **260817 정정** — 앞선 "s-DANNCE lone 은 레이블이 있는데 우리가 안 쓴다" 는 부정확했다.
+> 공개 데이터셋에는 있으나 **우리가 받은 적이 없다**. "미사용" 이 아니라 "미취득" 이다.
+> 원전: Klibaite, Li, Aldarondo, Akoad, Ölveczky, Dunn — *Mapping the landscape of social
+> behavior*, Cell (2025). 6-camera lone and social recordings across 80 animals.
 
 ### PAIR-R24M (Marshall 2021)
 
