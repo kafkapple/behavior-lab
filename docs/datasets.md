@@ -365,16 +365,16 @@ VIZ_CONFIG = {
 
 | 데이터셋 | 멀티뷰 | 3D kp | 행동 레이블 | 3축 | 로컬 자산 상태 |
 |---|---|---|---|---|---|
-| **s-DANNCE lone** (SCN2A_WK1 M1) | 6 cam | ✅ 23 kp | ✅ **9클래스**(원전 확인) | 🟢 **충족** | 🔴 **레이블 미취득** · 마스크 부재(`sam3_multimask_masks/wk1_*`) |
+| **s-DANNCE lone** (SCN2A_WK1 M1) | 6 cam | ✅ 23 kp | ✅ **9클래스**(원전 확인) | 🟢 **충족** | 🟡 6.2G 보유하나 **학습용 서브셋** — 행동 레이블 없음(Label3D=키포인트 도구). 별도 취득 필요 |
 | **s-DANNCE social** (SOC1) | 6 cam | ✅ 23 kp | ✅ 9클래스 + social 상호작용 | 🟢 **충족** | 🔴 **원본·대체본 모두 소실**(BS `docs/data/README.md` 실측). 마스크는 SAM3 아닌 sdannce-poc `kp_sam2.py` 산출물이었고 함께 소실 → **Dataverse 재취득 필수** |
-| **PAIR-R24M** (18 pairs) | 6 cam | ✅ 12 kp/rat | ✅ **11 coarse + 3 interaction + 84 fine** | 🟢 **충족** | 🔴 학습 대기 |
-| **NTU RGB+D 60** (인간) | **3 cam** | ✅ Kinect skeleton | ✅ 60 actions | 🟡 **뷰 수 부족** | — · 3뷰는 BS 재구성(통상 6뷰)에 희소 |
+| **PAIR-R24M** (18 pairs) | 6 cam | ✅ 12 kp/rat | ✅ **11 coarse + 4 interaction + 84 fine** | 🟢 **충족** | 🟢 **65G 보유** — `markerDataset.csv` 에 3D+레이블 동봉. **1순위** |
+| **NTU RGB+D 60** (인간) | **3 cam** | ✅ Kinect skeleton | ✅ 60 actions (`y_train (500,60)` 실측) | 🟡 **뷰 수 부족** | 🟢 5.9G 보유 · 3뷰는 BS 재구성(통상 6뷰)에 희소 |
 | markerless_mouse_1 (M5) | 6 cam | ✅ 22 kp | ❌ none | ❌ | 🟢 main |
 | Rat7M | 6 cam | ✅ MoCap | ❌ *"Unlabeled (discovery target)"* | ❌ | 🟢 보유 |
 | PoseSplatter mouse | 6 cam | ✅ 2D/3D bundled | ❌ none | ❌ | 🟢 보유 |
 | **SBeA** individual·social | 4 cam | ❌ *needs MAMMAL fit* | ❌ **none (unsupervised)** | ❌ | 🟢 원본 보유 |
 | CalMS21 | ❌ 2D top-view | ❌ 2D only | ✅ 4 classes | ❌ | 🟢 E2E 검증 |
-| Shank3KO | 🟡 멀티뷰 영상 미확인(MAT/NPY 배포) | ✅ 16 kp | ✅ 11 movement | 🟡 | 🟡 미취득 |
+| Shank3KO | ❌ **단일뷰**(avi 20) | ✅ `CoordX/Y/Z (27000,16)` | ❌ **mat 엔 유전형만**(`Genotypes`) | ❌ | 🟢 8.9G 보유 |
 
 **여기서 나오는 세 가지**
 
@@ -384,7 +384,10 @@ VIZ_CONFIG = {
    **레이블을 받은 적이 없다** — `DATASET_INDEX.yaml: sdannce_wk1` 에 레이블 경로가 없고,
    `SDANNCE_SOC1_v1.yaml` 의 `exclude_hlac_classes` 는 *"(있을 시)"* 주석이 달린 예정 옵션이다.
    마스크(`sam3_multimask_masks/wk1_*`)도 부재다. SOC1 은 더 나빠서 **원본·대체본 모두 소실**이다.
-   ⇒ **Dataverse 에서 레이블 포함 재취득이 최우선이고, 마스크는 SAM3 로 재생성해 일관화한다.**
+   ⇒ s-DANNCE 는 Dataverse 재취득 필요, 마스크는 SAM3 로 재생성해 일관화.
+   🔴 **단 260817 실측으로 우선순위가 바뀌었다** — `PAIR-R24M 65G 를 이미 보유`하고 있고
+   `markerDataset.csv` 한 파일에 3D 좌표 + coarse/fine/interaction 레이블이 다 있다.
+   **취득이 아니라 활용이 1순위다.** 상세 = `260817_Handoff_dataset_label_priority.md`.
 3. **SBeA 는 3축 중 2축이 비어 있다** — 3D 키포인트는 우리가 만든 것이고(배포본엔 없음),
    행동 레이블은 애초에 없다(unsupervised 프레임워크). 레이블 기반 작업의 후보가 아니다.
 
