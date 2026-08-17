@@ -349,6 +349,35 @@ VIZ_CONFIG = {
 
 ---
 
+## 3축 동시 충족 매트릭스 (260817 신설)
+
+> **질문**: "멀티뷰 영상 + 3D 키포인트 + 행동 레이블" 셋을 다 가진 오픈 데이터셋이 있는가?
+> **답**: 있다. 다만 우리 로컬 자산 상태는 별개 문제다 — 아래 두 열을 구분해서 볼 것.
+> 스펙 정본(카메라·해상도·레이블 열 포함) = `_html/260619_datasets_comparison.html`.
+
+| 데이터셋 | 멀티뷰 | 3D kp | 행동 레이블 | 3축 | 로컬 자산 상태 |
+|---|---|---|---|---|---|
+| **s-DANNCE lone** (SCN2A_WK1 M1) | 6 cam | ✅ 23 kp | ✅ **HLAC 9** | 🟢 **충족** | 🟡 마스크 부재(`sam3_multimask_masks/wk1_*`) |
+| **s-DANNCE social** (SCN2A_WK1) | 6 cam | ✅ 23 kp | ✅ HLAC 9 + HLJC social | 🟢 **충족** | 🔴 미다운로드 · 마스크 null |
+| **PAIR-R24M** (18 pairs) | 6 cam | ✅ 12 kp/rat | ✅ **11 behavioral + 3 interaction** | 🟢 **충족** | 🔴 학습 대기 |
+| **NTU RGB+D 60** (인간) | 3 cam | ✅ Kinect skeleton | ✅ 60 actions | 🟢 **충족** | — |
+| markerless_mouse_1 (M5) | 6 cam | ✅ 22 kp | ❌ none | ❌ | 🟢 main |
+| Rat7M | 6 cam | ✅ MoCap | ❌ *"Unlabeled (discovery target)"* | ❌ | 🟢 보유 |
+| PoseSplatter mouse | 6 cam | ✅ 2D/3D bundled | ❌ none | ❌ | 🟢 보유 |
+| **SBeA** individual·social | 4 cam | ❌ *needs MAMMAL fit* | ❌ **none (unsupervised)** | ❌ | 🟢 원본 보유 |
+| CalMS21 | ❌ 2D top-view | ❌ 2D only | ✅ 4 classes | ❌ | 🟢 E2E 검증 |
+| Shank3KO | 🟡 멀티뷰 영상 미확인(MAT/NPY 배포) | ✅ 16 kp | ✅ 11 movement | 🟡 | 🟡 미취득 |
+
+**여기서 나오는 세 가지**
+
+1. **3축을 다 만족하는 동물 데이터셋은 이미 3개 있다** — s-DANNCE(lone·social), PAIR-R24M.
+   "그런 데이터가 없다" 는 전제는 틀렸다.
+2. **병목은 데이터 부재가 아니라 로컬 자산·활용이다.** s-DANNCE lone 은 🟢 main 인데
+   HLAC 레이블이 `SDANNCE_SOC1_v1.yaml` 의 *"(있을 시)"* 제외 옵션으로만 언급되고
+   **실제로 소비되지 않는다**. 마스크도 부재다.
+3. **SBeA 는 3축 중 2축이 비어 있다** — 3D 키포인트는 우리가 만든 것이고(배포본엔 없음),
+   행동 레이블은 애초에 없다(unsupervised 프레임워크). 레이블 기반 작업의 후보가 아니다.
+
 ## Investigated (Not Yet Integrated)
 
 ### s-DANNCE (Klibaite 2024)
@@ -368,7 +397,8 @@ VIZ_CONFIG = {
 |-------|-------|
 | Species | Rat (pairs) |
 | Markers | 12 per rat (24 total) |
-| Categories | 84 fine-grained |
+| Categories | **11 behavioral + 3 interaction** (🔴 260817 정정: 구 '84 fine-grained' 는 오기) |
+| Viewpoints | 24.3M 프레임 · 18 pairs · 원전은 "24 different viewpoints" 표기 (동시 카메라 6대와 별개 개념일 수 있음, 🟡) |
 | Source | Figshare |
 | Status | Multi-animal 3D, future integration |
 
