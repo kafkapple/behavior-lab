@@ -366,8 +366,8 @@ VIZ_CONFIG = {
 | 데이터셋 | 멀티뷰 | 3D kp | 행동 레이블 | 3축 | 로컬 자산 상태 |
 |---|---|---|---|---|---|
 | **s-DANNCE lone** (SCN2A_WK1 M1) | 6 cam | ✅ 23 kp | ✅ **9클래스**(원전 확인) | 🟢 **충족** | 🟡 6.2G 보유하나 **학습용 서브셋** — 행동 레이블 없음(Label3D=키포인트 도구). 별도 취득 필요 |
-| **s-DANNCE social** (SOC1) | 6 cam | ✅ 23 kp | ✅ 9클래스 + social 상호작용 | 🟢 **충족** | 🔴 **원본·대체본 모두 소실**(BS `docs/data/README.md` 실측). 마스크는 SAM3 아닌 sdannce-poc `kp_sam2.py` 산출물이었고 함께 소실 → **Dataverse 재취득 필수** |
-| **PAIR-R24M** (18 pairs) | 6 cam | ✅ 12 kp/rat | ✅ **11 coarse + 4 interaction + 84 fine** | 🟢 **충족** | 🟢 **65G 보유** — `markerDataset.csv` 에 3D+레이블 동봉. **1순위** |
+| **s-DANNCE social** (SOC1) | 6 cam | ✅ 23 kp | ✅ 9클래스 + social 상호작용 | 🟢 **충족** | 🟢 **2세션 보유·전처리 진행 중**(eren, 260919 실측) — 개체별 분리 재구성 레인 착수. 구 "원본·대체본 모두 소실"은 gpu03 은퇴(260911) 이전 상태였다 |
+| **PAIR-R24M** (18 pairs) | 6 cam | ✅ 12 kp/rat | ✅ **11 coarse + 3 interaction + 84 fine** | 🟢 **충족** | 🟢 **65G 보유** — `markerDataset.csv` 에 3D+레이블 동봉. **1순위** |
 | **NTU RGB+D 60** (인간) | **3 cam** | ✅ Kinect skeleton | ✅ 60 actions (`y_train (500,60)` 실측) | 🟡 **뷰 수 부족** | 🟢 5.9G 보유 · 3뷰는 BS 재구성(통상 6뷰)에 희소 |
 | markerless_mouse_1 (M5) | 6 cam | ✅ 22 kp | ❌ none | ❌ | 🟢 main |
 | Rat7M | 6 cam | ✅ MoCap | ❌ *"Unlabeled (discovery target)"* | ❌ | 🟢 보유 |
