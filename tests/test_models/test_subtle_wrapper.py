@@ -242,3 +242,45 @@ def test_preprocess_centering_survives_nan():
     out = SUBTLE(fps=20)._preprocess(seq)
     assert out.shape == (4, 6)
     assert np.isnan(out).sum() == 1  # only the missing coordinate, not the whole array
+
+
+def test_to_result_picks_one_supercluster_level_per_frame():
+    import numpy as np
+    from behavior_lab.models.discovery.subtle_wrapper import SUBTLE
+
+    T = 50
+    hierarchy = np.stack([np.zeros(T, int), np.arange(T) % 2, np.arange(T) % 3], axis=1)
+    raw = {"subclusters": np.arange(T) % 7, "superclusters": hierarchy, "embeddings": None}
+    result = SUBTLE(fps=20)._to_result(raw, use_superclusters=True)
+    assert result.labels.shape == (T,)  # was T * n_levels when flattened
+    assert result.n_clusters == 3 and result.metadata["supercluster_level"] == 2
+
+
+def test_fit_raw_returns_time_ordered_labels(monkeypatch):
+    """Mapper.y is in shuffled training order; fit_raw must return the per-recording order."""
+    import sys
+    import types
+
+    import numpy as np
+    from behavior_lab.models.discovery import subtle_wrapper as sw
+
+    T = 30
+    ordered = np.repeat([0, 1, 2], 10)
+
+    class FakeMapper:
+        def __init__(self, **kwargs):
+            pass
+
+        def fit(self, flat):
+            self.y = np.random.default_rng(0).permutation(ordered)
+            self.Y = self.y[:, None]
+            self.Z = np.zeros((T, 2))
+            return [types.SimpleNamespace(y=ordered, Y=ordered[:, None], Z=np.ones((T, 2)),
+                                          TP=None, R=None)]
+
+    monkeypatch.setitem(sys.modules, "subtle", types.SimpleNamespace(Mapper=FakeMapper))
+    for name in ("_patch_subtle_cwt", "_patch_umap_njobs", "_patch_phenograph_njobs"):
+        monkeypatch.setattr(sw, name, lambda: None)
+    raw = sw.SUBTLE(fps=20).fit_raw([np.zeros((T, 9, 3), dtype=np.float32)])
+    assert (raw["subclusters"] == ordered).all()
+    assert raw["embeddings"].mean() == 1.0

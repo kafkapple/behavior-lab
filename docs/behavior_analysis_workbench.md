@@ -107,10 +107,19 @@ Status on this machine (macOS arm64, 2026-10-01):
 | Method | AVATAR 11-point, 600 frames | Note |
 |---|---|---|
 | kmeans_pca_umap, B-SOiD, pca_hmm_moseq_fallback | runs | main env |
-| SUBTLE | runs, 3 to 5 clusters | `.venv-subtle` |
+| SUBTLE | runs, 3 to 5 superclusters, 12 to 14 subclusters | `.venv-subtle` |
 | keypoint-MoSeq | does not install | the lockfile resolves `keypoint-moseq` 0.4.6, whose `jaxtyping==0.2.14` pin breaks the unpinned `dynamax` 1.0.2 import; `keypoint-moseq>=0.6` requires `jax-cuda12-pjrt`, which has Linux wheels only. Working versions are recorded in `env_snapshots/kpms.yml` (Linux, CUDA) |
 
-Reading the label-agreement panel: SUBTLE has no fixed seed. On one AVATAR slice (600 frames, identical input, 3 runs) the run-to-run ARI was 0.13 to 0.22, and ARI between pose variants was -0.01 to 0.29. At this clip length a difference between pose variants is therefore not distinguishable from run-to-run variation; repeat runs on longer recordings before reading it.
+Reading the label-agreement panel: SUBTLE has no fixed seed, so compare against repeat runs first. On the AVATAR `st_optim` slice (600 frames, 20 fps, 2026-10-01, `SUBTLE.fit_predict(isolate=True)`):
+
+| Labels | Clusters (3 runs) | ARI, same input (3 runs) | ARI, between the 4 pose variants (1 run each, 6 pairs) |
+|---|---|---|---|
+| subclusters | 13, 14, 12 | 0.68, 0.62, 0.68 | 0.30 to 0.42 |
+| superclusters, finest level | 5, 5, 3 | 0.61, 0.38, 0.47 | 0.00 to 0.22 |
+
+Agreement between pose variants is lower than agreement between repeat runs on one variant, at both levels. This is one clip and three repeats: a description of this slice, not an estimate of how much pose post-processing matters.
+
+SUBTLE results written before 2026-10-01 are not usable: `SUBTLE.fit()` returned `Mapper.y`, which is in the shuffled training order, and flattened the `(T, n_levels)` supercluster array (label length `T * n_levels`). Measured on 1,200 SUBTLE frames: mean bout 1.07 frames in the returned order against 9.02 frames in time order. Fixed in `subtle_wrapper.py`; old `SUBTLE` rows in `batch_results.csv` and the SUBTLE cells of the CalMS21 notebooks need a re-run.
 
 ## Minimal API
 

@@ -220,11 +220,17 @@ class SUBTLE:
             embedding_method=self.config.embedding_method, **self.config.extra)
         data_list = self._mapper.fit(flat)
 
+        # Mapper.Z/y/Y are in shuffled training order (Mapper.fit permutes frames before
+        # UMAP); the time-ordered labels live on the per-recording Data objects.
+        def in_time_order(attr: str):
+            vals = [getattr(d, attr, None) for d in data_list]
+            return np.concatenate(vals) if vals and all(v is not None for v in vals) else None
+
         data_obj = data_list[0] if data_list else None
         return {
-            "embeddings": getattr(self._mapper, "Z", None),
-            "subclusters": getattr(self._mapper, "y", None),
-            "superclusters": getattr(self._mapper, "Y", None),
+            "embeddings": in_time_order("Z"),
+            "subclusters": in_time_order("y"),
+            "superclusters": in_time_order("Y"),
             "transitions": getattr(data_obj, "TP", None) if data_obj else None,
             "retention": getattr(data_obj, "R", None) if data_obj else None,
         }
@@ -382,8 +388,12 @@ print(json.dumps({{'n_clusters': int(cr.n_clusters), 'elapsed': elapsed}}))
         else:
             labels = np.zeros(0, dtype=int)
 
-        if hasattr(labels, "flatten") and labels.ndim > 1:
-            labels = labels.flatten()
+        level = None
+        if getattr(labels, "ndim", 1) > 1:
+            # (T, n_levels) supercluster hierarchy: use the finest level, one label per frame
+            # (flattening would interleave levels). All levels stay in metadata.
+            level = int(np.argmax([len(np.unique(labels[:, j])) for j in range(labels.shape[1])]))
+            labels = labels[:, level]
 
         n_clusters = len(set(labels)) if len(labels) > 0 else 0
 
@@ -394,6 +404,7 @@ print(json.dumps({{'n_clusters': int(cr.n_clusters), 'elapsed': elapsed}}))
             metadata={
                 "algorithm": "subtle",
                 "use_superclusters": use_super,
+                "supercluster_level": level,
                 "subclusters": subclusters,
                 "superclusters": superclusters,
                 "transitions": raw.get("transitions"),
