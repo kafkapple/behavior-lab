@@ -46,6 +46,10 @@ moseq = [
     "keypoint-moseq>=0.6; sys_platform == 'linux'",
     # without this floor the resolver backtracks to jax-moseq 0.2.2 (jaxtyping==0.2.14 pin, import fails)
     "jax-moseq>=0.3; sys_platform == 'linux'",
+    # dynamax pulls tfp-nightly unpinned; a newer nightly breaks against jax<0.7 (tfb.Bijector missing).
+    # Pinned to the set recorded in env_snapshots/kpms.yml.
+    "jax>=0.6,<0.7; sys_platform == 'linux'",
+    "tfp-nightly==0.26.0.dev20260704; sys_platform == 'linux'",
 ]
 moseq-fallback = ["hmmlearn>=0.3"]
 subtle = ["subtle"]
