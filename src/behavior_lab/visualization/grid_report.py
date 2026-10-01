@@ -47,9 +47,17 @@ def _img(fig) -> str:
     return tag
 
 
+def _stem(method: str) -> str:  # same rule as the batch script's label file names
+    return method.lower().replace(" ", "_").replace("/", "_").replace("-", "_")
+
+
 def _labels(batch_dir: Path, dataset: str) -> dict[str, np.ndarray]:
+    """Label files of cells that have a finished row (a running cell leaves a file but no row)."""
+    rows = json.loads((batch_dir / "batch_results.json").read_text())
+    done = {_stem(r["method"]) for r in rows if r["dataset"] == dataset and r["status"] == "ok"}
     files = sorted((batch_dir / "arrays" / dataset).glob("*_labels.npy"))
-    return {p.stem.removesuffix("_labels"): np.load(p) for p in files}
+    return {p.stem.removesuffix("_labels"): np.load(p) for p in files
+            if p.stem.removesuffix("_labels") in done}
 
 
 def _pairs(agr: dict) -> list[list[object]]:
