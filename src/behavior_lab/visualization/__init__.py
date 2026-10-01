@@ -23,6 +23,7 @@ from .colors import (
 )
 from .html_report import generate_pipeline_report, fig_to_base64
 from .comparison import render_comparison_report, render_cluster_gallery
+from .agreement import label_agreement, plot_label_agreement, stretch_labels
 from .video_overlay import (
     render_skeleton_on_frame,
     overlay_keypoints_on_video,
