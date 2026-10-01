@@ -87,39 +87,46 @@ Primary notebooks:
 
 ## Dataset x Method Grid
 
-The grid is filled by one script, run once per environment; results are merged by `(dataset, method)` into `outputs/behavior_analysis_workbench/batch/`.
+One script fills the grid, run once per environment or machine; rows are merged by `(dataset, method)` into `outputs/behavior_analysis_workbench/<out>/`.
 
 ```bash
-# light methods (main env; pca_hmm needs --extra moseq-fallback)
-uv run python scripts/run_behavior_workbench_batch.py --datasets avatar,subtle \
-    --methods kmeans_pca_umap,B-SOiD,pca_hmm_moseq_fallback
+# light methods (main env; the HMM fallback needs --extra moseq-fallback)
+uv run python scripts/run_behavior_workbench_batch.py --out long --max-frames 30000 --repeats 3 \
+    --datasets avatar,subtle,shank3ko --methods kmeans_pca_umap,B-SOiD,pca_hmm_moseq_fallback
 # SUBTLE (own env)
 UV_PROJECT_ENVIRONMENT=.venv-subtle uv run --extra subtle --extra viz --extra clustering \
-    python scripts/run_behavior_workbench_batch.py --datasets avatar,subtle --methods SUBTLE
+    python scripts/run_behavior_workbench_batch.py --out long --max-frames 30000 --repeats 3 \
+    --datasets avatar,subtle,shank3ko --methods SUBTLE
+# keypoint-MoSeq: Linux only (own env, CPU works); then copy its folder back and merge
+UV_PROJECT_ENVIRONMENT=.venv-moseq uv sync --python 3.11 --extra moseq --extra viz --extra clustering
+JAX_PLATFORMS=cpu .venv-moseq/bin/python scripts/run_behavior_workbench_batch.py --out long \
+    --max-frames 30000 --repeats 3 --datasets avatar,subtle,shank3ko --methods keypoint_moseq
+uv run python scripts/run_behavior_workbench_batch.py --out long --merge <copied folder>
+# shareable page (plain HTML source; the vault's build_page.py adds theme and back link)
+uv run python -m behavior_lab.visualization.grid_report outputs/behavior_analysis_workbench/long
 ```
 
-- Datasets: every block in `load_datasets()`. AVATAR slices come from `$BEHAVIOR_LAB_AVATAR_DIR` (default `~/data/avatar_gslrm/keypoints/*_gslrm.npz`), one slice per pose post-processing variant, in the file's native 11-point layout (not remapped to SUBTLE's 9; see `architecture.md` "Pose Output Contract").
-- Missing keypoints are interpolated over time before any method runs; `nan_frac` and `max_gap_frames` are stored per slice in `dataset_slices.json`. They are not zero-filled, because the origin is a real position.
-- B-SOiD labels are 10 Hz bins; bout durations use that rate.
+Slices and inputs
 
-Status on this machine (macOS arm64, 2026-10-01):
+- A slice is one recording or one pose variant, fitted on its own. SUBTLE recordings (`y5a5_*`, 9 keypoints) and two same-date Shank3KO recordings (16 keypoints) run at full length; AVATAR slices come from `$BEHAVIOR_LAB_AVATAR_DIR` (default `~/data/avatar_gslrm/keypoints/*_gslrm.npz`), one per pose post-processing variant, in the file's native 11-point layout (see `architecture.md` "Pose Output Contract").
+- Recordings are never concatenated: a splice is a fake transition for temporal models.
+- Missing keypoints are interpolated over time before any method runs; `nan_frac` and `max_gap_frames` are stored per slice.
 
-| Method | AVATAR 11-point, 600 frames | Note |
-|---|---|---|
-| kmeans_pca_umap, B-SOiD, pca_hmm_moseq_fallback | runs | main env |
-| SUBTLE | runs, 3 to 5 superclusters, 12 to 14 subclusters | `.venv-subtle` |
-| keypoint-MoSeq | does not install | the lockfile resolves `keypoint-moseq` 0.4.6, whose `jaxtyping==0.2.14` pin breaks the unpinned `dynamax` 1.0.2 import; `keypoint-moseq>=0.6` requires `jax-cuda12-pjrt`, which has Linux wheels only. Working versions are recorded in `env_snapshots/kpms.yml` (Linux, CUDA) |
+Repeats and agreement
 
-Reading the label-agreement panel: SUBTLE has no fixed seed, so compare against repeat runs first. On the AVATAR `st_optim` slice (600 frames, 20 fps, 2026-10-01, `SUBTLE.fit_predict(isolate=True)`):
+- `--repeats N` runs seeds `seed..seed+N-1`; the seed reaches kmeans/UMAP, B-SOiD, the HMM fallback and keypoint-MoSeq. SUBTLE has no seed upstream, so its repeats differ by design. `repeat_ari_mean` per cell is the noise floor for every other comparison.
+- `behavior_lab.visualization.agreement` (used by notebook 03 and the HTML report) reports ARI with a circular-shift null, AMI, and homogeneity in both directions, because ARI alone drops when one method merely splits another's labels more finely.
+- B-SOiD labels are 10 Hz bins; bout durations use that rate and bins map to frames by `floor(i * L / T)`.
 
-| Labels | Clusters (3 runs) | ARI, same input (3 runs) | ARI, between the 4 pose variants (1 run each, 6 pairs) |
-|---|---|---|---|
-| subclusters | 13, 14, 12 | 0.68, 0.62, 0.68 | 0.30 to 0.42 |
-| superclusters, finest level | 5, 5, 3 | 0.61, 0.38, 0.47 | 0.00 to 0.22 |
+keypoint-MoSeq recipe and install
 
-Agreement between pose variants is lower than agreement between repeat runs on one variant, at both levels. This is one clip and three repeats: a description of this slice, not an estimate of how much pose post-processing matters.
+- Fit = the modeling tutorial's two stages: AR-HMM only for 50 iterations, then the full model for 500 with kappa 1e4; tail keypoints excluded; `latent_dim = min(10, dims for 90% variance)`. kappa is not tuned to a target syllable duration, so read `median_bout_sec` before its agreement numbers.
+- It installs on Linux with Python < 3.13 only: `keypoint-moseq>=0.6` depends on `jax-cuda12-pjrt` (Linux wheels), and 0.4.x does not import against current `dynamax`. The lock pins `jax 0.6.x` and `tfp-nightly==0.26.0.dev20260704` (the set in `env_snapshots/kpms.yml`); a newer nightly breaks `dynamax`.
+- Measured on a 1-CPU WSL box: 20 iterations on 12,010 frames in 61.5 s including compilation.
 
-SUBTLE results written before 2026-10-01 are not usable: `SUBTLE.fit()` returned `Mapper.y`, which is in the shuffled training order, and flattened the `(T, n_levels)` supercluster array (label length `T * n_levels`). Measured on 1,200 SUBTLE frames: mean bout 1.07 frames in the returned order against 9.02 frames in time order. Fixed in `subtle_wrapper.py`; old `SUBTLE` rows in `batch_results.csv` and the SUBTLE cells of the CalMS21 notebooks need a re-run.
+Results and their numbers live in the vault experiment note `30_Projects/Behavior-Lab/_Agent/Experiment/261002_behaviorlab_discovery_grid_long_run.md` and the page built from the grid; they are not copied here.
+
+SUBTLE results written before 2026-10-01 are not usable: `SUBTLE.fit()` returned `Mapper.y`, which is in the shuffled training order, and flattened the `(T, n_levels)` supercluster array (label length `T * n_levels`). Measured on 1,200 SUBTLE frames: mean bout 1.07 frames in the returned order against 9.02 frames in time order. Fixed in `subtle_wrapper.py`; the SUBTLE cells of the CalMS21 notebooks need a re-run.
 
 ## Minimal API
 

@@ -15,6 +15,7 @@ and per-cluster galleries). Heavy methods run in isolated envs via
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import shutil
 import math
@@ -449,19 +450,22 @@ def run_cell(ds: DatasetSlice, method: str, fn: Callable[[DatasetSlice], BatchRe
 def save_results(rows: list[dict], slices: list[dict]) -> pd.DataFrame:
     """Upsert by (dataset, method): methods live in separate envs and machines, so one run
     fills only some cells. Called after every cell so a long run can be interrupted."""
-    merged = {(r["dataset"], r["method"]): r for r in rows}
-    prev = OUT_DIR / "batch_results.json"
-    if prev.exists():
-        merged = {(r["dataset"], r["method"]): r for r in json.loads(prev.read_text())} | merged
-    df = pd.DataFrame(list(merged.values()))
-    df.to_csv(OUT_DIR / "batch_results.csv", index=False)
-    prev.write_text(json.dumps(list(merged.values()), indent=2), encoding="utf-8")
+    with open(OUT_DIR / ".lock", "w") as lock:  # several envs may write the same folder at once
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        merged = {(r["dataset"], r["method"]): r for r in rows}
+        prev = OUT_DIR / "batch_results.json"
+        if prev.exists():
+            merged = {(r["dataset"], r["method"]): r
+                      for r in json.loads(prev.read_text())} | merged
+        df = pd.DataFrame(list(merged.values()))
+        df.to_csv(OUT_DIR / "batch_results.csv", index=False)
+        prev.write_text(json.dumps(list(merged.values()), indent=2), encoding="utf-8")
 
-    by_name = {s["name"]: s for s in slices}
-    slices_path = OUT_DIR / "dataset_slices.json"
-    if slices_path.exists():
-        by_name = {s["name"]: s for s in json.loads(slices_path.read_text())} | by_name
-    slices_path.write_text(json.dumps(list(by_name.values()), indent=2), encoding="utf-8")
+        by_name = {s["name"]: s for s in slices}
+        slices_path = OUT_DIR / "dataset_slices.json"
+        if slices_path.exists():
+            by_name = {s["name"]: s for s in json.loads(slices_path.read_text())} | by_name
+        slices_path.write_text(json.dumps(list(by_name.values()), indent=2), encoding="utf-8")
     return df
 
 
