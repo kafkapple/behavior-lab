@@ -42,7 +42,11 @@ loaders = ["h5py>=3.8"]
 bsoid = ["umap-learn>=0.5", "hdbscan>=0.8"]
 # 0.4.x pins jaxtyping==0.2.14 against an unpinned dynamax and does not import; >=0.6 depends on
 # jax-cuda12 (Linux wheels only), so the extra is Linux-only (261001). Working set: env_snapshots/kpms.yml
-moseq = ["keypoint-moseq>=0.6; sys_platform == 'linux'"]
+moseq = [
+    "keypoint-moseq>=0.6; sys_platform == 'linux'",
+    # without this floor the resolver backtracks to jax-moseq 0.2.2 (jaxtyping==0.2.14 pin, import fails)
+    "jax-moseq>=0.3; sys_platform == 'linux'",
+]
 moseq-fallback = ["hmmlearn>=0.3"]
 subtle = ["subtle"]
 vame = ["vame-py>=0.14; python_version >= '3.12'"]
