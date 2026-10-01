@@ -25,6 +25,12 @@ The canonical exchange format is always `(T,K,D)`: time, keypoint, coordinate.
 Multi-animal recordings can either be flattened into `(T, M*K, D)` or kept as
 separate tracks when a downstream method needs identity-specific handling.
 
+## Two-Stage View
+
+Pose estimation is Stage 0; representation (Stage 1) and discovery and analysis (Stage 2) are compared on the shared `(T,K,D)` contract.
+Canonical text lives in the vault note `30_Projects/Behavior-Lab/_Agent/261001_Behavior_two_stage_concept.md` (method placement table included); kept there to avoid two copies.
+Only the `kmeans_pca_umap` path honors `feature=` (`experiments/discovery.py`); other methods compute Stage 1 internally.
+
 ## Pose And Feature Sources
 
 Generated from `behavior_lab.data.features.catalog`:
