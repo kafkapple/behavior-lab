@@ -43,13 +43,13 @@ bsoid = ["umap-learn>=0.5", "hdbscan>=0.8"]
 # 0.4.x pins jaxtyping==0.2.14 against an unpinned dynamax and does not import; >=0.6 depends on
 # jax-cuda12 (Linux wheels only), so the extra is Linux-only (261001). Working set: env_snapshots/kpms.yml
 moseq = [
-    "keypoint-moseq>=0.6; sys_platform == 'linux'",
+    "keypoint-moseq>=0.6; sys_platform == 'linux' and python_version < '3.13'",
     # without this floor the resolver backtracks to jax-moseq 0.2.2 (jaxtyping==0.2.14 pin, import fails)
-    "jax-moseq>=0.3; sys_platform == 'linux'",
+    "jax-moseq>=0.3; sys_platform == 'linux' and python_version < '3.13'",
     # dynamax pulls tfp-nightly unpinned; a newer nightly breaks against jax<0.7 (tfb.Bijector missing).
     # Pinned to the set recorded in env_snapshots/kpms.yml.
-    "jax>=0.6,<0.7; sys_platform == 'linux'",
-    "tfp-nightly==0.26.0.dev20260704; sys_platform == 'linux'",
+    "jax>=0.6,<0.7; sys_platform == 'linux' and python_version < '3.13'",
+    "tfp-nightly==0.26.0.dev20260704; sys_platform == 'linux' and python_version < '3.13'",
 ]
 moseq-fallback = ["hmmlearn>=0.3"]
 subtle = ["subtle"]
