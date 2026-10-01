@@ -43,11 +43,11 @@ bsoid = ["umap-learn>=0.5", "hdbscan>=0.8"]
 moseq = ["keypoint-moseq>=0.4"]
 moseq-fallback = ["hmmlearn>=0.3"]
 subtle = ["subtle"]
-vame = ["vame-py>=0.14"]
-pyskl = ["pyskl", "mmcv>=2.0", "mmaction2>=1.0"]
+vame = ["vame-py>=0.14; python_version >= '3.12'"]
+# pyskl removed from extras (261001): not on PyPI, git source pins mmcv-full 1.5.0 which does not build; install separately if needed
 # Benchmark
 benchmark = ["joblib>=1.2"]
-external = ["behavior-lab[bsoid,moseq,subtle,vame,pyskl]"]
+# `external` aggregate removed (261001): moseq (jax) and the others pin conflicting numpy, see scripts/isolated_run.py. Install one external method per env.
 all = ["behavior-lab[torch,viz,clustering,bsoid,loaders,benchmark,behavemae]"]
 dev = ["behavior-lab[all]", "pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.1", "mypy>=1.0"]
 
@@ -74,3 +74,12 @@ pythonpath = ["src", "external/BehaveMAE"]
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
+
+[tool.uv]
+conflicts = [
+    [{ extra = "moseq" }, { extra = "vame" }, { extra = "subtle" }, { extra = "bsoid" }],
+]
+
+[tool.uv.sources]
+# PyPI "subtle" is an unrelated subtitle downloader (checked 261001); the SUBTLE package is installed from GitHub
+subtle = { git = "https://github.com/jeakwon/subtle.git" }
