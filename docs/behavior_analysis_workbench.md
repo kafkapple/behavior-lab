@@ -126,7 +126,10 @@ keypoint-MoSeq recipe and install
 
 Results and their numbers live in the vault experiment note `30_Projects/Behavior-Lab/_Agent/Experiment/261002_behaviorlab_discovery_grid_long_run.md` and the page built from the grid; they are not copied here.
 
-SUBTLE results written before 2026-10-01 are not usable: `SUBTLE.fit()` returned `Mapper.y`, which is in the shuffled training order, and flattened the `(T, n_levels)` supercluster array (label length `T * n_levels`). Measured on 1,200 SUBTLE frames: mean bout 1.07 frames in the returned order against 9.02 frames in time order. Fixed in `subtle_wrapper.py`; the SUBTLE cells of the CalMS21 notebooks need a re-run.
+SUBTLE wrapper labels written before 2026-10-01 are not in time order: `SUBTLE.fit()` returned `Mapper.y`, which is in the shuffled training order, and flattened the `(T, n_levels)` supercluster array (label length `T * n_levels`). Measured on 1,200 SUBTLE frames: mean bout 1.07 frames in the returned order against 9.02 frames in time order. Fixed in `subtle_wrapper.py`.
+
+- Affected: anything temporal computed from `SUBTLE.fit()` / `fit_predict()` labels (bout durations, transitions, ethograms, ARI against frame labels), i.e. the `SUBTLE` rows of the June `batch/batch_results.csv`.
+- Not affected: cluster counts and UMAP scatter plots (order-independent), which is all `phase4_report.md` and `subtle_pipeline_reference.md` report for SUBTLE; and `notebooks/calms21_behavior_discovery/01_subtle_baseline.ipynb`, which calls the upstream API and reads the per-session, time-ordered `out.y`.
 
 ## Minimal API
 
