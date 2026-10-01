@@ -19,8 +19,8 @@ from .agreement import label_agreement, plot_label_agreement
 # Slices that are the same frames under different pose post-processing: labels are comparable
 # frame by frame across the slices of one group.
 SAME_FRAMES_PREFIXES = ("avatar_",)
-COLS = ["dataset", "method", "status", "n_frames", "n_clusters", "median_bout_sec", "noise_frac",
-        "n_repeats", "repeat_ari_mean", "repeat_ari_min", "silhouette", "elapsed_sec"]
+COLS = ["dataset", "method", "n_frames", "n_clusters", "median_bout_sec", "noise_frac",
+        "n_repeats", "repeat_ari_mean", "repeat_ari_min", "elapsed_sec"]
 
 
 def _fmt(v: object) -> str:
@@ -40,7 +40,9 @@ def _img(fig) -> str:
 
     from .html_report import fig_to_base64
 
-    tag = f'<img src="data:image/png;base64,{fig_to_base64(fig)}" alt="">'
+    uri = fig_to_base64(fig, dpi=90)  # already a full data URI
+    assert uri.startswith("data:image/png;base64,")
+    tag = f'<img src="{uri}" alt="">'
     plt.close(fig)
     return tag
 
