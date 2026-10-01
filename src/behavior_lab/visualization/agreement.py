@@ -17,7 +17,8 @@ from sklearn.metrics import (
 def stretch_labels(labels: np.ndarray, T: int) -> np.ndarray:
     """Nearest-neighbour resample to length T (methods that emit bins, e.g. B-SOiD 10 Hz)."""
     labels = np.asarray(labels)
-    return labels if len(labels) == T else labels[np.linspace(0, len(labels) - 1, T).astype(int)]
+    # frame i belongs to bin floor(i * L / T); linspace over (0, L-1) would shift bin edges
+    return labels if len(labels) == T else labels[np.arange(T) * len(labels) // T]
 
 
 def label_agreement(seqs: dict[str, np.ndarray], *, n_shifts: int = 20,

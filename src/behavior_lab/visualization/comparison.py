@@ -43,8 +43,9 @@ def _normalize(runs: Any) -> dict[str, dict]:
 
 
 def _resample(lab: np.ndarray, T: int) -> np.ndarray:
-    lab = np.asarray(lab)
-    return lab if len(lab) == T else lab[np.linspace(0, len(lab) - 1, T).astype(int)]
+    from .agreement import stretch_labels
+
+    return stretch_labels(lab, T)
 
 
 def render_comparison_report(runs: Any, out_html: str | Path, *, fps: float = 30.0,
