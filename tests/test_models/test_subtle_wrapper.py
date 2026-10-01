@@ -231,3 +231,14 @@ class TestMorletWithClustering:
         bm = compute_behavior_metrics(labels, fps=30.0)
         assert bm.num_bouts == 4
         assert bm.temporal_consistency > 0.9  # 4 contiguous blocks
+
+
+def test_preprocess_centering_survives_nan():
+    import numpy as np
+    from behavior_lab.models.discovery.subtle_wrapper import SUBTLE
+
+    seq = np.ones((4, 2, 3), dtype=np.float32)
+    seq[1, 0, 0] = np.nan
+    out = SUBTLE(fps=20)._preprocess(seq)
+    assert out.shape == (4, 6)
+    assert np.isnan(out).sum() == 1  # only the missing coordinate, not the whole array

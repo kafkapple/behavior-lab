@@ -6,6 +6,8 @@ Install: pip install git+https://github.com/jeakwon/subtle.git
 Compatibility: scipy >= 1.12 removed signal.cwt. We monkey-patch the
 SUBTLE module's morlet_cwt to use a manual convolution-based CWT.
 """
+# no-split: one model wrapper; config, scipy/umap compat patches and subprocess isolation
+# share module state (file was already 421L before the 261001 one-line NaN fix).
 from __future__ import annotations
 
 import json
@@ -177,7 +179,7 @@ class SUBTLE:
     def _preprocess(self, seq: np.ndarray) -> np.ndarray:
         """Convert (T, K, D) -> (T, K*D) with centering."""
         T, K, D = seq.shape
-        mean = seq.mean(axis=(0, 1))
+        mean = np.nanmean(seq, axis=(0, 1))  # mean() would blank the array on one NaN
         centered = seq - mean
         return centered.reshape(T, K * D)
 

@@ -81,6 +81,36 @@ Primary notebooks:
 - `notebooks/behavior_analysis_workbench/02_method_comparison_matrix.ipynb`
   - Structured comparison template for dataset x feature x method sweeps.
   - Supports B-SOiD, SUBTLE, keypoint-MoSeq, hBehaveMAE, and lightweight baselines.
+- `notebooks/behavior_analysis_workbench/03_batch_results_all_methods.ipynb`
+  - Reads the dataset x method grid written by `scripts/run_behavior_workbench_batch.py`.
+  - Tables and heatmaps per cell, then label agreement on one clip (ethogram per method, ARI between methods, ARI between dataset slices for one method).
+
+## Dataset x Method Grid
+
+The grid is filled by one script, run once per environment; results are merged by `(dataset, method)` into `outputs/behavior_analysis_workbench/batch/`.
+
+```bash
+# light methods (main env; pca_hmm needs --extra moseq-fallback)
+uv run python scripts/run_behavior_workbench_batch.py --datasets avatar,subtle \
+    --methods kmeans_pca_umap,B-SOiD,pca_hmm_moseq_fallback
+# SUBTLE (own env)
+UV_PROJECT_ENVIRONMENT=.venv-subtle uv run --extra subtle --extra viz --extra clustering \
+    python scripts/run_behavior_workbench_batch.py --datasets avatar,subtle --methods SUBTLE
+```
+
+- Datasets: every block in `load_datasets()`. AVATAR slices come from `$BEHAVIOR_LAB_AVATAR_DIR` (default `~/data/avatar_gslrm/keypoints/*_gslrm.npz`), one slice per pose post-processing variant, in the file's native 11-point layout (not remapped to SUBTLE's 9; see `architecture.md` "Pose Output Contract").
+- Missing keypoints are interpolated over time before any method runs; `nan_frac` and `max_gap_frames` are stored per slice in `dataset_slices.json`. They are not zero-filled, because the origin is a real position.
+- B-SOiD labels are 10 Hz bins; bout durations use that rate.
+
+Status on this machine (macOS arm64, 2026-10-01):
+
+| Method | AVATAR 11-point, 600 frames | Note |
+|---|---|---|
+| kmeans_pca_umap, B-SOiD, pca_hmm_moseq_fallback | runs | main env |
+| SUBTLE | runs, 3 to 5 clusters | `.venv-subtle` |
+| keypoint-MoSeq | does not install | the lockfile resolves `keypoint-moseq` 0.4.6, whose `jaxtyping==0.2.14` pin breaks the unpinned `dynamax` 1.0.2 import; `keypoint-moseq>=0.6` requires `jax-cuda12-pjrt`, which has Linux wheels only. Working versions are recorded in `env_snapshots/kpms.yml` (Linux, CUDA) |
+
+Reading the label-agreement panel: SUBTLE has no fixed seed. On one AVATAR slice (600 frames, identical input, 3 runs) the run-to-run ARI was 0.13 to 0.22, and ARI between pose variants was -0.01 to 0.29. At this clip length a difference between pose variants is therefore not distinguishable from run-to-run variation; repeat runs on longer recordings before reading it.
 
 ## Minimal API
 

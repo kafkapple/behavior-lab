@@ -125,7 +125,7 @@ AVATAR files: `~/data/avatar_gslrm/keypoints/*.npz` with `keypoints (T, 11, 3)`,
 | 7 | left_forepaw | 4 | forelegL1 |
 | 8 | tail_tip | 10 | tailend1 |
 
-Unused AVATAR points: 2 `earL1`, 3 `earR1`, 9 `tail1`. Caveats: (1) `mid_back` has no source, so a 9-point array cannot be built by re-indexing alone; any synthesized point (e.g. neck–tail_base midpoint) must be marked derived in `metadata`. (2) L/R in AVATAR names were not checked against the labelling protocol (BS comment). (3) `_gslrm.npz` coordinates are in GS-LRM normalized space (range about -0.7 to 0.9, neck–tail_base median 0.56), not mm; the unit field above exists for exactly this. (4) `SUBTLELoader.load_preprocessed` does not check `K == 9`, so loading an 11-point file today mislabels silently.
+Unused AVATAR points: 2 `earL1`, 3 `earR1`, 9 `tail1`. Caveats: (1) `mid_back` has no source, so a 9-point array cannot be built by re-indexing alone; any synthesized point (e.g. neck–tail_base midpoint) must be marked derived in `metadata`. (2) L/R in AVATAR names were not checked against the labelling protocol (BS comment). (3) `_gslrm.npz` coordinates are in GS-LRM normalized space (range about -0.7 to 0.9, neck–tail_base median 0.56), not mm; the unit field above exists for exactly this. (4) `SUBTLELoader.load_preprocessed` rejects files whose joint count differs from its skeleton; other layouts go through `behavior_lab.data.ingest()`, which keeps `names` and `valid` in `metadata`.
 
 ## Data Flow
 

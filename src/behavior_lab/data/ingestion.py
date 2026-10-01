@@ -136,6 +136,20 @@ def _load_npz(path: Path) -> list[BehaviorSequence]:
         if a.ndim != 3:
             raise ValueError(f"{path.name}: expected (T,K,D) keypoints, got {a.shape}")
         seqs.append(BehaviorSequence(keypoints=a, sample_id=f"{path.stem}_{i}" if len(arrays) > 1 else path.stem))
+    # Optional per-file fields of the pose output contract (docs/architecture.md).
+    if not isinstance(obj, np.ndarray) and len(seqs) == 1:
+        K = seqs[0].keypoints.shape[1]
+        if "names" in obj:
+            names = [str(n) for n in obj["names"]]
+            if len(names) != K:
+                raise ValueError(f"{path.name}: {len(names)} names for {K} keypoints")
+            seqs[0].metadata["node_names"] = names
+        if "valid" in obj:
+            valid = np.asarray(obj["valid"], dtype=bool)
+            if valid.shape != seqs[0].keypoints.shape[:2]:
+                raise ValueError(f"{path.name}: valid {valid.shape} != keypoints "
+                                 f"{seqs[0].keypoints.shape[:2]}")
+            seqs[0].metadata["valid"] = valid
     return seqs
 
 

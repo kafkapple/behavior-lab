@@ -14,8 +14,10 @@ and per-cluster galleries). Heavy methods run in isolated envs via
 # BatchResult/metric_result + plot/html helpers; splitting fragments locality.
 from __future__ import annotations
 
+import argparse
 import json
 import math
+import os
 import sys
 import time
 import traceback
@@ -35,7 +37,9 @@ from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, s
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from behavior_lab.data import ingest
 from behavior_lab.data.features import SkeletonBackend
+from behavior_lab.data.preprocessing import Interpolator
 from behavior_lab.evaluation import compute_behavior_metrics
 from behavior_lab.models.discovery.bsoid import BSOiD
 from behavior_lab.models.discovery.clustering import cluster_features
@@ -66,6 +70,7 @@ class BatchResult:
     n_clusters: int | None = None
     elapsed_sec: float | None = None
     silhouette: float | None = None
+    noise_frac: float | None = None
     ari: float | None = None
     nmi: float | None = None
     num_bouts: int | None = None
@@ -148,12 +153,45 @@ def load_datasets(max_frames: int = MAX_FRAMES) -> list[DatasetSlice]:
             notes={"source": str(mabe), "shape": str(kp.shape), "sequences": 2},
         ))
 
-    return datasets
+    # AVATAR 3D keypoints (BS lane output). One slice per post-processing variant, native joint
+    # layout from the file (11 points), not remapped to SUBTLE's 9 (docs/architecture.md).
+    avatar_dir = Path(os.environ.get("BEHAVIOR_LAB_AVATAR_DIR",
+                                     "~/data/avatar_gslrm/keypoints")).expanduser()
+    paths = sorted(avatar_dir.glob("*_gslrm.npz"))
+    prefix = os.path.commonprefix([p.stem for p in paths]) if len(paths) > 1 else ""
+    for path in paths:
+        seq = ingest(path, units="gslrm_normalized")[0]
+        variant = path.stem[len(prefix):].removesuffix("gslrm").strip("_") or "base"
+        datasets.append(DatasetSlice(
+            name=f"avatar_{variant}",
+            keypoints=seq.keypoints[:max_frames],
+            fps=20.0,  # not stored in the file; AVATAR lane contract
+            notes={"source": str(path), "shape": str(seq.keypoints.shape),
+                   "units": "gslrm_normalized", "node_names": seq.metadata.get("node_names")},
+        ))
+
+    return [fill_missing(ds) for ds in datasets]
+
+
+def fill_missing(ds: DatasetSlice) -> DatasetSlice:
+    """Interpolate NaN over time and record how much (zero-fill would be a real position)."""
+    miss = np.isnan(ds.keypoints)
+    ds.notes["nan_frac"] = round(float(miss.mean()), 4)
+    if miss.any():
+        m = miss.reshape(len(miss), -1).T  # (channels, T)
+        runs = np.diff(np.pad(m.astype(np.int8), ((0, 0), (1, 1))), axis=1)
+        # np.nonzero is row-major, so starts and ends pair up channel by channel
+        gaps = np.nonzero(runs == -1)[1] - np.nonzero(runs == 1)[1]
+        assert gaps.sum() == miss.reshape(len(miss), -1).sum()
+        ds.notes["max_gap_frames"] = int(gaps.max())
+        fill = Interpolator(max_gap=len(ds.keypoints))
+        ds.keypoints = fill(ds.keypoints).astype(np.float32)
+    return ds
 
 
 def metric_result(ds: DatasetSlice, method: str, labels: np.ndarray, features: np.ndarray | None,
-                  embedding: np.ndarray | None, elapsed: float, notes: dict[str, object] | None = None
-                  ) -> BatchResult:
+                  embedding: np.ndarray | None, elapsed: float, notes: dict[str, object] | None = None,
+                  label_fps: float | None = None) -> BatchResult:
     valid = labels >= 0
     n_clusters = len(set(labels[valid]) if valid.any() else set())
     sil = None
@@ -165,7 +203,7 @@ def metric_result(ds: DatasetSlice, method: str, labels: np.ndarray, features: n
         ari = float(adjusted_rand_score(ds.labels[valid], labels[valid])) if valid.any() else None
         nmi = float(normalized_mutual_info_score(ds.labels[valid], labels[valid])) if valid.any() else None
 
-    behavior = compute_behavior_metrics(labels, fps=ds.fps)
+    behavior = compute_behavior_metrics(labels, fps=label_fps or ds.fps)
     mean_bout = float(np.mean(list(behavior.bout_durations.values()))) if behavior.bout_durations else None
 
     ds_dir = OUT_DIR / "arrays" / ds.name
@@ -187,6 +225,7 @@ def metric_result(ds: DatasetSlice, method: str, labels: np.ndarray, features: n
         n_clusters=int(n_clusters),
         elapsed_sec=float(elapsed),
         silhouette=sil,
+        noise_frac=float((~valid).mean()),
         ari=ari,
         nmi=nmi,
         num_bouts=int(behavior.num_bouts),
@@ -216,13 +255,12 @@ def run_kmeans(ds: DatasetSlice) -> BatchResult:
 
 
 def run_bsoid(ds: DatasetSlice) -> BatchResult:
-    if ds.keypoints.shape[-1] != 2:
-        raise ValueError("B-SOiD route is run only on 2D slices in this batch")
     t0 = time.time()
     out = BSOiD(fps=int(ds.fps), min_cluster_size=20, random_state=RANDOM_STATE).fit(ds.keypoints)
     return metric_result(
         ds, "B-SOiD", out["labels"], out.get("features"), out.get("embedding_2d"),
         time.time() - t0, notes={"label_rate": "10fps bins"},
+        label_fps=ds.fps / max(1, int(ds.fps) // 10),  # labels are per bin, not per frame
     )
 
 
@@ -362,15 +400,15 @@ def plot_summary(df: pd.DataFrame) -> None:
     plt.close(fig)
 
 
-def write_html(df: pd.DataFrame, datasets: list[DatasetSlice]) -> None:
+def write_html(df: pd.DataFrame, slices: list[dict]) -> None:
     rows = df.fillna("").to_dict(orient="records")
     html_rows = "\n".join(
         "<tr>" + "".join(f"<td>{row.get(col, '')}</td>" for col in df.columns) + "</tr>"
         for row in rows
     )
     dataset_rows = "\n".join(
-        f"<tr><td>{d.name}</td><td>{d.keypoints.shape}</td><td>{d.fps}</td><td>{d.labels is not None}</td><td>{d.notes}</td></tr>"
-        for d in datasets
+        f"<tr><td>{d['name']}</td><td>{d['shape']}</td><td>{d['fps']}</td><td>{d['has_labels']}</td><td>{d['notes']}</td></tr>"
+        for d in slices
     )
     html = f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>Behavior Workbench Batch</title>
@@ -388,13 +426,26 @@ th{{background:#f4f4f4}}img{{max-width:1100px;width:100%;height:auto}}</style></
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--datasets",
+                    help="comma list, prefix match, e.g. avatar,subtle (default: all found)")
+    ap.add_argument("--methods", help=f"comma list from: {', '.join(METHODS)} (default: all)")
+    ap.add_argument("--max-frames", type=int, default=MAX_FRAMES)
+    args = ap.parse_args()
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    datasets = load_datasets()
+    datasets = load_datasets(args.max_frames)
+    if args.datasets:
+        want = args.datasets.split(",")
+        datasets = [d for d in datasets if any(d.name.startswith(w) for w in want)]
+    methods = {m: METHODS[m] for m in args.methods.split(",")} if args.methods else METHODS
+    assert datasets, "no dataset matched"
     results: list[BatchResult] = []
 
     for ds in datasets:
-        print(f"\nDataset {ds.name}: {ds.keypoints.shape}, fps={ds.fps}, labels={ds.labels is not None}")
-        for method, fn in METHODS.items():
+        print(f"\nDataset {ds.name}: {ds.keypoints.shape}, fps={ds.fps}, "
+              f"labels={ds.labels is not None}, nan_frac={ds.notes.get('nan_frac')}")
+        for method, fn in methods.items():
             print(f"  {method}...", flush=True)
             try:
                 result = fn(ds)
@@ -405,22 +456,23 @@ def main() -> None:
                 print(f"    error: {result.error}")
             results.append(result)
 
-    df = pd.DataFrame([asdict(r) for r in results])
+    # Upsert by (dataset, method): methods live in separate envs, so one run fills only some cells.
+    rows = {(r.dataset, r.method): asdict(r) for r in results}
+    prev = OUT_DIR / "batch_results.json"
+    if prev.exists():
+        rows = {(r["dataset"], r["method"]): r for r in json.loads(prev.read_text())} | rows
+    df = pd.DataFrame(list(rows.values()))
     df.to_csv(OUT_DIR / "batch_results.csv", index=False)
-    (OUT_DIR / "batch_results.json").write_text(
-        json.dumps([asdict(r) for r in results], indent=2),
-        encoding="utf-8",
-    )
-    (OUT_DIR / "dataset_slices.json").write_text(
-        json.dumps([
-            {"name": d.name, "shape": list(d.keypoints.shape), "fps": d.fps,
-             "has_labels": d.labels is not None, "notes": d.notes}
-            for d in datasets
-        ], indent=2),
-        encoding="utf-8",
-    )
+    prev.write_text(json.dumps(list(rows.values()), indent=2), encoding="utf-8")
+
+    slices = {d.name: {"name": d.name, "shape": list(d.keypoints.shape), "fps": d.fps,
+                       "has_labels": d.labels is not None, "notes": d.notes} for d in datasets}
+    slices_path = OUT_DIR / "dataset_slices.json"
+    if slices_path.exists():
+        slices = {s["name"]: s for s in json.loads(slices_path.read_text())} | slices
+    slices_path.write_text(json.dumps(list(slices.values()), indent=2), encoding="utf-8")
     plot_summary(df)
-    write_html(df, datasets)
+    write_html(df, list(slices.values()))
     print(f"\nWrote {OUT_DIR}")
 
 
