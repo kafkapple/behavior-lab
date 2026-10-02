@@ -29,8 +29,8 @@ COLS = ["dataset", "method", "n_frames", "n_clusters", "median_bout_sec", "noise
         "n_repeats", "repeat_ari_mean", "repeat_ari_min", "elapsed_sec"]
 # Flags (own loose rule, no literature threshold): a row that trips one is described, not ranked.
 MIN_CLUSTERS, MAX_NOISE = 3, 0.3
-GALLERY_CLUSTERS, GALLERY_MAX_SEC, GALLERY_PAD_SEC = 6, 3.0, 1.0
-GALLERY_GIF_FPS = 10  # frames are subsampled to about this rate to keep the page small
+GALLERY_CLUSTERS, GALLERY_MAX_SEC, GALLERY_PAD_SEC = 6, 2.0, 0.5
+GALLERY_GIF_FPS = 8  # frames are subsampled to about this rate: 3 slices come to about 9 MB
 SKELETONS = {"subtle_": "subtle_mouse", "shank3ko_": "shank3ko"}
 
 
@@ -349,8 +349,9 @@ def render_gallery(batch_dir: str | Path, out_html: str | Path | None = None) ->
              f'{html.escape(", ".join(chosen))} · source: <code>{html.escape(str(batch_dir))}'
              "</code></div>",
              '<div class="tldr"><ul><li>Each animation is one real bout of that cluster: the '
-             f"bout of median length, at most {GALLERY_MAX_SEC:.0f} s, with {GALLERY_PAD_SEC:.0f} "
-             "s of context before and after. Nothing is stitched.</li>"
+             f"bout of median length, at most {GALLERY_MAX_SEC:g} s, with {GALLERY_PAD_SEC:g} s of "
+             f"context before and after, played at about {GALLERY_GIF_FPS} fps. Nothing is "
+             "stitched.</li>"
              f"<li>Per method the {GALLERY_CLUSTERS} clusters with the most frames are shown; "
              "the heading says how many clusters exist and what share of frames is covered.</li>"
              "<li>Cluster ids are per method: cluster 3 of one method is unrelated to cluster 3 "
