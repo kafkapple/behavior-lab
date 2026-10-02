@@ -68,7 +68,8 @@ def label_agreement(seqs: dict[str, np.ndarray], *, n_shifts: int = 20, seed: in
                 out["ari"][i, j] = out["ari"][j, i] = adjusted_rand_score(lab[i], lab[j])
                 out["ami"][i, j] = out["ami"][j, i] = adjusted_mutual_info_score(lab[i], lab[j])
                 null[i, j] = null[j, i] = float(np.mean(
-                    [adjusted_rand_score(lab[i], shift_within(lab[j], s, lengths)) for s in shifts]))
+                    [adjusted_rand_score(lab[i], shift_within(lab[j], s, lengths))
+                     for s in shifts]))
     assert np.allclose(out["ari"], out["ari"].T)
     return {"names": names, "n_frames": T, **out, "null_ari": null}
 
@@ -167,7 +168,8 @@ def match_clusters(a: np.ndarray, b: np.ndarray, *, n_shifts: int = 200, seed: i
     mean = float(J[rows, cols].mean())
     assert all(0 <= d["jaccard"] <= 1 and 0 <= d["expected"] <= 1 for d in pairs)
     return {"pairs": pairs, "jaccard": J, "ids_a": ids_a, "ids_b": ids_b,
-            "share_a": C.sum(axis=1) / n, "share_b": C.sum(axis=0) / n, "mean_matched": mean, "null_mean_matched": float(null_mean.mean()),
+            "share_a": C.sum(axis=1) / n, "share_b": C.sum(axis=0) / n, "mean_matched": mean,
+            "null_mean_matched": float(null_mean.mean()),
             "p_mean": float((1 + (null_mean >= mean).sum()) / (1 + n_shifts)),
             "n_frames": int(n), "n_a": len(ids_a), "n_b": len(ids_b)}
 

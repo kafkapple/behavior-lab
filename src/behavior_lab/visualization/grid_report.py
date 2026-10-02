@@ -22,15 +22,19 @@ from datetime import date
 from pathlib import Path
 
 from ._grid_common import (
+    DATASET_INFO,
     FAMILIES,
     FAMILY_VARS,
     MAX_NOISE,
+    METHOD_HEAD,
+    METHOD_INFO,
     MIN_CLUSTERS,
     PAIR_HEADER,
     ROW_COLS,
     ROW_HEAD,
     SAME_FRAMES_PREFIXES,
     SORT_JS,
+    RawHtml,
     _family,
     _flags,
     _fmt,
@@ -41,6 +45,7 @@ from ._grid_common import (
     _pairs,
     _table,
     _write,
+    family_embeddings,
 )
 from .agreement import label_agreement
 from .grid_slice import plot_grid_overview, schema_block, slice_blocks
@@ -84,6 +89,21 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
 
     families = list(dict.fromkeys(_family(d) for d in datasets))
     by_name = {s["name"]: s for s in slices}
+    settings_file = batch_dir / "method_settings.json"
+    settings = json.loads(settings_file.read_text()) if settings_file.exists() else {}
+    parts.append("<h2>Data and methods</h2><p>What was recorded and what each method does "
+                 "with it. Every cell is one unsupervised fit: no pretrained model, no labels."
+                 "</p><h3>Datasets</h3>")
+    parts.append(_table(["family", "slices", "what it is"],
+                        [[FAMILIES.get(f, f), ", ".join(d for d in datasets if _family(d) == f),
+                          RawHtml(DATASET_INFO.get(f, ""))] for f in families]))
+    parts.append("<h3>Methods and settings</h3><p>Slices named <code>*_pooled</code> are one "
+                 "fit across all recordings of the family (recordings stay separate sequences); "
+                 "all other slices are fitted alone.</p>")
+    parts.append(_table(METHOD_HEAD, [
+        [m, *METHOD_INFO.get(m, ("", "", "", "", "")),
+         "; ".join(f"{k} = {v}" for k, v in settings.get(m, {}).items())] for m in methods]))
+    emb, explained = family_embeddings(batch_dir, [by_name[d] for d in datasets])
     parts.append("<h2>Keypoint layouts</h2><p>One layout per dataset family. Every method takes "
                  "any layout as a (frames, keypoints, dims) array; only the drawing needs bones "
                  "and only keypoint-MoSeq needs to know the nose and the tail base, which it "
@@ -207,8 +227,11 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
                      "“B inside A” near 1 with a low reverse value means B is a finer split of "
                      "A.</p>")
         for ds in group:
-            parts.append(f"<h3>{html.escape(ds)}</h3>"
-                         + slice_blocks(batch_dir, ds, _keypoints(batch_dir, ds), fps[ds]))
+            notes = by_name[ds]["notes"]
+            parts.append(f"<h3>{html.escape(ds)}</h3>" + slice_blocks(
+                batch_dir, ds, _keypoints(batch_dir, ds), fps[ds], emb=emb.get(ds),
+                explained=explained.get(fam), lengths=notes.get("lengths"),
+                recordings=notes.get("recordings")))
         if fam + "_" in SAME_FRAMES_PREFIXES and len(group) > 1:
             body = ["<p>The slices are the same frames under different pose post-processing, "
                     "so one method's labels can be compared across them. Read each table "

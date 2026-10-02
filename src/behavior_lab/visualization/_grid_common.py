@@ -147,6 +147,69 @@ FAMILIES = {"subtle": "SUBTLE mouse recordings", "shank3ko": "Shank3KO recording
             "avatar": "AVATAR pose variants"}
 
 
+# What each dataset family is. Sources: SUBTLE repo and paper (Kwon et al., 2024); Huang et al.
+# (2021) for the 16-point Shank3 data; the AVATAR clip is a local file.
+DATASET_INFO = {
+    "subtle": ("Mouse 3D keypoints shipped with SUBTLE (Kwon et al., 2024): 9 keypoints, 20 fps, "
+               "recorded with the AVATAR multi-camera system. 5 recordings (files "
+               "y5a5_adult_&lt;id&gt;), about 10 min each."),
+    "shank3ko": ("Shank3 knockout and wild-type mice, 16 keypoints in 3D (Huang et al., 2021). "
+                 "One KO and one WT recording of the same date, 15 min each. The 30 fps used "
+                 "here is this repo's loader setting and was not confirmed in the paper."),
+    "avatar": ("One 600-frame clip triangulated in the AVATAR lane, 11 SLEAP keypoints, "
+               "normalized units. The 4 slices are the same frames after 4 pose "
+               "post-processing variants."),
+}
+# What each method does to the keypoints. Settings come from method_settings.json (written by
+# the batch script from the constants it ran with); this text only describes the pipeline.
+METHOD_INFO = {
+    "kmeans_pca_umap": ("speed, acceleration, body spread, spatial variance (4 features, "
+                        "speed scaled by body size)", "none: frames are clustered independently",
+                        "fixed", "frame", "yes"),
+    "B-SOiD": ("displacement, pairwise joint distances, angular change, averaged in 100 ms bins",
+               "none beyond the 100 ms bin", "data-driven (HDBSCAN on UMAP), with a noise label",
+               "10 Hz bin", "yes"),
+    "pca_hmm_moseq_fallback": ("raw coordinates, not centered or aligned, PCA",
+                               "Gaussian HMM", "fixed", "frame", "yes"),
+    "SUBTLE": ("coordinates centered per recording, Morlet wavelet spectrogram, PCA, UMAP",
+               "wavelet window; superclusters merge subclusters by transitions",
+               "data-driven (Phenograph, then superclusters)", "frame", "no (upstream)"),
+    "keypoint_moseq": ("keypoints centered and aligned to the body axis per frame, tail "
+                       "excluded, PCA latent", "autoregressive HMM (switching linear dynamics)",
+                       "upper bound, used states are data-driven", "frame", "yes"),
+}
+METHOD_HEAD = ["method", "input features", "temporal model", "number of clusters", "label rate",
+               "seeded", "settings as run"]
+
+
+def family_embeddings(batch_dir: Path, slices: list[dict]) -> tuple[dict, dict]:
+    """``(slice -> (T, 2) embedding, family -> explained variance)``.
+
+    One posture PCA is fitted on all recordings of a family, so every slice of the family is
+    drawn on identical axes. PCA is deterministic: refitting gives the same axes. A pooled
+    slice reuses the embeddings of its recordings."""
+    from .cluster_map import pose_embedding
+
+    emb, explained = {}, {}
+    names = [s["name"] for s in slices]
+    for fam in dict.fromkeys(_family(n) for n in names):
+        base = [s["name"] for s in slices if _family(s["name"]) == fam
+                and not s["notes"].get("lengths")]
+        kps = {n: _keypoints(batch_dir, n) for n in base}
+        kps = {n: k for n, k in kps.items() if k is not None}
+        if not kps:
+            continue
+        parts = np.split(pose_embedding(np.concatenate(list(kps.values()))),
+                         np.cumsum([len(k) for k in kps.values()])[:-1])
+        emb.update(dict(zip(kps, parts)))
+        explained[fam] = pose_embedding.explained
+    for s in slices:
+        recs = s["notes"].get("recordings")
+        if recs and all(r in emb for r in recs):
+            emb[s["name"]] = np.concatenate([emb[r] for r in recs])
+    return emb, explained
+
+
 def _family(name: str) -> str:
     return name.split("_")[0]
 

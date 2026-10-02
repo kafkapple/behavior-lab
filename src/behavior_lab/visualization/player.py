@@ -49,6 +49,7 @@ def player_data(keypoints: np.ndarray, edges: list[tuple[int, int]], embedding: 
                         "colors": [color[c] for c in order],
                         "share": [round(float((lab == c).mean()), 4) for c in order]})
     return {"hz": fps / max(1, round(fps / hz)), "n": len(idx), "k": K, "body": body,
+            "grid": span / 10,  # floor grid spacing in the file's units
             "kp": _quantize(xyz, lo, span), "edges": [list(map(int, e)) for e in edges],
             "emb": _quantize(emb, elo, ehi - elo + 1e-9), "methods": methods,
             "joint_colors": [joint_color(k) for k in range(K)]}
@@ -107,17 +108,29 @@ function init(root){
   function badge(c,m,big){const p=cent[c];if(!p)return;g.beginPath();g.arc(MX+p[0],p[1],big?11:8,0,7);
     g.fillStyle='#fff';g.fill();g.lineWidth=big?3:1.5;g.strokeStyle=m.col[c];g.stroke();
     g.fillStyle='#000';g.font=(big?'bold ':'')+'10px sans-serif';g.textAlign='center';g.fillText(c,MX+p[0],p[1]+3.5);}
-  function pose(){ // orthographic view: yaw about the third coordinate, pitch 0 = side, 90 deg = from above
+  function view(){ // orthographic: yaw about the third coordinate, pitch 0 = side, 90 deg = from above
     const k=d.k,o=t*k*3,cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),spn=Math.sin(pitch);
     let c=[500,500,0],z=1;
     if(fol.checked){c=[0,0,0];for(let j=0;j<k;j++)for(let a=0;a<3;a++)c[a]+=d.kp[o+3*j+a]/k;z=0.45/Math.max(d.body,.02);}
-    const out=[];for(let j=0;j<k;j++){const x=(d.kp[o+3*j]-c[0])/1000*z,y=(d.kp[o+3*j+1]-c[1])/1000*z,h=(d.kp[o+3*j+2]-c[2])/1000*z;
-      const xr=x*cy-y*sy,yr=x*sy+y*cy;out.push([P/2+xr*(P-40),P/2-(yr*spn+h*cp)*(P-40),yr*cp-h*spn]);}
-    return out;}
+    const pr=(X,Y,H)=>{const x=(X-c[0])/1000*z,y=(Y-c[1])/1000*z,h=(H-c[2])/1000*z,xr=x*cy-y*sy,yr=x*sy+y*cy;
+      return [P/2+xr*(P-40),P/2-(yr*spn+h*cp)*(P-40),yr*cp-h*spn];};
+    return {pr,c,o};}
+  function floor(v,fg){ // grid on the floor (third coordinate = its 1st percentile) and an axis gizmo
+    g.save();g.beginPath();g.rect(0,16,P,P-16);g.clip();g.strokeStyle=fg;g.lineWidth=1;g.globalAlpha=.18;
+    for(let i=0;i<=10;i++){let p=v.pr(i*100,0,0),q=v.pr(i*100,1000,0);g.beginPath();g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);g.stroke();
+      p=v.pr(0,i*100,0);q=v.pr(1000,i*100,0);g.beginPath();g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);g.stroke();}
+    g.restore();g.globalAlpha=1;
+    const o0=v.pr(v.c[0],v.c[1],v.c[2]),ax=[[1,0,0,'#d62728','x'],[0,1,0,'#2ca02c','y'],[0,0,1,'#1f77b4','z']];
+    ax.forEach(a=>{const p=v.pr(v.c[0]+a[0]*100,v.c[1]+a[1]*100,v.c[2]+a[2]*100);let dx=p[0]-o0[0],dy=p[1]-o0[1];
+      const n=Math.hypot(dx,dy)||1,L=28*Math.min(1,n/((P-40)*.1*(fol.checked?0.45/Math.max(d.body,.02):1)));dx=dx/n*L;dy=dy/n*L;
+      g.strokeStyle=a[3];g.lineWidth=2;g.beginPath();g.moveTo(36,P-36);g.lineTo(36+dx,P-36+dy);g.stroke();
+      g.fillStyle=a[3];g.font='11px sans-serif';g.fillText(a[4],36+dx*1.25-3,P-36+dy*1.25+4);});
+    g.fillStyle=fg;g.font='10px sans-serif';g.fillText('grid '+d.grid.toPrecision(2)+' (file units)',70,P-6);}
+  function pose(v){const out=[];for(let j=0;j<d.k;j++)out.push(v.pr(d.kp[v.o+3*j],d.kp[v.o+3*j+1],d.kp[v.o+3*j+2]));return out;}
   function draw(){const fg=getComputedStyle(root).color,m=M();
     g.clearRect(0,0,cv.width,cv.height);g.textAlign='left';g.fillStyle=fg;g.font='12px sans-serif';
     g.fillText('skeleton (drag to rotate)',4,12);g.fillText('cluster map: '+m.name,MX+4,12);
-    const q=pose();g.strokeStyle=fg;g.lineWidth=1.5;g.globalAlpha=.7;
+    const v=view();floor(v,fg);const q=pose(v);g.strokeStyle=fg;g.lineWidth=1.5;g.globalAlpha=.7;
     d.edges.forEach(e=>{g.beginPath();g.moveTo(q[e[0]][0],q[e[0]][1]);g.lineTo(q[e[1]][0],q[e[1]][1]);g.stroke();});
     g.globalAlpha=1;q.map((p,j)=>[p,j]).sort((a,b)=>b[0][2]-a[0][2]).forEach(([p,j])=>{g.beginPath();g.arc(p[0],p[1],4,0,7);g.fillStyle=d.joint_colors[j];g.fill();});
     if(t-cut<8){g.fillStyle='#d62728';g.font='bold 14px sans-serif';g.fillText('cut',P-40,14);}

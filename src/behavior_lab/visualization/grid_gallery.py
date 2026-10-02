@@ -22,6 +22,7 @@ from ._grid_common import (
     _stem,
     _subtle_map,
     _write,
+    family_embeddings,
 )
 from .agreement import stretch_labels
 from .cluster_map import pose_embedding
@@ -150,6 +151,7 @@ def render_player(batch_dir: str | Path, out_html: str | Path | None = None) -> 
              "<li>Playback is at 10 Hz; pose, map position and labels are all taken from the "
              "same frame.</li></ul></div>"]
     family, first = None, True
+    emb, _ = family_embeddings(batch_dir, slices)
     for s in slices:
         ds, kp = s["name"], _keypoints(batch_dir, s["name"])
         seqs = _labels(batch_dir, ds)
@@ -159,7 +161,8 @@ def render_player(batch_dir: str | Path, out_html: str | Path | None = None) -> 
             family = _family(ds)
             parts.append(f"<h2>{html.escape(FAMILIES.get(family, family))}</h2>")
         skel, _ = _skeleton(ds, s["notes"].get("node_names"), kp.shape[1])
-        data = player_data(kp, skel.edges, pose_embedding(kp), seqs, s["fps"])
+        data = player_data(kp, skel.edges, emb.get(ds, None) if ds in emb else pose_embedding(kp),
+                           seqs, s["fps"])
         parts.append(player_block(f"player-{ds}", f"{ds} ({len(kp)} frames, {len(seqs)} methods)",
                                   data, open_=first))
         first = False

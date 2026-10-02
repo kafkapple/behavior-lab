@@ -51,3 +51,41 @@ def test_match_clusters_recovers_relabelled_split():
 
     unrelated = match_clusters(a, np.repeat(rng.integers(0, 4, 300), 20), n_shifts=50)
     assert unrelated["p_mean"] > 0.05
+
+
+def test_shift_stays_inside_each_recording():
+    from behavior_lab.visualization.agreement import match_clusters, shift_within
+
+    lab = np.r_[np.zeros(100, int), np.ones(100, int)]          # each recording = one cluster
+    assert shift_within(lab, 0.3, [100, 100]).tolist() == lab.tolist()
+    assert shift_within(lab, 0.3).tolist() != lab.tolist()      # a whole-sequence roll mixes them
+    # two methods whose clusters are just the recording: not significant under the right null
+    m = match_clusters(lab, lab + 5, n_shifts=50, lengths=[100, 100])
+    assert m["p_mean"] > 0.5 and all(d["p"] > 0.5 for d in m["pairs"])
+
+
+def test_meta_groups_and_recording_purity():
+    from behavior_lab.visualization.agreement import match_clusters
+    from behavior_lab.visualization.correspondence import (
+        meta_groups,
+        plot_meta_graph,
+        plot_recording_shares,
+        recording_purity,
+    )
+
+    rng = np.random.default_rng(0)
+    a = np.repeat(rng.integers(0, 4, 300), 20)
+    seqs = {"a": a, "b": (a + 1) % 4 + 10, "c": np.repeat(rng.integers(0, 3, 300), 20)}
+    matches = {(x, y): match_clusters(seqs[x], seqs[y], n_shifts=50)
+               for x, y in [("a", "b"), ("a", "c"), ("b", "c")]}
+    share, groups = meta_groups(matches)
+    ab = [g for g in groups if {n[0] for n in g} >= {"a", "b"}]
+    assert 1 <= len(ab) <= 4                 # clusters of a are joined to their twins in b
+    assert all(sum(n[0] == "a" for n in g) == sum(n[0] == "b" for n in g) for g in ab)
+    assert abs(sum(v for n, v in share.items() if n[0] == "a") - 1) < 1e-9
+    assert plot_meta_graph(matches, "demo").axes
+    nmi, top = recording_purity(np.r_[np.zeros(50, int), np.ones(50, int)], [50, 50])
+    assert nmi > 0.99 and top == 1.0         # clusters = recordings
+    nmi, top = recording_purity(np.tile([0, 1], 50), [50, 50])
+    assert nmi < 0.01 and top == 0.5         # clusters shared equally
+    assert plot_recording_shares({"m": np.tile([0, 1], 50)}, [50, 50], ["r_1", "r_2"]).axes

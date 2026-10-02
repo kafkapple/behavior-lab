@@ -28,6 +28,7 @@ from .colors import (
     get_person_colors,
 )
 from .comparison import render_cluster_gallery, render_comparison_report
+from .correspondence import plot_meta_graph, plot_recording_shares, recording_purity
 from .dynamics import common_rate, plot_dynamics
 from .embedding import plot_embedding, plot_embedding_3d
 from .html_report import fig_to_base64, generate_pipeline_report
@@ -47,6 +48,9 @@ from .video_overlay import (
 )
 
 __all__ = [
+    "plot_meta_graph",
+    "plot_recording_shares",
+    "recording_purity",
     "common_rate",
     "plot_dynamics",
     "rank_colors",

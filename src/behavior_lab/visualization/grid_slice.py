@@ -18,13 +18,14 @@ from ._grid_common import (
     _subtle_map,
     _table,
 )
-from .agreement import label_agreement, match_clusters, plot_label_agreement
+from .agreement import label_agreement, match_clusters, plot_label_agreement, stretch_labels
 from .cluster_map import (
     plot_cluster_sizes,
     plot_method_maps,
     plot_subtle_cluster_map,
     pose_embedding,
 )
+from .correspondence import plot_meta_graph, plot_recording_shares
 from .dynamics import COMMON_HZ, plot_dynamics
 from .keypoint_schema import joint_color, plot_keypoint_schema
 
@@ -43,8 +44,10 @@ def schema_block(name: str, kp: np.ndarray, node_names: list[str] | None) -> tup
     return _img(fig), [kp.shape[1], kp.shape[2], f"{len(skel.edges)} ({note})", RawHtml(chips)]
 
 
-def slice_matches(seqs: dict[str, np.ndarray]) -> dict[tuple[str, str], dict]:
-    return {(a, b): match_clusters(seqs[a], seqs[b]) for a, b in combinations(seqs, 2)}
+def slice_matches(seqs: dict[str, np.ndarray],
+                  lengths: list[int] | None = None) -> dict[tuple[str, str], dict]:
+    return {(a, b): match_clusters(seqs[a], seqs[b], lengths=lengths)
+            for a, b in combinations(seqs, 2)}
 
 
 def _supported(matches: dict[tuple[str, str], dict]) -> list[list[object]]:
@@ -122,7 +125,9 @@ def plot_grid_overview(rows: list[dict], flags: dict, families: list[str]):
     return fig
 
 
-def slice_blocks(batch_dir: Path, ds: str, kp: np.ndarray | None, fps: float) -> str:
+def slice_blocks(batch_dir: Path, ds: str, kp: np.ndarray | None, fps: float, *,
+                 emb: np.ndarray | None = None, explained: float | None = None,
+                 lengths: list[int] | None = None, recordings: list[str] | None = None) -> str:
     seqs = _labels(batch_dir, ds)
     if len(seqs) < 2:
         return "<p>Fewer than two methods finished on this slice.</p>"
@@ -131,7 +136,18 @@ def slice_blocks(batch_dir: Path, ds: str, kp: np.ndarray | None, fps: float) ->
     if T < SHORT_FRAMES:
         out.append(f"<p>{T} frames: too short for stable clusters; cluster sizes and matches "
                    "below are low confidence.</p>")
-    fig, agr = plot_label_agreement(seqs, ds, fps=fps)
+    if lengths:
+        full = {k: stretch_labels(v, T) for k, v in seqs.items()}
+        out.append(_details(
+            "Cluster share per recording",
+            "<p>One fit across all recordings, so a cluster id means the same in every "
+            "recording. Bars: share of time per cluster in each recording. NMI(cluster, "
+            "recording) near 0 means the clusters are shared by the animals; near 1 means "
+            "the clusters mostly tell the animals apart (position, body size or session), "
+            "not behavior. With one animal per group, a difference between bars cannot be "
+            "attributed to the group.</p>"
+            + _img(plot_recording_shares(full, lengths, recordings or [], ds)), open_=True))
+    fig, agr = plot_label_agreement(seqs, ds, fps=fps, lengths=lengths)
     out.append(_details("Label sequences and agreement",
                         _img(fig) + _table(PAIR_HEADER, _pairs(agr)), open_=True))
     out.append(_details("Cluster sizes", _img(plot_cluster_sizes(seqs, ds))))
@@ -145,11 +161,14 @@ def slice_blocks(batch_dir: Path, ds: str, kp: np.ndarray | None, fps: float) ->
         "self-transitions left out. Right: bout lengths on a log axis; the dashed line is the "
         "shortest bout the grid allows.</p>" + _img(plot_dynamics(seqs, T, fps, ds), dpi=70)))
     if kp is not None:
-        emb = pose_embedding(kp)
+        if emb is None:
+            emb, explained = pose_embedding(kp), pose_embedding.explained
         out.append(_details(
             "Cluster maps on shared axes",
             "<p>Every point is one frame, placed by a 2D PCA of posture (pairwise joint "
-            f"distances, joint heights; {pose_embedding.explained:.0%} of the variance). The "
+            f"distances, joint heights; {explained:.0%} of the variance), fitted once on all "
+            "recordings of this dataset family: the axes are the same linear combination of "
+            "posture features on every slice, and PCA has no random component. The "
             "points are identical in every panel; only the coloring changes, by each method's "
             "labels. The figure answers one question: do a method's clusters differ in "
             "posture along these two axes? It does not rank methods: clusters that overlap "
@@ -179,5 +198,15 @@ def slice_blocks(batch_dir: Path, ds: str, kp: np.ndarray | None, fps: float) ->
         fig = plot_subtle_cluster_map(m["embedding"], m["subclusters"], m["superclusters"], ds)
         out.append(_details("SUBTLE's own map", "<p>SUBTLE's UMAP embedding, colored by "
                             f"subcluster and by supercluster. {html.escape(note)}</p>" + _img(fig)))
-    out.append(_details("Cluster correspondence between methods", _matching(slice_matches(seqs))))
+    matches = slice_matches(seqs, lengths)
+    out.append(_details(
+        "Cluster correspondence between methods",
+        "<p>One column per method, one circle per cluster (1% of frames or more; size = share "
+        "of frames, number = cluster id). A line joins two clusters that are matched one to "
+        "one and clear the shifted null (p &lt; 0.05); its width is the Jaccard overlap. "
+        "Clusters joined by lines form a group and share a color: read them as “the same "
+        "segment of behavior under different methods”. White circles have no partner. "
+        "Vertical position has no meaning. Construction after the cluster-ensemble "
+        "meta-graph of Strehl &amp; Ghosh (2002).</p>" + _img(plot_meta_graph(matches, ds))
+        + _matching(matches)))
     return "".join(out)

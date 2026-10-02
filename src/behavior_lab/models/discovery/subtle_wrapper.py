@@ -284,12 +284,14 @@ class SUBTLE:
         use_super = use_superclusters if use_superclusters is not None \
             else self.config.use_superclusters
 
-        # Concatenate sequences for transfer
+        # One array for transfer; the subprocess splits it back, so recordings stay separate
+        # sequences (handing SUBTLE the concatenation would splice them into one recording).
         kp = np.concatenate(sequences, axis=0) if len(sequences) > 1 else sequences[0]
+        lengths = [len(s) for s in sequences]
 
         with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as f:
             tmp_in = f.name
-            np.savez(f, keypoints=kp)
+            np.savez(f, keypoints=kp, lengths=np.array(lengths))
         tmp_out = tmp_in.replace(".npz", "_result.npz")
 
         script = f"""
@@ -301,14 +303,16 @@ multiprocessing.set_start_method('spawn', force=True)
 
 from behavior_lab.models.discovery.subtle_wrapper import SUBTLE, SUBTLEConfig
 
-kp = np.load('{tmp_in}')['keypoints']
+src = np.load('{tmp_in}')
+seqs = np.split(src['keypoints'], np.cumsum(src['lengths'])[:-1])
+assert [len(s) for s in seqs] == src['lengths'].tolist()
 config = SUBTLEConfig(fps={self.config.fps},
                       n_train_frames={self.config.n_train_frames},
                       use_superclusters={use_super},
                       isolate=False)
 model = SUBTLE(config=config)
 t0 = time.time()
-cr = model.fit([kp], use_superclusters={use_super})
+cr = model.fit(seqs, use_superclusters={use_super})
 elapsed = time.time() - t0
 
 np.savez('{tmp_out}',
