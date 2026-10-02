@@ -53,7 +53,7 @@ from behavior_lab.visualization.grid_report import render_grid_report
 OUT_DIR = ROOT / "outputs" / "behavior_analysis_workbench" / "batch"
 RANDOM_STATE = 42
 MAX_FRAMES = 1500
-KPMS = {"ar_iters": 50, "iters": 500, "full_kappa": 1e4}  # keypoint-MoSeq tutorial values
+KPMS = {"ar_iters": 50, "iters": 500, "ar_kappa": 1e6, "full_kappa": 1e4, "num_states": 20}  # keypoint-MoSeq tutorial values
 SUBTLE_TIMEOUT_S = 3600
 KPMS_ANTERIOR = ("nose", "nose1")
 KPMS_POSTERIOR = ("tail_base", "tailstart1", "root_tail")
@@ -143,6 +143,21 @@ def load_datasets(max_frames: int = MAX_FRAMES) -> list[DatasetSlice]:
                        "node_names": list(get_skeleton("shank3ko").joint_names)},
             ))
 
+    # Pooled slices: every method is fitted once on all recordings of a family, so cluster ids
+    # mean the same thing in every animal. Recordings stay separate sequences (``lengths``);
+    # nothing is computed across a recording boundary (see ``segments``).
+    for prefix in ("subtle_", "shank3ko_"):
+        group = [d for d in datasets if d.name.startswith(prefix)]
+        if len(group) > 1:
+            datasets.append(DatasetSlice(
+                name=f"{prefix}pooled",
+                keypoints=np.concatenate([d.keypoints for d in group]),
+                fps=group[0].fps,
+                notes={"source": "pooled fit", "recordings": [d.name for d in group],
+                       "lengths": [len(d.keypoints) for d in group],
+                       "node_names": group[0].notes["node_names"]},
+            ))
+
     mabe = ROOT / "data" / "preprocessed" / "mabe22" / "mouse_user_train.npz"
     if mabe.exists():
         d = np.load(mabe, allow_pickle=True)
@@ -180,6 +195,14 @@ def load_datasets(max_frames: int = MAX_FRAMES) -> list[DatasetSlice]:
         ))
 
     return [fill_missing(ds) for ds in datasets]
+
+
+def segments(ds: DatasetSlice) -> list[np.ndarray]:
+    """The recordings of a slice: one array, or one per recording for a pooled slice."""
+    lengths = ds.notes.get("lengths")
+    out = np.split(ds.keypoints, np.cumsum(lengths)[:-1]) if lengths else [ds.keypoints]
+    assert sum(len(s) for s in out) == len(ds.keypoints)
+    return out
 
 
 def fill_missing(ds: DatasetSlice) -> DatasetSlice:
@@ -261,25 +284,34 @@ def error_result(ds: DatasetSlice, method: str, exc: BaseException | str) -> Bat
 
 def run_kmeans(ds: DatasetSlice) -> BatchResult:
     t0 = time.time()
-    features = SkeletonBackend(fps=ds.fps, normalize_body_size=True).extract(ds.keypoints)
+    backend = SkeletonBackend(fps=ds.fps, normalize_body_size=True)  # per recording: no
+    features = np.concatenate([backend.extract(s) for s in segments(ds)])  # velocity across files
     out = cluster_features(features, n_clusters=8, use_umap=True, random_state=RANDOM_STATE)
     return metric_result(ds, "kmeans_pca_umap", out["labels"], features, out["embedding_2d"], time.time() - t0)
 
 
 def run_bsoid(ds: DatasetSlice) -> BatchResult:
     t0 = time.time()
-    out = BSOiD(fps=int(ds.fps), min_cluster_size=20, random_state=RANDOM_STATE).fit(ds.keypoints)
+    segs = segments(ds)
+    out = BSOiD(fps=int(ds.fps), min_cluster_size=20, random_state=RANDOM_STATE).fit(
+        segs if len(segs) > 1 else ds.keypoints)
+    labels, emb, label_fps = out["labels"], out.get("embedding_2d"), ds.fps / max(1, int(ds.fps) // 10)
+    if len(segs) > 1:  # bins of each recording back to its own frames, then one per-frame array
+        b, starts = max(1, int(ds.fps) // 10), np.cumsum([0] + out["segment_bins"])
+        idx = np.concatenate([starts[k] + np.minimum(np.arange(len(seg)) // b, n - 1)
+                              for k, (seg, n) in enumerate(zip(segs, out["segment_bins"]))])
+        labels, emb, label_fps = labels[idx], emb[idx], ds.fps
     return metric_result(
-        ds, "B-SOiD", out["labels"], out.get("features"), out.get("embedding_2d"),
+        ds, "B-SOiD", labels, out.get("features") if len(segs) == 1 else None, emb,
         time.time() - t0, notes={"label_rate": "10fps bins"},
-        label_fps=ds.fps / max(1, int(ds.fps) // 10),  # labels are per bin, not per frame
+        label_fps=label_fps,  # labels are per bin (per frame for a pooled slice)
     )
 
 
 def run_pca_hmm(ds: DatasetSlice) -> BatchResult:
     t0 = time.time()
     cr = _PCAHMMFallback(n_components=10, n_states=12, n_iter=50,
-                         random_state=RANDOM_STATE).fit(ds.keypoints)
+                         random_state=RANDOM_STATE).fit(ds.keypoints, lengths=ds.notes.get("lengths"))
     return metric_result(ds, "pca_hmm_moseq_fallback", cr.labels, cr.features, cr.embeddings, time.time() - t0)
 
 
@@ -295,12 +327,14 @@ def run_keypoint_moseq(ds: DatasetSlice) -> BatchResult:
     posterior = [used.index(n) for n in KPMS_POSTERIOR if n in used][:1] or None
     model = KeypointMoSeq(
         project_dir=str(OUT_DIR / "keypoint_moseq" / f"{ds.name}_seed{RANDOM_STATE}"),
-        num_ar_iters=KPMS["ar_iters"], num_iters=KPMS["iters"], full_kappa=KPMS["full_kappa"],
+        num_ar_iters=KPMS["ar_iters"], num_iters=KPMS["iters"], kappa=KPMS["ar_kappa"],
+        full_kappa=KPMS["full_kappa"], num_states=KPMS["num_states"],
         latent_dim=10, auto_latent_dim=True, seed=RANDOM_STATE,
         bodypart_names=list(names), use_bodyparts=used,
         anterior_idxs=anterior, posterior_idxs=posterior,
     )
-    cr = model.fit_predict(kp)
+    segs = segments(ds)
+    cr = model.fit_predict(segs if len(segs) > 1 else kp)
     notes = {k: v for k, v in cr.metadata.items() if k not in ("algorithm", "use_bodyparts")}
     notes["heading_from_names"] = anterior is not None and posterior is not None
     return metric_result(ds, "keypoint_moseq", cr.labels, cr.features, cr.embeddings,
@@ -315,7 +349,7 @@ def run_subtle(ds: DatasetSlice) -> BatchResult:
     t0 = time.time()
     # no seed: upstream SUBTLE shuffles frames and runs UMAP unseeded, so repeats differ by design
     cr = SUBTLE(config=SUBTLEConfig(fps=int(ds.fps), timeout=SUBTLE_TIMEOUT_S)).fit_predict(
-        [ds.keypoints], isolate=True,
+        segments(ds), isolate=True,
     )
     save_subtle_map(ds, cr, f"seed{RANDOM_STATE}")
     return metric_result(ds, "SUBTLE", cr.labels, cr.features, cr.embeddings, time.time() - t0,
@@ -427,6 +461,24 @@ def plot_summary(df: pd.DataFrame) -> None:
     plt.close(fig)
 
 
+def method_settings() -> dict[str, dict[str, object]]:
+    """Settings of each cell as run, read from the same constants the runners use."""
+    return {
+        "kmeans_pca_umap": {"clusters": 8, "pca_variance": "default of cluster_features",
+                            "umap": "n_neighbors 15, min_dist 0.1", "body_size_normalized": True},
+        "B-SOiD": {"bin": "10 Hz", "umap": "n_neighbors 60, min_dist 0.0",
+                   "hdbscan_min_cluster_size": 20, "classifier": "random forest, 200 trees"},
+        "pca_hmm_moseq_fallback": {"pca_components": 10, "states": 12, "iterations": 50,
+                                   "covariance": "diag"},
+        "SUBTLE": {"embedding": "umap", "n_train_frames": 120000, "timeout_s": SUBTLE_TIMEOUT_S,
+                   "reported_level": "finest supercluster", "seed": "none upstream"},
+        "keypoint_moseq": {"ar_only_iterations": KPMS["ar_iters"], "ar_only_kappa": KPMS["ar_kappa"],
+                           "full_iterations": KPMS["iters"], "full_kappa": KPMS["full_kappa"],
+                           "num_states": KPMS["num_states"], "latent_dim": "min(10, 90% variance)",
+                           "nlags": 3, "tail_keypoints": "excluded"},
+    }
+
+
 def run_cell(ds: DatasetSlice, method: str, fn: Callable[[DatasetSlice], BatchResult],
              repeats: int, seed0: int) -> BatchResult:
     """Run one (dataset, method) cell ``repeats`` times; keep the first seed's row and labels,
@@ -491,9 +543,13 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=RANDOM_STATE)
     ap.add_argument("--kpms-ar-iters", type=int, default=KPMS["ar_iters"])
     ap.add_argument("--kpms-iters", type=int, default=KPMS["iters"])
+    ap.add_argument("--kpms-kappa", type=float, default=KPMS["full_kappa"],
+                    help="kappa of the full-model stage (sets syllable duration)")
+    ap.add_argument("--kpms-states", type=int, default=KPMS["num_states"])
     ap.add_argument("--merge", help="batch folder from another machine: upsert its rows and label files, run nothing")
     args = ap.parse_args()
-    KPMS.update(ar_iters=args.kpms_ar_iters, iters=args.kpms_iters)
+    KPMS.update(ar_iters=args.kpms_ar_iters, iters=args.kpms_iters,
+                full_kappa=args.kpms_kappa, num_states=args.kpms_states)
 
     OUT_DIR = OUT_DIR.parent / args.out
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -536,6 +592,8 @@ def main() -> None:
                 df = save_results([asdict(result)], slices)
         df = save_results([], slices)
 
+    if not args.merge:  # the settings these rows were produced with, for the page's protocol table
+        (OUT_DIR / "method_settings.json").write_text(json.dumps(method_settings(), indent=2))
     plot_summary(df)
     render_grid_report(OUT_DIR)
     print(f"\nWrote {OUT_DIR}")

@@ -29,8 +29,20 @@ def stretch_labels(labels: np.ndarray, T: int) -> np.ndarray:
     return labels[np.arange(T) * L // T]
 
 
-def label_agreement(seqs: dict[str, np.ndarray], *, n_shifts: int = 20,
-                    seed: int = 0) -> dict[str, object]:
+def shift_within(labels: np.ndarray, frac: float, lengths: list[int] | None = None) -> np.ndarray:
+    """Circularly shift by ``frac`` of the length; with ``lengths``, inside each recording.
+
+    A pooled sequence must not be rolled as a whole: labels would land on another animal, the
+    null overlap would collapse and every comparison would look significant."""
+    if not lengths:
+        return np.roll(labels, int(frac * len(labels)))
+    assert sum(lengths) == len(labels), "lengths do not add up to the sequence"
+    parts = np.split(labels, np.cumsum(lengths)[:-1])
+    return np.concatenate([np.roll(p, int(frac * len(p))) for p in parts])
+
+
+def label_agreement(seqs: dict[str, np.ndarray], *, n_shifts: int = 20, seed: int = 0,
+                    lengths: list[int] | None = None) -> dict[str, object]:
     """Pairwise agreement between label sequences that cover the same time span.
 
     Returns ``names`` and square matrices: ``ari``, ``ami``, ``homogeneity`` (entry [i, j] = 1
@@ -46,7 +58,7 @@ def label_agreement(seqs: dict[str, np.ndarray], *, n_shifts: int = 20,
     out = {k: np.eye(n) for k in ("ari", "ami", "homogeneity")}
     null = np.zeros((n, n))
     rng = np.random.default_rng(seed)
-    shifts = rng.integers(max(1, T // 10), max(2, T - T // 10), size=n_shifts)
+    shifts = rng.uniform(0.1, 0.9, size=n_shifts)  # fraction of the (recording) length
     for i in range(n):
         for j in range(n):
             if i == j:
@@ -56,7 +68,7 @@ def label_agreement(seqs: dict[str, np.ndarray], *, n_shifts: int = 20,
                 out["ari"][i, j] = out["ari"][j, i] = adjusted_rand_score(lab[i], lab[j])
                 out["ami"][i, j] = out["ami"][j, i] = adjusted_mutual_info_score(lab[i], lab[j])
                 null[i, j] = null[j, i] = float(np.mean(
-                    [adjusted_rand_score(lab[i], np.roll(lab[j], int(s))) for s in shifts]))
+                    [adjusted_rand_score(lab[i], shift_within(lab[j], s, lengths)) for s in shifts]))
     assert np.allclose(out["ari"], out["ari"].T)
     return {"names": names, "n_frames": T, **out, "null_ari": null}
 
@@ -75,11 +87,12 @@ def _heatmap(ax, names: list[str], M: np.ndarray, title: str) -> None:
     ax.figure.colorbar(im, ax=ax, fraction=0.046)
 
 
-def plot_label_agreement(seqs: dict[str, np.ndarray], title: str = "", *, fps: float | None = None):
+def plot_label_agreement(seqs: dict[str, np.ndarray], title: str = "", *, fps: float | None = None,
+                         lengths: list[int] | None = None):
     """Ethogram per sequence plus ARI and AMI heatmaps. Returns ``(fig, agreement_dict)``."""
     import matplotlib.pyplot as plt
 
-    agr = label_agreement(seqs)
+    agr = label_agreement(seqs, lengths=lengths)
     names, T = agr["names"], agr["n_frames"]
     fig, axes = plt.subplots(1, 3, figsize=(18, 0.5 * len(names) + 3.2), constrained_layout=True,
                              gridspec_kw={"width_ratios": [2.2, 1, 1]})
@@ -113,8 +126,8 @@ def _jaccard(a: np.ndarray, b: np.ndarray, ids_a: np.ndarray, ids_b: np.ndarray)
     return np.divide(C, union, out=np.zeros_like(C), where=union > 0), C
 
 
-def match_clusters(a: np.ndarray, b: np.ndarray, *, n_shifts: int = 200,
-                   seed: int = 0) -> dict[str, object]:
+def match_clusters(a: np.ndarray, b: np.ndarray, *, n_shifts: int = 200, seed: int = 0,
+                   lengths: list[int] | None = None) -> dict[str, object]:
     """One-to-one correspondence between the clusters of two label sequences.
 
     Similarity = Jaccard overlap of the frame sets (frames in both / frames in either), noise
@@ -135,8 +148,8 @@ def match_clusters(a: np.ndarray, b: np.ndarray, *, n_shifts: int = 200,
     n = C.sum()
     rng = np.random.default_rng(seed)
     null_best, null_mean = np.zeros(n_shifts), np.zeros(n_shifts)
-    for k, s in enumerate(rng.integers(max(1, T // 10), max(2, T - T // 10), size=n_shifts)):
-        Jn, _ = _jaccard(a, np.roll(b, int(s)), ids_a, ids_b)
+    for k, s in enumerate(rng.uniform(0.1, 0.9, size=n_shifts)):
+        Jn, _ = _jaccard(a, shift_within(b, s, lengths), ids_a, ids_b)
         r, c = linear_sum_assignment(-Jn)
         null_best[k], null_mean[k] = Jn.max(), Jn[r, c].mean()
     pairs = []
@@ -153,9 +166,11 @@ def match_clusters(a: np.ndarray, b: np.ndarray, *, n_shifts: int = 200,
     pairs.sort(key=lambda d: -d["jaccard"])
     mean = float(J[rows, cols].mean())
     assert all(0 <= d["jaccard"] <= 1 and 0 <= d["expected"] <= 1 for d in pairs)
-    return {"pairs": pairs, "mean_matched": mean, "null_mean_matched": float(null_mean.mean()),
+    return {"pairs": pairs, "jaccard": J, "ids_a": ids_a, "ids_b": ids_b,
+            "share_a": C.sum(axis=1) / n, "share_b": C.sum(axis=0) / n, "mean_matched": mean, "null_mean_matched": float(null_mean.mean()),
             "p_mean": float((1 + (null_mean >= mean).sum()) / (1 + n_shifts)),
             "n_frames": int(n), "n_a": len(ids_a), "n_b": len(ids_b)}
 
 
-__all__ = ["label_agreement", "match_clusters", "plot_label_agreement", "stretch_labels"]
+__all__ = ["label_agreement", "match_clusters", "plot_label_agreement", "shift_within",
+           "stretch_labels"]

@@ -102,7 +102,10 @@ class BSOiD:
         Returns:
             dict with 'labels', 'embedding_2d', 'n_clusters'
         """
-        features = _compute_bsoid_features(data, self.fps)
+        # a list = several recordings fitted together; features never span two recordings
+        parts = [_compute_bsoid_features(d, self.fps) for d in data] if isinstance(data, list) \
+            else [_compute_bsoid_features(data, self.fps)]
+        features = np.concatenate(parts)
 
         self.scaler = StandardScaler()
         features_sc = self.scaler.fit_transform(features)
@@ -125,6 +128,7 @@ class BSOiD:
             'embedding_2d': embeddings[:, :2] if embeddings.shape[1] >= 2 else embeddings,
             'n_clusters': len(set(labels) - {-1}),
             'features': features_sc,
+            'segment_bins': [len(p) for p in parts],
         }
 
     def predict(self, data: np.ndarray) -> np.ndarray:

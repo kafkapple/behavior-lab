@@ -67,9 +67,12 @@ class KeypointMoSeq:
 
     def _to_kpms_format(self, keypoints: np.ndarray, name: str = 'rec_0'):
         """Convert (T, K, D) -> keypoint-moseq dict format."""
-        coords = {name: keypoints}
+        if isinstance(keypoints, list):  # several recordings fitted together: rec_0, rec_1, ...
+            coords = {f"rec_{i}": k for i, k in enumerate(keypoints)}
+        else:
+            coords = {name: keypoints}
         if self.use_confidences:
-            confs = {name: np.ones(keypoints.shape[:2])}
+            confs = {n: np.ones(k.shape[:2]) for n, k in coords.items()}
         else:
             confs = None
         return coords, confs
@@ -87,7 +90,8 @@ class KeypointMoSeq:
             raise ImportError("Install keypoint-moseq: pip install keypoint-moseq")
 
         coords, confs = self._to_kpms_format(keypoints, recording_name)
-        bodyparts = self.bodypart_names or [f'kp{i}' for i in range(keypoints.shape[1])]
+        n_kp = (keypoints[0] if isinstance(keypoints, list) else keypoints).shape[1]
+        bodyparts = self.bodypart_names or [f'kp{i}' for i in range(n_kp)]
         used = self.use_bodyparts or bodyparts
         # heading indices refer to positions within ``used``
         anterior_idxs = self.anterior_idxs or self._infer_anterior_idxs(used)
@@ -248,13 +252,19 @@ class KeypointMoSeq:
     def fit_predict(self, keypoints: np.ndarray) -> ClusteringResult:
         """Fit and return structured ClusteringResult."""
         self.fit(keypoints)
-        labels = self.predict(keypoints, recording_name='rec_0')  # reuse the fit's own results
+        if isinstance(keypoints, list):  # the fit's own results, recordings in input order
+            labels = np.concatenate([np.asarray(self._results[f"rec_{i}"]["syllable"])
+                                     for i in range(len(keypoints))])
+            assert len(labels) == sum(len(k) for k in keypoints)
+        else:
+            labels = self.predict(keypoints, recording_name='rec_0')  # reuse the fit's results
         return ClusteringResult(
             labels=labels,
             n_clusters=len(set(labels)),
             metadata={"algorithm": "moseq", "latent_dim": self.latent_dim, "seed": self.seed,
                       "num_ar_iters": self.num_ar_iters, "num_iters": self.num_iters,
                       "kappa": self.kappa, "full_kappa": self.full_kappa,
+                      "num_states": self.num_states,
                       "use_bodyparts": self.use_bodyparts},
         )
 
@@ -315,8 +325,9 @@ class _PCAHMMFallback:
         self._pca: PCA | None = None
         self._hmm = None
 
-    def fit(self, keypoints: np.ndarray) -> "ClusteringResult":
-        """Fit PCA + HMM on (T, K, D) keypoint data."""
+    def fit(self, keypoints: np.ndarray, lengths: list[int] | None = None) -> "ClusteringResult":
+        """Fit PCA + HMM on (T, K, D) keypoint data; ``lengths`` = frames per recording when
+        several recordings are stacked (no transition is learned across a boundary)."""
         try:
             from hmmlearn.hmm import GaussianHMM
         except ImportError:
@@ -335,8 +346,8 @@ class _PCAHMMFallback:
             covariance_type="diag",
             random_state=self.random_state,
         )
-        self._hmm.fit(reduced)
-        labels = self._hmm.predict(reduced)
+        self._hmm.fit(reduced, lengths)
+        labels = self._hmm.predict(reduced, lengths)
 
         return ClusteringResult(
             labels=labels,
