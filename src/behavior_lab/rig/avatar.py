@@ -1,10 +1,7 @@
 """AVATAR rig (5 cameras recorded as one 3600x2000 composite): layout, split, calibration check.
 
-Composite layout (x0, y0 = cell origin; the cell size is the camera's calibrated `size`):
-    cam_1 (0, 0) 1200x1000 | cam_2 (1200, 0) 1200x1000 | cam_3 (2400, 0) 1200x1200 (bottom)
-    cam_4 (0, 1000) 1200x1000 | cam_5 (1200, 1000) 1200x1000 | (2400, 1200)-(3600, 2000) UI
-Recordings of other sizes (3592x2000, 3840x2160, 3592x2028) do not follow this layout and are
-rejected.
+The layout (composite size, cell origins, calibration date) is read from configs/rig/avatar.yaml;
+the cell size is each camera's calibrated `size`. Recordings of another size are rejected.
 
 The rig has one calibration (2024-12-24). `residuals` measures how well it explains another
 day's SLEAP detections: DLT over the cameras that see a keypoint with conf >= thr (min_cams or
@@ -31,18 +28,17 @@ from pathlib import Path
 
 import numpy as np
 import tomllib
+import yaml
 
 from .multiview import load_calib, reproj_px, triangulate
 
-COMPOSITE = (3600, 2000)
-ORIGIN = {
-    "cam_1": (0, 0),
-    "cam_2": (1200, 0),
-    "cam_3": (2400, 0),
-    "cam_4": (0, 1000),
-    "cam_5": (1200, 1000),
-}
-CALIB_DATE = dt.date(2024, 12, 24)
+# ponytail: configs/ sits at the repo root, so this needs a source checkout (editable install).
+# Ship it as package data if the package is ever installed without one.
+RIG_YAML = Path(__file__).resolve().parents[3] / "configs" / "rig" / "avatar.yaml"
+_RIG = yaml.safe_load(RIG_YAML.read_text())
+COMPOSITE: tuple[int, int] = tuple(_RIG["composite"])
+ORIGIN: dict[str, tuple[int, int]] = {c: tuple(o) for c, o in _RIG["origin"].items()}
+CALIB_DATE: dt.date = _RIG["calib_date"]
 
 
 def cells(calib: str | Path) -> dict[str, tuple[int, int, int, int]]:

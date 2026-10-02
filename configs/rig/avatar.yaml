@@ -1,0 +1,13 @@
+# AVATAR rig: 5 cameras recorded as one composite video.
+# Cell size is not listed here: it is each camera's calibrated `size` in the aniposelib config.toml.
+#   cam_1 | cam_2 | cam_3 (bottom, 1200x1200)
+#   cam_4 | cam_5 | UI panel
+name: avatar
+composite: [3600, 2000]   # other recording sizes (3592x2000, 3840x2160, 3592x2028) are rejected
+calib_date: 2024-12-24    # the rig's single calibration
+origin:                   # top-left corner of each camera cell in the composite, px
+  cam_1: [0, 0]
+  cam_2: [1200, 0]
+  cam_3: [2400, 0]
+  cam_4: [0, 1000]
+  cam_5: [1200, 1000]

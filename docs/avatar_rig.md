@@ -8,6 +8,7 @@
 
 | Step | Owner | Path |
 |---|---|---|
+| Rig layout (composite size, cell origins, calibration date) | behavior-lab | `configs/rig/avatar.yaml` |
 | Composite → per-camera mp4 | behavior-lab | `behavior_lab.rig.avatar.split_composite` |
 | Calibration loading, DLT, reprojection residual | behavior-lab | `behavior_lab.rig.multiview` |
 | Calibration residual by recording date, plot | behavior-lab | `behavior_lab.rig.avatar` (`residual`, `plot`), figure code in `behavior_lab.visualization.rig` |
