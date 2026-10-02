@@ -53,6 +53,7 @@ from ._grid_common import (
     set_figs,
 )
 from .agreement import label_agreement
+from .grid_reading import reading_section
 from .grid_slice import (
     LEAD_METRICS,
     baseline_block,
@@ -102,8 +103,23 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
     parts.append("<h2>Data and methods</h2><p>What was recorded and what each method does "
                  "with it. Every cell is one unsupervised fit: no pretrained model, no labels."
                  "</p><h3>Datasets</h3>")
-    parts.append(_table(["family", "slices", "what it is"],
-                        [[FAMILIES.get(f, f), ", ".join(d for d in datasets if _family(d) == f),
+    def spec(f: str) -> list[object]:
+        rec = [by_name[d] for d in datasets if _family(d) == f
+               and not by_name[d]["notes"].get("lengths")]  # pooled slices repeat the same frames
+        frames = sorted({s["shape"][0] for s in rec})
+        fps_ = sorted({s["fps"] for s in rec})
+        minutes = sorted({round(s["shape"][0] / s["fps"] / 60, 1) for s in rec})
+
+        def span(v):
+            return f"{v[0]:g}" if len(v) == 1 else f"{v[0]:g} to {v[-1]:g}"
+
+        return [len(rec), f'{rec[0]["shape"][1]} × {rec[0]["shape"][2]}D', span(fps_),
+                span(frames), span(minutes)]
+
+    parts.append(_table(["family", "recordings", "keypoints", "fps", "frames per recording",
+                         "minutes per recording", "slices", "what it is"],
+                        [[FAMILIES.get(f, f), *spec(f),
+                          ", ".join(d for d in datasets if _family(d) == f),
                           RawHtml(DATASET_INFO.get(f, ""))] for f in families]))
     parts.append("<h3>Methods and settings</h3><p>Slices named <code>*_pooled</code> are one "
                  "fit across all recordings of the family (recordings stay separate sequences); "
@@ -294,6 +310,8 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
         parts.append(_table(["dataset", "method", "error"],
                             [[r["dataset"], r["method"], (r.get("error") or "")[-300:]]
                              for r in failed]))
+
+    parts.append(reading_section(batch_dir, ok, flags, [by_name[d] for d in datasets]))
 
     parts.append("<h2>Limits</h2><ul>"
                  "<li>ARI and AMI between methods with very different cluster counts mostly "

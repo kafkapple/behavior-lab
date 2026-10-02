@@ -17,7 +17,7 @@ ROW_COLS = ["dataset", "method", "n_clusters", "median_bout_sec", "repeat_ari_me
 ROW_HEAD = {"dataset": "slice", "n_clusters": "clusters", "median_bout_sec": "median bout (s)",
             "repeat_ari_mean": "repeat ARI", "repeat_ari_min": "repeat ARI, min",
             "noise_frac": "noise", "n_frames": "label steps", "n_repeats": "repeats",
-            "elapsed_sec": "run time (s)"}
+            "elapsed_sec": "fit time (s), first seed"}
 # Flags (own loose rule, no literature threshold): a row that trips one is described, not ranked.
 MIN_CLUSTERS, MAX_NOISE = 3, 0.3
 GALLERY_CLUSTERS, GALLERY_MAX_SEC, GALLERY_PAD_SEC = 6, 2.0, 0.5

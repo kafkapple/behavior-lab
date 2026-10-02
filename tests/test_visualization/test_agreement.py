@@ -89,3 +89,13 @@ def test_meta_groups_and_recording_purity():
     nmi, top = recording_purity(np.tile([0, 1], 50), [50, 50])
     assert nmi < 0.01 and top == 0.5         # clusters shared equally
     assert plot_recording_shares({"m": np.tile([0, 1], 50)}, [50, 50], ["r_1", "r_2"]).axes
+
+
+def test_reading_section_sources_are_consistent():
+    import re
+
+    from behavior_lab.visualization.grid_reading import CRITERIA, REFERENCES
+
+    cited = {int(n) for row in CRITERIA for n in re.findall(r"\[(\d+)\]", row[3] + row[2])}
+    assert cited and max(cited) <= len(REFERENCES)      # every citation has a reference
+    assert all(len(row) == 4 and all(row) for row in CRITERIA)
