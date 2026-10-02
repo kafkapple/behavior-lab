@@ -98,6 +98,9 @@ def write_calib(cfg: dict, path: str | Path) -> None:
         return repr(v)
 
     top = [f"{k} = {val(v)}" for k, v in cfg.items() if not isinstance(v, dict)]
-    tables = [f"\n[{k}]\n" + "\n".join(f"{a} = {val(b)}" for a, b in v.items())
-              for k, v in cfg.items() if isinstance(v, dict)]
+    tables = [
+        f"\n[{k}]\n" + "\n".join(f"{a} = {val(b)}" for a, b in v.items())
+        for k, v in cfg.items()
+        if isinstance(v, dict)
+    ]
     Path(path).expanduser().write_text("\n".join(top) + "\n" + "\n".join(tables) + "\n")

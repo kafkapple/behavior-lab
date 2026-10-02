@@ -49,5 +49,8 @@ is unchanged and stays the file for recordings from 2023-08-22 on. Numbers: vaul
 - `~/dev/behavior-tools`: the earlier POC is parked on branch `archive/260928_avatar_rig_poc`
   (local only), not on its main.
 - Not covered: recordings that are not 3600x2000, per-date extrinsic re-estimation for recordings
-  before 2023-08-22, and the 2D keypoint script (`run_sleap_one.py`, in no repo; `pose/` is the
-  candidate home).
+  before 2023-08-22.
+- `run_sleap_one.py` stays outside the repos on purpose: it is an 11-line caller of the SUBTLE
+  checkout next to it (`run_tools_pose_inference("sleap", ...)` with
+  `configs/SLEAP/AVATAR3D_11_config.json` and `model/SLEAP/260504.single_instance.n=1423-1`) and
+  cannot run without that checkout.

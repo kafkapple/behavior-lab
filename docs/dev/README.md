@@ -18,7 +18,7 @@
 | **BehaviorSplatter** | GS-LRM 3D 재구성 · 4D deform (논문 본체) | `BehaviorSplatter/docs/references.md` → `BehaviorSplatter/docs/HANDOFF.md` | mac + gpu03 |
 | **behavior-lab** | 포즈 로더 · `(T,K,D)` 정규화 · feature · 비지도 행동발견 · KP 벤치마크 | `behavior-lab/docs/README.md` | mac + gpu03 |
 | **sdannce-poc** | 멀티뷰 어노테이션 · 6뷰 뷰어 · kp-guided SAM2 마스크 | `sdannce-poc/docs/README.md` | mac + gpu03 |
-| **behavior-tools** | 영상 분할 · 프레임 추출 · 이미지 큐레이션 | `behavior-tools/docs/README.md` | mac only |
+| **behavior-tools** | 영상 분할(균등 격자) · 프레임 추출 · 이미지 큐레이션. AVATAR rig 의 calibration 기반 분리·DLT·residual 은 behavior-lab `rig/` (`behavior-lab/docs/avatar_rig.md`, 261002) | `behavior-tools/docs/README.md` | mac only |
 | **FaceLift** | 업스트림 레퍼런스 (KP22 정의 보유) | — | mac + gpu03 |
 | **pose-splatter** | 별개 논문 구현 (arXiv 2505.18342) | `README.md` | gpu03 only |
 | ~~mouse-kp-benchmark~~ | **deprecated** → behavior-lab 로 대체 | — | GitHub only (로컬 클론 260728 삭제) |
