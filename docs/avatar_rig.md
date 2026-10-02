@@ -10,7 +10,7 @@
 |---|---|---|
 | Composite → per-camera mp4 | behavior-lab | `behavior_lab.rig.avatar.split_composite` |
 | Calibration loading, DLT, reprojection residual | behavior-lab | `behavior_lab.rig.multiview` |
-| Calibration residual by recording date, plot | behavior-lab | `behavior_lab.rig.avatar` (`residual`, `plot`) |
+| Calibration residual by recording date, plot | behavior-lab | `behavior_lab.rig.avatar` (`residual`, `plot`), figure code in `behavior_lab.visualization.rig` |
 | 2D keypoints (SUBTLE SLEAP) | outside any repo | Olaf `~/data/avatar_gslrm/eren_avatar_subtle_260930/run_sleap_one.py` |
 | Masks (SAM3 tracker) | BehaviorSplatter | `scripts/data_prep/avatar_sam3_tracker_masks.py` |
 | 3D keypoints in GS-LRM space | BehaviorSplatter | `scripts/data_prep/avatar_keypoints_to_gslrm.py` |
