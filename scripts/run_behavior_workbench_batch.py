@@ -54,8 +54,10 @@ OUT_DIR = ROOT / "outputs" / "behavior_analysis_workbench" / "batch"
 RANDOM_STATE = 42
 MAX_FRAMES = 1500
 # --target-clusters N: every method is steered to about N clusters (k-means k, HMM states,
-# B-SOiD min_cluster_size search); None = each method's own setting.
-TARGET_CLUSTERS: int | None = None
+# B-SOiD min_cluster_size search); 0 = each method's own setting (k 8, 12 states, size 20).
+# Default 5: the count SUBTLE's supercluster hierarchy gives on these recordings (3 to 5),
+# so all methods are compared at a similar granularity (experiment note, matched cluster count).
+TARGET_CLUSTERS: int | None = 5
 KPMS = {"ar_iters": 50, "iters": 500, "ar_kappa": 1e6, "full_kappa": 1e4, "num_states": 20}  # keypoint-MoSeq tutorial values
 SUBTLE_TIMEOUT_S = 3600
 KPMS_ANTERIOR = ("nose", "nose1")
@@ -536,7 +538,7 @@ def save_results(rows: list[dict], slices: list[dict]) -> pd.DataFrame:
 
 
 def main() -> None:
-    global OUT_DIR
+    global OUT_DIR, TARGET_CLUSTERS
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--datasets",
                     help="comma list, prefix match, e.g. avatar,subtle (default: all found)")
@@ -553,12 +555,11 @@ def main() -> None:
     ap.add_argument("--kpms-kappa", type=float, default=KPMS["full_kappa"],
                     help="kappa of the full-model stage (sets syllable duration)")
     ap.add_argument("--kpms-states", type=int, default=KPMS["num_states"])
-    ap.add_argument("--target-clusters", type=int, default=None,
+    ap.add_argument("--target-clusters", type=int, default=TARGET_CLUSTERS,
                     help="steer k-means, the HMM and B-SOiD to about this many clusters")
     ap.add_argument("--merge", help="batch folder from another machine: upsert its rows and label files, run nothing")
     args = ap.parse_args()
-    global TARGET_CLUSTERS
-    TARGET_CLUSTERS = args.target_clusters
+    TARGET_CLUSTERS = args.target_clusters or None
     KPMS.update(ar_iters=args.kpms_ar_iters, iters=args.kpms_iters,
                 full_kappa=args.kpms_kappa, num_states=args.kpms_states)
 

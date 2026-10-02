@@ -3,7 +3,9 @@
 Plain content only (h1, header-meta, tldr, sections with embedded figures); the vault's
 ``build_page.py`` supplies the theme and navigation. Rebuild from the batch folder; do not
 hand-edit the output. Usage:
-``python -m behavior_lab.visualization.grid_report <batch_dir> [gallery_href] [player_href]``
+``python -m behavior_lab.visualization.grid_report <batch_dir> [gallery_href] [player_href]
+[figs_href]``; figures are embedded as previews and link to full-resolution PNGs written to
+``<batch_dir>/figs_report/`` (copy that folder next to the published page as ``figs_href``);
 writes ``batch_report.html``, ``batch_gallery.html`` (per-cluster GIFs) and
 ``batch_player.html`` (synchronized playback) into the batch folder.
 
@@ -22,6 +24,7 @@ from datetime import date
 from pathlib import Path
 
 from ._grid_common import (
+    set_figs,
     DATASET_INFO,
     FAMILIES,
     FAMILY_VARS,
@@ -53,12 +56,14 @@ from .grid_slice import plot_grid_overview, schema_block, slice_blocks
 
 def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None, *,
                        gallery_href: str = "batch_gallery.html",
-                       player_href: str = "batch_player.html") -> Path:
+                       player_href: str = "batch_player.html",
+                       figs_href: str = "figs_report") -> Path:
     import matplotlib
 
     matplotlib.use("Agg")
 
     batch_dir = Path(batch_dir)
+    set_figs(batch_dir / "figs_report", figs_href)  # full-resolution copies, opened on click
     rows = json.loads((batch_dir / "batch_results.json").read_text())
     slices = json.loads((batch_dir / "dataset_slices.json").read_text())
     datasets = [s["name"] for s in slices if any(r["dataset"] == s["name"] for r in rows)]
@@ -271,13 +276,16 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
                  "and drop a tail shorter than two bins.</li></ul>")
 
     parts.append(SORT_JS)
+    set_figs(None, None)
     return _write(Path(out_html) if out_html else batch_dir / "batch_report.html", title, parts)
 
 
 if __name__ == "__main__":
     from .grid_gallery import render_gallery, render_player
 
-    args = sys.argv[2:] + ["batch_gallery.html", "batch_player.html"][len(sys.argv) - 2:]
-    print(render_grid_report(sys.argv[1], gallery_href=args[0], player_href=args[1]))
+    defaults = ["batch_gallery.html", "batch_player.html", "figs_report"]
+    args = sys.argv[2:] + defaults[len(sys.argv) - 2:]
+    print(render_grid_report(sys.argv[1], gallery_href=args[0], player_href=args[1],
+                             figs_href=args[2]))
     print(render_gallery(sys.argv[1]))
     print(render_player(sys.argv[1]))

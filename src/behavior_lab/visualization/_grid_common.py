@@ -81,6 +81,20 @@ def _table(header: list[str], rows: list[list[object]]) -> str:
     return f"<table><tr>{head}</tr>{body}</table>"
 
 
+FULL_DPI = 180
+_FIGS: dict[str, object] = {"dir": None, "href": None, "n": 0}
+
+
+def set_figs(directory: Path | None, href: str | None) -> None:
+    """Where ``_img`` writes the full-resolution copy of each figure, and the link to it.
+
+    The page embeds a light preview; a click opens the full-resolution PNG. ``None`` turns
+    the copies off (preview only)."""
+    _FIGS.update(dir=directory, href=href, n=0)
+    if directory is not None:
+        directory.mkdir(parents=True, exist_ok=True)
+
+
 def _img(fig, dpi: int = 90) -> str:
     import matplotlib.pyplot as plt
 
@@ -89,6 +103,12 @@ def _img(fig, dpi: int = 90) -> str:
     uri = fig_to_base64(fig, dpi=dpi)  # already a full data URI
     assert uri.startswith("data:image/png;base64,")
     tag = f'<img src="{uri}" alt="">'
+    if _FIGS["dir"] is not None:
+        name = f"{_FIGS['n']:03d}.png"
+        fig.savefig(_FIGS["dir"] / name, dpi=FULL_DPI)
+        _FIGS["n"] += 1
+        tag = (f'<a href="{html.escape(str(_FIGS["href"]))}/{name}" target="_blank" '
+               f'title="open at full resolution">{tag}</a>')
     plt.close(fig)
     return tag
 
