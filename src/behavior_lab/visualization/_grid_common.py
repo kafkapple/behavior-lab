@@ -129,12 +129,13 @@ def _labels(batch_dir: Path, dataset: str) -> dict[str, np.ndarray]:
 def _pairs(agr: dict) -> list[list[object]]:
     n = agr["names"]
     return [[n[i], n[j], float(agr["ari"][i, j]), float(agr["null_ari"][i, j]),
-             float(agr["ami"][i, j]), float(agr["homogeneity"][i, j]),
-             float(agr["homogeneity"][j, i])]
+             float(agr["ami"][i, j]), float(agr["null_ami"][i, j]),
+             float(agr["homogeneity"][i, j]), float(agr["homogeneity"][j, i])]
             for i in range(len(n)) for j in range(i + 1, len(n))]
 
 
-PAIR_HEADER = ["A", "B", "ARI", "ARI, shifted null", "AMI", "B inside A", "A inside B"]
+PAIR_HEADER = ["A", "B", "ARI", "ARI, shifted null", "AMI", "AMI, shifted null", "B inside A",
+               "A inside B"]
 
 
 def _subtle_map(batch_dir: Path, dataset: str):

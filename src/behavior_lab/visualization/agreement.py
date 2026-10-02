@@ -14,6 +14,9 @@ from sklearn.metrics import (
 )
 
 
+AMI_NULL_SHIFTS = 3
+
+
 def stretch_labels(labels: np.ndarray, T: int) -> np.ndarray:
     """Nearest-neighbour resample to length T (methods that emit bins, e.g. B-SOiD 10 Hz)."""
     labels = np.asarray(labels)
@@ -56,7 +59,7 @@ def label_agreement(seqs: dict[str, np.ndarray], *, n_shifts: int = 20, seed: in
     lab = [stretch_labels(seqs[n], T) for n in names]
     n = len(names)
     out = {k: np.eye(n) for k in ("ari", "ami", "homogeneity")}
-    null = np.zeros((n, n))
+    null, null_ami = np.zeros((n, n)), np.zeros((n, n))
     rng = np.random.default_rng(seed)
     shifts = rng.uniform(0.1, 0.9, size=n_shifts)  # fraction of the (recording) length
     for i in range(n):
@@ -70,8 +73,13 @@ def label_agreement(seqs: dict[str, np.ndarray], *, n_shifts: int = 20, seed: in
                 null[i, j] = null[j, i] = float(np.mean(
                     [adjusted_rand_score(lab[i], shift_within(lab[j], s, lengths))
                      for s in shifts]))
+                # AMI is chance-corrected for independent labels, not for the autocorrelation
+                # of label sequences, so it gets the same shifted null (fewer shifts: slower)
+                null_ami[i, j] = null_ami[j, i] = float(np.mean(
+                    [adjusted_mutual_info_score(lab[i], shift_within(lab[j], s, lengths))
+                     for s in shifts[:AMI_NULL_SHIFTS]]))
     assert np.allclose(out["ari"], out["ari"].T)
-    return {"names": names, "n_frames": T, **out, "null_ari": null}
+    return {"names": names, "n_frames": T, **out, "null_ari": null, "null_ami": null_ami}
 
 
 def _heatmap(ax, names: list[str], M: np.ndarray, title: str) -> None:
