@@ -135,14 +135,18 @@ def render_player(batch_dir: str | Path, out_html: str | Path | None = None) -> 
     parts = [f"<h1>{html.escape(title)}</h1>",
              f'<div class="header-meta">{date.today().isoformat()} · source: <code>'
              f"{html.escape(str(batch_dir))}</code></div>",
-             '<div class="tldr"><ul><li>Left: skeleton from above. Right: every time step as a '
-             "point on a 2D PCA of posture and speed, colored by the chosen method's clusters; "
-             "the ring is the current step and the fading dots are the last 2 s.</li>"
-             "<li>Numbered circles are cluster centers (the 12 largest and the current one). "
-             "When the label changes, an arrow from the previous to the new cluster stays for "
-             "1 s.</li>"
+             '<div class="tldr"><ul><li>Left: 3D skeleton; drag to rotate, "follow animal" '
+             "keeps it centered. Joint colors are those of the keypoint layout table.</li>"
+             "<li>Right: every time step as a point on a 2D PCA of posture, colored by the "
+             "chosen method's clusters. The same points serve every method; only the coloring "
+             "changes. The ring is the current step, fading dots are the last 2 s.</li>"
+             "<li>Legend: click a cluster to switch it off or on. Switched-off clusters fade "
+             "on the map and in that method's row, and playback skips them. Every skip shows "
+             "a red “cut” mark and resets the trail: the two sides of a cut are not "
+             "continuous motion.</li>"
              "<li>Bottom: every method's label sequence with a cursor; click a row to jump. "
-             "Colors are per method: the same color in two rows is not the same behavior.</li>"
+             "Colors are per method (12 largest clusters colored, the rest grey): the same "
+             "color in two rows is not the same behavior.</li>"
              "<li>Playback is at 10 Hz; pose, map position and labels are all taken from the "
              "same frame.</li></ul></div>"]
     family, first = None, True

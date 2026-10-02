@@ -8,6 +8,23 @@ from __future__ import annotations
 
 import numpy as np
 
+# One categorical palette for every cluster figure and the player: the 12 largest clusters of
+# a label sequence get a color (largest first), the rest are grey. A 20-color cycle repeats
+# colors as soon as a method returns more than 20 clusters.
+PALETTE = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2",
+           "#bcbd22", "#17becf", "#393b79", "#ad494a", "#637939"]
+OTHER_COLOR, NOISE_COLOR = "#b5b5b5", "#e3e3e3"
+
+
+def rank_colors(labels: np.ndarray) -> dict[int, str]:
+    """Cluster id -> color by size rank (ties by id); beyond the palette = grey; -1 = noise."""
+    labels = np.asarray(labels)
+    ids, counts = np.unique(labels[labels >= 0], return_counts=True)
+    order = ids[np.lexsort((ids, -counts))]
+    out = {int(c): (PALETTE[k] if k < len(PALETTE) else OTHER_COLOR) for k, c in enumerate(order)}
+    out[-1] = NOISE_COLOR
+    return out
+
 
 def transition_matrix(labels: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Row-normalized transition probabilities between different consecutive labels.
@@ -43,13 +60,13 @@ def plot_cluster_map(embedding: np.ndarray, labels: np.ndarray, title: str = "",
     if ax is None:
         _, ax = plt.subplots(figsize=(6, 5.5), constrained_layout=True)
     step = max(1, len(emb) // max_points)
-    cmap = plt.get_cmap("tab20")
     ids, P = transition_matrix(labels)
-    color = {c: cmap(k % 20) for k, c in enumerate(ids)}
-    noise = labels[::step] == -1
-    ax.scatter(*emb[::step][noise].T, s=3, color="0.8", linewidths=0)
-    ax.scatter(*emb[::step][~noise].T, s=4, linewidths=0, alpha=0.6,
-               c=[color[c] for c in labels[::step][~noise]])
+    color = rank_colors(labels)
+    grey = np.array([color[int(c)] in (OTHER_COLOR, NOISE_COLOR) for c in labels[::step]])
+    ax.scatter(*emb[::step][grey].T, s=4, linewidths=0, alpha=0.5,
+               c=[color[int(c)] for c in labels[::step][grey]])
+    ax.scatter(*emb[::step][~grey].T, s=7, linewidths=0, alpha=0.75,
+               c=[color[int(c)] for c in labels[::step][~grey]])
     cent = {c: emb[labels == c].mean(axis=0) for c in ids}
     for i, a in enumerate(ids):
         for j, b in enumerate(ids):
@@ -59,8 +76,10 @@ def plot_cluster_map(embedding: np.ndarray, labels: np.ndarray, title: str = "",
                                             lw=0.5 + 3 * P[i, j], shrinkA=7, shrinkB=7,
                                             connectionstyle="arc3,rad=0.15"))
     for c in ids:
+        if color[int(c)] == OTHER_COLOR:  # ids only for the colored (largest) clusters
+            continue
         ax.text(*cent[c], str(c), ha="center", va="center", fontsize=8, weight="bold", zorder=4,
-                bbox=dict(boxstyle="circle,pad=0.25", fc="white", ec=color[c], lw=1.5))
+                bbox=dict(boxstyle="circle,pad=0.25", fc="white", ec=color[int(c)], lw=1.5))
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_title(f"{title} ({len(ids)} clusters)", fontsize=10)
@@ -88,9 +107,11 @@ def pose_embedding(keypoints: np.ndarray) -> np.ndarray:
     """Method-neutral 2D axes for one recording: PCA of posture and speed.
 
     Features need no alignment and no skeleton: all pairwise joint distances, joint heights
-    (third coordinate, when present) and centroid speed, each standardized. No discovery
-    method in the grid clusters on these axes, so no method is favored when all are drawn on
-    them. Linear, so distances on the plane are meaningful up to the variance it keeps.
+    (third coordinate, when present) and centroid speed, each standardized. Speed is one
+    column among many, so the axes are posture axes. No method clusters on this plane, but
+    it is not neutral: B-SOiD's features include the same pairwise distances, so its
+    clusters separate here more easily than those of a method built on dynamics. Linear, so
+    distances on the plane are meaningful up to the variance it keeps.
     Returns ``(T, 2)``; ``pose_embedding.explained`` holds the last call's variance ratio.
     """
     from sklearn.decomposition import PCA
@@ -110,12 +131,18 @@ def pose_embedding(keypoints: np.ndarray) -> np.ndarray:
     return pca.transform(X)
 
 
-def plot_method_maps(embedding: np.ndarray, seqs: dict[str, np.ndarray], title: str = ""):
-    """The same embedding once per method, colored by that method's labels (small multiples)."""
+def plot_method_maps(embedding: np.ndarray | dict[str, np.ndarray], seqs: dict[str, np.ndarray],
+                     title: str = ""):
+    """One panel per method, colored by that method's labels (small multiples).
+
+    ``embedding`` is one array (the same axes for every method) or a dict of per-method
+    arrays (each method on its own embedding; methods without one are skipped)."""
     import matplotlib.pyplot as plt
 
     from .agreement import stretch_labels
 
+    if isinstance(embedding, dict):
+        seqs = {k: v for k, v in seqs.items() if k in embedding}
     n = len(seqs)
     cols = min(n, 3)
     rows = -(-n // cols)
@@ -124,7 +151,8 @@ def plot_method_maps(embedding: np.ndarray, seqs: dict[str, np.ndarray], title: 
     for ax in axes.ravel()[n:]:
         ax.axis("off")
     for ax, (name, lab) in zip(axes.ravel(), seqs.items()):
-        plot_cluster_map(embedding, stretch_labels(lab, len(embedding)), name, ax=ax)
+        emb = embedding[name] if isinstance(embedding, dict) else embedding
+        plot_cluster_map(emb, stretch_labels(lab, len(emb)), name, ax=ax)
     fig.suptitle(title, fontsize=10)
     return fig
 
@@ -143,11 +171,10 @@ def plot_cluster_sizes(seqs: dict[str, np.ndarray], title: str = ""):
 
     fig, axes = plt.subplots(1, len(seqs), figsize=(3.3 * len(seqs), 2.8), squeeze=False,
                              constrained_layout=True, sharey=True)
-    cmap = plt.get_cmap("tab20")
     for ax, (name, lab) in zip(axes[0], seqs.items()):
         ids, share, noise = cluster_sizes(lab)
-        all_ids = sorted(ids.tolist())  # same color per id as plot_cluster_map
-        ax.bar(range(len(ids)), share, color=[cmap(all_ids.index(c) % 20) for c in ids])
+        color = rank_colors(lab)  # same color per id as plot_cluster_map
+        ax.bar(range(len(ids)), share, color=[color[int(c)] for c in ids])
         if len(ids) <= 20:
             ax.set_xticks(range(len(ids)))
             ax.set_xticklabels(ids, fontsize=6)
@@ -162,5 +189,5 @@ def plot_cluster_sizes(seqs: dict[str, np.ndarray], title: str = ""):
     return fig
 
 
-__all__ = ["cluster_sizes", "plot_cluster_map", "plot_cluster_sizes", "plot_method_maps",
-           "plot_subtle_cluster_map", "pose_embedding", "transition_matrix"]
+__all__ = ["PALETTE", "cluster_sizes", "plot_cluster_map", "plot_cluster_sizes", "plot_method_maps",
+           "plot_subtle_cluster_map", "pose_embedding", "rank_colors", "transition_matrix"]

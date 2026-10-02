@@ -83,9 +83,17 @@ def plot_label_agreement(seqs: dict[str, np.ndarray], title: str = "", *, fps: f
     names, T = agr["names"], agr["n_frames"]
     fig, axes = plt.subplots(1, 3, figsize=(18, 0.5 * len(names) + 3.2), constrained_layout=True,
                              gridspec_kw={"width_ratios": [2.2, 1, 1]})
-    # colors are per-sequence ids: the same color in two rows does not mean the same behavior
-    axes[0].imshow(np.stack([stretch_labels(seqs[n], T) % 20 for n in names]), aspect="auto",
-                   cmap="tab20", interpolation="nearest",
+    # colors are per sequence (size rank): the same color in two rows is not the same behavior
+    from matplotlib.colors import to_rgb
+
+    from .cluster_map import rank_colors
+
+    rows = []
+    for n in names:
+        lab = stretch_labels(seqs[n], T)
+        color = {c: to_rgb(v) for c, v in rank_colors(lab).items()}
+        rows.append(np.array([color[int(c)] for c in lab]))
+    axes[0].imshow(np.stack(rows), aspect="auto", interpolation="nearest",
                    extent=(0, T / fps if fps else T, len(names), 0))
     axes[0].set_yticks(np.arange(len(names)) + 0.5)
     axes[0].set_yticklabels(names, fontsize=8)

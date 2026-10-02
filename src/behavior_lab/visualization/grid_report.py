@@ -22,15 +22,19 @@ from datetime import date
 from pathlib import Path
 
 from ._grid_common import (
-    COLS,
     FAMILIES,
+    FAMILY_VARS,
     MAX_NOISE,
     MIN_CLUSTERS,
     PAIR_HEADER,
+    ROW_COLS,
+    ROW_HEAD,
     SAME_FRAMES_PREFIXES,
+    SORT_JS,
     _family,
     _flags,
     _fmt,
+    _img,
     _keypoints,
     _labels,
     _method_color,
@@ -39,7 +43,7 @@ from ._grid_common import (
     _write,
 )
 from .agreement import label_agreement
-from .grid_slice import schema_block, slice_blocks
+from .grid_slice import plot_grid_overview, schema_block, slice_blocks
 
 
 def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None, *,
@@ -95,8 +99,9 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
         schema_rows.append([FAMILIES.get(fam, fam), sum(_family(d) == fam for d in datasets),
                             by_name[first]["fps"], *row])
         figs.append(f"<h3>{html.escape(FAMILIES.get(fam, fam))}</h3><p>Slice shown: "
-                    f"{html.escape(first)}. Which coordinate points up is not stated in the "
-                    f"files.</p>{img}")
+                    f"{html.escape(first)}. Joint colors are the ones in the table above "
+                    "and in the playback page. Which coordinate points up is not stated in "
+                    f"the files.</p>{img}")
     parts.append(_table(["family", "slices", "fps", "keypoints", "dims", "bones", "joints"],
                         schema_rows) + "".join(figs))
 
@@ -158,23 +163,41 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
         body.append(f"<tr><td>{html.escape(ds)}</td>{''.join(tds)}</tr>")
     parts.append(f"<table><tr><th>slice</th>{head}</tr>{''.join(body)}</table>")
 
-    parts.append("<h3>All rows</h3><p>One row per slice and method, with the flag reason.</p>")
+    parts.append("<h3>All rows</h3><p>One row per slice and method; click a column header to "
+                 "sort. Columns run from the descriptive results (clusters, median bout, repeat "
+                 "ARI, noise, flag) to the run details. The slice cell is tinted by dataset "
+                 "family, the method cell carries the method color, and the repeat ARI cell is "
+                 "shaded by its value. No cell is marked “best”: no column measures quality, "
+                 "and more clusters or longer bouts are not better.</p>")
+    fam_var = {f: FAMILY_VARS[i % len(FAMILY_VARS)] for i, f in enumerate(families)}
     body = []
-    for r in sorted(ok, key=lambda r: (r["dataset"], r["method"])):
+    for r in sorted(ok, key=lambda r: (datasets.index(r["dataset"]), r["method"])):
         key = (r["dataset"], r["method"])
         tds = []
-        for c in COLS:
+        for c in ROW_COLS:
             style = ""
-            if c == "method":
+            if c == "dataset":
+                style = (f"background:color-mix(in srgb, var({fam_var[_family(r['dataset'])]}) "
+                         "22%, transparent)")
+            elif c == "method":
                 style = f"border-left:5px solid {color[r['method']]}"
-            elif c == "repeat_ari_mean" and top.get(r["dataset"]) == r["method"]:
-                style = hi
-            tds.append(f'<td style="{style}">{_fmt(r.get(c))}</td>')
-        reason = "; ".join(flags[key])
-        tds.append(f'<td style="color:var(--warn)">{html.escape(reason)}</td>')
+            elif c == "repeat_ari_mean" and r.get(c) is not None:
+                style = (f"background:color-mix(in srgb, var(--a1) {max(0, r[c]) * 45:.0f}%, "
+                         "transparent)" + (";font-weight:600" if top.get(r["dataset"])
+                                           == r["method"] else ""))
+            if c == "flag":
+                tds.append('<td style="color:var(--warn)">'
+                           f'{html.escape("; ".join(flags[key]))}</td>')
+            else:
+                tds.append(f'<td style="{style}">{_fmt(r.get(c))}</td>')
         body.append(f"<tr>{''.join(tds)}</tr>")
-    head = "".join(f"<th>{html.escape(c)}</th>" for c in COLS + ["flag"])
-    parts.append(f"<table><tr>{head}</tr>{''.join(body)}</table>")
+    head = "".join(f"<th>{html.escape(ROW_HEAD.get(c, c))}</th>" for c in ROW_COLS)
+    parts.append(f'<table class="sortable"><thead><tr>{head}</tr></thead><tbody>'
+                 f"{''.join(body)}</tbody></table>")
+
+    parts.append("<h3>Overview charts</h3><p>The same rows as charts: one dot per slice, colored "
+                 "by dataset family, grouped by method. Hollow dots are flagged rows.</p>"
+                 + _img(plot_grid_overview(ok, flags, families)))
 
     for fam in families:
         group = [d for d in datasets if _family(d) == fam]
@@ -224,6 +247,7 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
                  "<li>B-SOiD labels are 10 Hz bins repeated to frames; its bins start at frame 0 "
                  "and drop a tail shorter than two bins.</li></ul>")
 
+    parts.append(SORT_JS)
     return _write(Path(out_html) if out_html else batch_dir / "batch_report.html", title, parts)
 
 

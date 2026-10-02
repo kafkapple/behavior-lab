@@ -15,6 +15,7 @@ from .cluster_map import (
     plot_method_maps,
     plot_subtle_cluster_map,
     pose_embedding,
+    rank_colors,
     transition_matrix,
 )
 from .colors import (
@@ -27,6 +28,7 @@ from .colors import (
     get_person_colors,
 )
 from .comparison import render_cluster_gallery, render_comparison_report
+from .dynamics import common_rate, plot_dynamics
 from .embedding import plot_embedding, plot_embedding_3d
 from .html_report import fig_to_base64, generate_pipeline_report
 from .keypoint_schema import plot_keypoint_schema
@@ -45,6 +47,9 @@ from .video_overlay import (
 )
 
 __all__ = [
+    "common_rate",
+    "plot_dynamics",
+    "rank_colors",
     "label_agreement",
     "plot_cluster_map",
     "plot_label_agreement",

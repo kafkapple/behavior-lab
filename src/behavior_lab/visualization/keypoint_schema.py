@@ -1,4 +1,4 @@
-"""Keypoint schema figure: one real frame with joint indices, names and bones.
+"""Keypoint schema figure: one real frame, joints as colored points, bones as lines.
 
 A recording's mean pose is meaningless while the animal moves and turns, so the figure shows
 the frame whose pairwise joint distances are closest to the recording's median.
@@ -6,6 +6,15 @@ the frame whose pairwise joint distances are closest to the recording's median.
 from __future__ import annotations
 
 import numpy as np
+
+
+def joint_color(k: int) -> str:
+    """Fixed color of joint ``k`` (tab20 by index): the schema figure, its table and the player
+    use the same one, so joint names are written once, in the table."""
+    from matplotlib import colormaps
+    from matplotlib.colors import to_hex
+
+    return to_hex(colormaps["tab20"](k % 20))
 
 
 def representative_frame(keypoints: np.ndarray) -> int:
@@ -35,10 +44,8 @@ def plot_keypoint_schema(keypoints: np.ndarray, joint_names: list[str],
     for ax, (name, x, y) in zip(axes[0], views):
         for a, b in edges:
             ax.plot([x[a], x[b]], [y[a], y[b]], color="0.5", lw=1.5, zorder=1)
-        ax.scatter(x, y, s=28, c=range(len(x)), cmap="tab20", zorder=2)
-        for k, nm in enumerate(joint_names):
-            ax.annotate(f"{k} {nm}", (x[k], y[k]), xytext=(4, 4), textcoords="offset points",
-                        fontsize=7)
+        ax.scatter(x, y, s=60, c=[joint_color(k) for k in range(len(x))], zorder=2,
+                   edgecolors="white", linewidths=0.6)
         ax.set_aspect("equal", adjustable="datalim")
         ax.set_title(name, fontsize=9)
         ax.tick_params(labelsize=7)
@@ -46,4 +53,4 @@ def plot_keypoint_schema(keypoints: np.ndarray, joint_names: list[str],
     return fig
 
 
-__all__ = ["plot_keypoint_schema", "representative_frame"]
+__all__ = ["joint_color", "plot_keypoint_schema", "representative_frame"]

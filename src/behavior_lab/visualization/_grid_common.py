@@ -12,11 +12,38 @@ import numpy as np
 SAME_FRAMES_PREFIXES = ("avatar_",)
 COLS = ["dataset", "method", "n_frames", "n_clusters", "median_bout_sec", "noise_frac",
         "n_repeats", "repeat_ari_mean", "repeat_ari_min", "elapsed_sec"]
+ROW_COLS = ["dataset", "method", "n_clusters", "median_bout_sec", "repeat_ari_mean",
+            "repeat_ari_min", "noise_frac", "flag", "n_frames", "n_repeats", "elapsed_sec"]
+ROW_HEAD = {"dataset": "slice", "n_clusters": "clusters", "median_bout_sec": "median bout (s)",
+            "repeat_ari_mean": "repeat ARI", "repeat_ari_min": "repeat ARI, min",
+            "noise_frac": "noise", "n_frames": "label steps", "n_repeats": "repeats",
+            "elapsed_sec": "run time (s)"}
 # Flags (own loose rule, no literature threshold): a row that trips one is described, not ranked.
 MIN_CLUSTERS, MAX_NOISE = 3, 0.3
 GALLERY_CLUSTERS, GALLERY_MAX_SEC, GALLERY_PAD_SEC = 6, 2.0, 0.5
 GALLERY_GIF_FPS = 8  # frames are subsampled to about this rate: 3 slices come to about 9 MB
 SKELETONS = {"subtle_": "subtle_mouse", "shank3ko_": "shank3ko"}
+
+
+# Lines drawn between joints when a file gives joint names but no bone list (AVATAR's SLEAP
+# layout). Drawing aid only: not a skeleton definition, not used by any method.
+DISPLAY_BONES = [("nose1", "neck1"), ("neck1", "earL1"), ("neck1", "earR1"),
+                 ("neck1", "forelegL1"), ("neck1", "forelegR1"), ("neck1", "tailstart1"),
+                 ("tailstart1", "hindlegL1"), ("tailstart1", "hindlegR1"),
+                 ("tailstart1", "tail1"), ("tail1", "tailend1")]
+FAMILY_VARS = ["--c2", "--c4", "--c5", "--c1", "--c3"]  # tint of the slice cell, per family
+
+# Click a header of a table with class "sortable" to sort by that column (numbers first).
+SORT_JS = """<script>
+document.querySelectorAll('table.sortable').forEach(t=>{
+  t.querySelectorAll('th').forEach((th,i)=>{th.style.cursor='pointer';th.title='click to sort';
+    th.onclick=()=>{const rows=[...t.rows].slice(1),d=th.dataset.d=th.dataset.d==='1'?'-1':'1';
+      const key=r=>{const c=r.cells[i],v=c.dataset.v??c.textContent.trim(),n=parseFloat(v);
+        return isNaN(n)?v:n;};
+      rows.sort((a,b)=>{const x=key(a),y=key(b);if(x===''||y==='')return (x==='')-(y==='');
+        return (typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y)))*d;});
+      rows.forEach(r=>t.tBodies[0].appendChild(r));};});});
+</script>"""
 
 
 def _flags(r: dict, slice_sec: float) -> list[str]:
@@ -36,7 +63,13 @@ def _method_color(methods: list[str]) -> dict[str, str]:
     return {m: f"var(--c{1 + i % 5})" for i, m in enumerate(methods)}
 
 
+class RawHtml(str):
+    """A table cell that is already HTML (not escaped)."""
+
+
 def _fmt(v: object) -> str:
+    if isinstance(v, RawHtml):
+        return v
     if v is None or (isinstance(v, float) and np.isnan(v)):
         return ""
     return f"{v:.2f}" if isinstance(v, float) else html.escape(str(v))
@@ -48,12 +81,12 @@ def _table(header: list[str], rows: list[list[object]]) -> str:
     return f"<table><tr>{head}</tr>{body}</table>"
 
 
-def _img(fig) -> str:
+def _img(fig, dpi: int = 90) -> str:
     import matplotlib.pyplot as plt
 
     from .html_report import fig_to_base64
 
-    uri = fig_to_base64(fig, dpi=90)  # already a full data URI
+    uri = fig_to_base64(fig, dpi=dpi)  # already a full data URI
     assert uri.startswith("data:image/png;base64,")
     tag = f'<img src="{uri}" alt="">'
     plt.close(fig)
@@ -101,10 +134,13 @@ def _skeleton(name: str, node_names: list[str] | None, n_joints: int):
     for prefix, key in SKELETONS.items():
         if name.startswith(prefix):
             return get_skeleton(key), "bones from the skeleton registry"
-    names = node_names or [f"kp{i}" for i in range(n_joints)]
-    return (SkeletonDefinition(name=name, num_joints=n_joints, joint_names=list(names),
-                               joint_parents=[-1] * n_joints, edges=[]),
-            "points only: this layout has no bone list in behavior-lab")
+    names = list(node_names or [f"kp{i}" for i in range(n_joints)])
+    edges = [(names.index(a), names.index(b)) for a, b in DISPLAY_BONES
+             if a in names and b in names]
+    note = ("display-only bones assumed from the joint names; the source files carry no bone "
+            "list" if edges else "points only: no bone list for this layout")
+    return (SkeletonDefinition(name=name, num_joints=n_joints, joint_names=names,
+                               joint_parents=[-1] * n_joints, edges=edges), note)
 
 
 FAMILIES = {"subtle": "SUBTLE mouse recordings", "shank3ko": "Shank3KO recordings",

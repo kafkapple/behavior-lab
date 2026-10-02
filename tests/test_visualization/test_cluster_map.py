@@ -58,7 +58,25 @@ def test_schema_and_player_data():
     assert len(fig.axes) == 2
     lab = np.repeat(np.arange(10), 20)
     d = player_data(kp, [(0, 1)], rng.normal(size=(200, 2)), {"m": lab, "binned": lab[::2]}, fps=20)
-    assert d["n"] == 100 and len(d["kp"]) == 100 * 4 * 2 and len(d["emb"]) == 200
+    assert d["n"] == 100 and len(d["kp"]) == 100 * 4 * 3 and len(d["emb"]) == 200
     # one index vector: both sequences show the label of frame 2 * i at step i
     assert d["methods"][0]["labels"] == d["methods"][1]["labels"] == lab[::2].tolist()
     assert 'id="p1"' in player_block("p1", "demo", d)
+    m = d["methods"][0]  # legend order = size rank, one color and one share per cluster
+    assert len(m["order"]) == len(m["colors"]) == len(m["share"]) == 10
+
+
+def test_rank_colors_and_dynamics():
+    from behavior_lab.visualization.cluster_map import OTHER_COLOR, PALETTE, rank_colors
+    from behavior_lab.visualization.dynamics import bout_lengths, common_rate, plot_dynamics
+
+    lab = np.concatenate([np.full(30 - k, k) for k in range(15)] + [np.full(5, -1)])
+    color = rank_colors(lab)
+    assert color[0] == PALETTE[0] and color[11] == PALETTE[11] and color[12] == OTHER_COLOR
+    # 20 fps -> 10 Hz: a one-frame flicker inside a bin pair disappears, real bouts stay
+    frames = np.array([0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0])
+    assert common_rate(frames, 12, 20).tolist() == [0, 0, 1, 1, 1, 0]
+    assert common_rate(np.array([0, 0, 1, 1, 1, 0]), 12, 20).tolist() == [0, 0, 1, 1, 1, 0]
+    assert bout_lengths(np.array([0, 0, 1, -1, -1, 2, 2, 2])).tolist() == [2, 1, 3]
+    seqs = {"a": np.repeat(np.arange(8), 150), "b": np.repeat(np.arange(4), 150)}
+    assert len(plot_dynamics(seqs, 1200, 20.0, "demo").axes) >= 6

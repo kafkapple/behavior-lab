@@ -9,6 +9,7 @@ import numpy as np
 
 from ._grid_common import (
     PAIR_HEADER,
+    RawHtml,
     _details,
     _img,
     _labels,
@@ -24,7 +25,8 @@ from .cluster_map import (
     plot_subtle_cluster_map,
     pose_embedding,
 )
-from .keypoint_schema import plot_keypoint_schema
+from .dynamics import COMMON_HZ, plot_dynamics
+from .keypoint_schema import joint_color, plot_keypoint_schema
 
 MATCH_ROWS, MATCH_P = 12, 0.05
 SHORT_FRAMES = 2000  # below this, matching and bout statistics are reported as low confidence
@@ -34,8 +36,11 @@ def schema_block(name: str, kp: np.ndarray, node_names: list[str] | None) -> tup
     """Figure plus the table cells ``[keypoints, dims, bones, names]`` of one keypoint layout."""
     skel, note = _skeleton(name, node_names, kp.shape[1])
     fig = plot_keypoint_schema(kp, skel.joint_names, skel.edges, name)
-    return _img(fig), [kp.shape[1], kp.shape[2], f"{len(skel.edges)} ({note})",
-                       ", ".join(f"{i} {n}" for i, n in enumerate(skel.joint_names))]
+    chips = " ".join(
+        f'<span style="white-space:nowrap"><span style="display:inline-block;width:.8em;'
+        f'height:.8em;border-radius:50%;background:{joint_color(i)}"></span> {i} '
+        f"{html.escape(n)}</span>" for i, n in enumerate(skel.joint_names))
+    return _img(fig), [kp.shape[1], kp.shape[2], f"{len(skel.edges)} ({note})", RawHtml(chips)]
 
 
 def slice_matches(seqs: dict[str, np.ndarray]) -> dict[tuple[str, str], dict]:
@@ -89,6 +94,34 @@ def _matching(matches: dict[tuple[str, str], dict]) -> str:
     return out
 
 
+def plot_grid_overview(rows: list[dict], flags: dict, families: list[str]):
+    """Clusters, median bout and repeat ARI of every finished cell: dot = slice, x = method."""
+    import matplotlib.pyplot as plt
+
+    methods = sorted({r["method"] for r in rows})
+    metrics = [("n_clusters", "clusters", "log"), ("median_bout_sec", "median bout (s)", "log"),
+               ("repeat_ari_mean", "repeat ARI", "linear")]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 3.6), constrained_layout=True)
+    for ax, (key, name, scale) in zip(axes, metrics):
+        for r in rows:
+            if r.get(key) is None:
+                continue
+            f = families.index(r["dataset"].split("_")[0])
+            x = methods.index(r["method"]) + (f - (len(families) - 1) / 2) * 0.22
+            flagged = bool(flags[(r["dataset"], r["method"])])
+            ax.scatter(x, r[key], s=36, facecolors="none" if flagged else f"C{f}",
+                       edgecolors=f"C{f}", linewidths=1.2)
+        ax.set_xticks(range(len(methods)))
+        ax.set_xticklabels(methods, rotation=20, ha="right", fontsize=8)
+        ax.set_yscale(scale)
+        ax.set_title(name, fontsize=10)
+        ax.grid(axis="y", alpha=0.3)
+    for f, fam in enumerate(families):
+        axes[0].scatter([], [], color=f"C{f}", label=fam)
+    axes[0].legend(fontsize=8, frameon=False)
+    return fig
+
+
 def slice_blocks(batch_dir: Path, ds: str, kp: np.ndarray | None, fps: float) -> str:
     seqs = _labels(batch_dir, ds)
     if len(seqs) < 2:
@@ -102,15 +135,37 @@ def slice_blocks(batch_dir: Path, ds: str, kp: np.ndarray | None, fps: float) ->
     out.append(_details("Label sequences and agreement",
                         _img(fig) + _table(PAIR_HEADER, _pairs(agr)), open_=True))
     out.append(_details("Cluster sizes", _img(plot_cluster_sizes(seqs, ds))))
+    out.append(_details(
+        "Dynamics: occupancy over time, transitions, bout lengths",
+        f"<p>Every method is first put on one {COMMON_HZ:g} Hz grid (majority label per bin), "
+        "because bout lengths and transition rates otherwise follow the label rate: a "
+        "per-frame method can switch faster than one that labels 100 ms bins. One row per "
+        "method. Left: share of each 30 s window per cluster, and transitions per minute "
+        "(black line). Middle: probability of the next cluster given the current one, "
+        "self-transitions left out. Right: bout lengths on a log axis; the dashed line is the "
+        "shortest bout the grid allows.</p>" + _img(plot_dynamics(seqs, T, fps, ds), dpi=70)))
     if kp is not None:
         emb = pose_embedding(kp)
         out.append(_details(
             "Cluster maps on shared axes",
-            f"<p>Every panel uses the same axes: a 2D PCA of posture and speed "
-            f"({pose_embedding.explained:.0%} of the variance), which no method clusters on. "
-            "A method whose clusters separate here differs in posture or speed; clusters that "
-            "overlap here can still differ in dynamics.</p>"
-            + _img(plot_method_maps(emb, seqs, ds))))
+            "<p>Every point is one frame, placed by a 2D PCA of posture (pairwise joint "
+            f"distances, joint heights; {pose_embedding.explained:.0%} of the variance). The "
+            "points are identical in every panel; only the coloring changes, by each method's "
+            "labels. The figure answers one question: do a method's clusters differ in "
+            "posture along these two axes? It does not rank methods: clusters that overlap "
+            "here can differ in dynamics, and B-SOiD has an advantage because its features "
+            "include the same joint distances. The 12 largest clusters are colored, the rest "
+            "are grey.</p>" + _img(plot_method_maps(emb, seqs, ds), dpi=60)))
+        own = {p.stem.removesuffix("_embedding"): np.load(p)
+               for p in sorted((batch_dir / "arrays" / ds).glob("*_embedding.npy"))}
+        own = {k: v[:, :2] for k, v in own.items() if k in seqs and v.ndim == 2}
+        if own:
+            out.append(_details(
+                "Cluster maps on each method's own embedding",
+                "<p>Each method on the 2D embedding it produced itself. Axes differ between "
+                "panels. Clean islands here are separation by construction (k-means and B-SOiD "
+                "cluster on this very embedding), not evidence of quality. keypoint-MoSeq "
+                "stores no embedding.</p>" + _img(plot_method_maps(own, seqs, ds), dpi=60)))
     sm = _subtle_map(batch_dir, ds)
     if sm:
         tag, m = sm
