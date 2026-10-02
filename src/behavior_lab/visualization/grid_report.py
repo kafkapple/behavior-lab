@@ -4,7 +4,8 @@ Plain content only (h1, header-meta, tldr, sections with embedded figures); the 
 ``build_page.py`` supplies the theme and navigation. Rebuild from the batch folder; do not
 hand-edit the output. Usage:
 ``python -m behavior_lab.visualization.grid_report <batch_dir> [gallery_href] [player_href]
-[figs_href]``; figures are embedded as previews and link to full-resolution PNGs written to
+[figs_href] [baseline_dir] [baseline_href]``; ``baseline_dir`` is a batch run under each
+method's own settings, summarized in one table on this page; figures are embedded as previews and link to full-resolution PNGs written to
 ``<batch_dir>/figs_report/`` (copy that folder next to the published page as ``figs_href``);
 writes ``batch_report.html``, ``batch_gallery.html`` (per-cluster GIFs) and
 ``batch_player.html`` (synchronized playback) into the batch folder.
@@ -24,7 +25,6 @@ from datetime import date
 from pathlib import Path
 
 from ._grid_common import (
-    set_figs,
     DATASET_INFO,
     FAMILIES,
     FAMILY_VARS,
@@ -49,15 +49,18 @@ from ._grid_common import (
     _table,
     _write,
     family_embeddings,
+    set_figs,
 )
 from .agreement import label_agreement
-from .grid_slice import plot_grid_overview, schema_block, slice_blocks
+from .grid_slice import baseline_block, plot_grid_overview, schema_block, slice_blocks
 
 
 def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None, *,
                        gallery_href: str = "batch_gallery.html",
                        player_href: str = "batch_player.html",
-                       figs_href: str = "figs_report") -> Path:
+                       figs_href: str = "figs_report",
+                       baseline_dir: str | Path | None = None,
+                       baseline_href: str | None = None) -> Path:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -220,6 +223,9 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
     parts.append(f'<table class="sortable"><thead><tr>{head}</tr></thead><tbody>'
                  f"{''.join(body)}</tbody></table>")
 
+    if baseline_dir:
+        parts.append(baseline_block(batch_dir, Path(baseline_dir), baseline_href))
+
     parts.append("<h3>Overview charts</h3><p>The same rows as charts: one dot per slice, colored "
                  "by dataset family, grouped by method. Hollow dots are flagged rows.</p>"
                  + _img(plot_grid_overview(ok, flags, families)))
@@ -283,9 +289,10 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
 if __name__ == "__main__":
     from .grid_gallery import render_gallery, render_player
 
-    defaults = ["batch_gallery.html", "batch_player.html", "figs_report"]
+    defaults = ["batch_gallery.html", "batch_player.html", "figs_report", "", ""]
     args = sys.argv[2:] + defaults[len(sys.argv) - 2:]
     print(render_grid_report(sys.argv[1], gallery_href=args[0], player_href=args[1],
-                             figs_href=args[2]))
+                             figs_href=args[2], baseline_dir=args[3] or None,
+                             baseline_href=args[4] or None))
     print(render_gallery(sys.argv[1]))
     print(render_player(sys.argv[1]))

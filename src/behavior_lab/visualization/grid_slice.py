@@ -97,6 +97,58 @@ def _matching(matches: dict[tuple[str, str], dict]) -> str:
     return out
 
 
+def settings_summary(batch_dir: Path) -> tuple[dict[str, dict], list[float]]:
+    """Per method: cluster count range, repeat ARI range, largest noise share over all slices;
+    and the between-method ARI of every method pair on every slice (keypoint-MoSeq left out:
+    its state bound is not steered by the target cluster count)."""
+    import json
+
+    rows = [r for r in json.loads((batch_dir / "batch_results.json").read_text())
+            if r["status"] == "ok"]
+    slices = json.loads((batch_dir / "dataset_slices.json").read_text())
+    per: dict[str, dict] = {}
+    for m in sorted({r["method"] for r in rows}):
+        xs = [r for r in rows if r["method"] == m]
+        rep = [r["repeat_ari_mean"] for r in xs if r.get("repeat_ari_mean") is not None]
+        per[m] = {"clusters": (min(r["n_clusters"] for r in xs), max(r["n_clusters"] for r in xs)),
+                  "repeat": (min(rep), max(rep)) if rep else None,
+                  "noise": max((r.get("noise_frac") or 0) for r in xs)}
+    aris: list[float] = []
+    for s in slices:
+        seqs = {k: v for k, v in _labels(batch_dir, s["name"]).items() if k != "keypoint_moseq"}
+        if len(seqs) > 1:
+            a = label_agreement(seqs, n_shifts=1, lengths=s["notes"].get("lengths"))["ari"]
+            aris += [float(a[i, j]) for i in range(len(a)) for j in range(i + 1, len(a))]
+    return per, aris
+
+
+def baseline_block(batch_dir: Path, baseline_dir: Path, baseline_href: str | None) -> str:
+    """Compact comparison of this batch with the batch run under each method's own settings."""
+    here, ari_here = settings_summary(batch_dir)
+    base, ari_base = settings_summary(baseline_dir)
+
+    def rng(v, fmt="{:g}"):
+        return "" if v is None else (fmt.format(v[0]) if v[0] == v[1]
+                                     else f"{fmt.format(v[0])} to {fmt.format(v[1])}")
+
+    rows = [[m, rng(base[m]["clusters"]) if m in base else "", rng(here[m]["clusters"]),
+             rng(base[m]["repeat"], "{:.2f}") if m in base else "",
+             rng(here[m]["repeat"], "{:.2f}"),
+             f"{base[m]['noise']:.0%}" if m in base else "", f"{here[m]['noise']:.0%}"]
+            for m in here]
+    link = (f' The full page under own settings: <a href="{html.escape(baseline_href)}">'
+            f"{html.escape(baseline_dir.name)}</a>." if baseline_href else "")
+    return ("<h3>Own settings versus matched cluster count</h3><p>The same slices under each "
+            "method's own settings and under the common target count. Between-method "
+            f"ARI over all slices has median {np.median(ari_base):.2f} (max {max(ari_base):.2f}, "
+            f"{len(ari_base)} pairs) under each method's own settings and median "
+            f"{np.median(ari_here):.2f} (max {max(ari_here):.2f}, {len(ari_here)} pairs) here. "
+            "Columns: own settings, then this page. keypoint-MoSeq is left out of the ARI "
+            f"figures because its state bound is not steered.{link}</p>"
+            + _table(["method", "clusters, own", "clusters, here", "repeat ARI, own",
+                      "repeat ARI, here", "max noise, own", "max noise, here"], rows))
+
+
 def plot_grid_overview(rows: list[dict], flags: dict, families: list[str]):
     """Clusters, median bout and repeat ARI of every finished cell: dot = slice, x = method."""
     import matplotlib.pyplot as plt
