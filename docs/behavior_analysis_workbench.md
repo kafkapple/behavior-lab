@@ -138,6 +138,7 @@ Reading the page
 
 keypoint-MoSeq recipe and install
 
+- `--target-clusters N` steers the methods to a common cluster count for a matched comparison: k-means `k = N`, HMM `N` states, and B-SOiD doubles HDBSCAN `min_cluster_size` from 20 and keeps the value whose count is closest to `N` (recorded in the row notes). SUBTLE's hierarchy only offers its supercluster levels (1 to 5 here) or the subclusters (75), so it matches at `N = 5` only. B-SOiD's default `min_cluster_size = 20` bins is 2 s of data: on a pooled 100-minute slice it gives 206 clusters and 56% noise, against 6 clusters and 3% noise at 160.
 - `--kpms-kappa` and `--kpms-states` set the full-model kappa and the state upper bound (defaults 1e4 and 20; upstream default for states is 100, and all 20 are used on 12,000-frame recordings, so the bound is binding).
 - Fit = the modeling tutorial's two stages: AR-HMM only for 50 iterations, then the full model for 500 with kappa 1e4; tail keypoints excluded; `latent_dim = min(10, dims for 90% variance)`. kappa is not tuned to a target syllable duration, so read `median_bout_sec` before its agreement numbers.
 - It installs on Linux with Python < 3.13 only: `keypoint-moseq>=0.6` depends on `jax-cuda12-pjrt` (Linux wheels), and 0.4.x does not import against current `dynamax`. The lock pins `jax 0.6.x` and `tfp-nightly==0.26.0.dev20260704` (the set in `env_snapshots/kpms.yml`); a newer nightly breaks `dynamax`.
