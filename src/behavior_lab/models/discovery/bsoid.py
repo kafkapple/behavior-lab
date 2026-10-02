@@ -84,7 +84,9 @@ class BSOiD:
     """
 
     def __init__(self, fps: int = 30, n_neighbors: int = 60, min_dist: float = 0.0,
-                 umap_dim: int = 11, min_cluster_size: int = 30, random_state: int = 42):
+                 umap_dim: int = 11, min_cluster_size: int = 30, random_state: int = 42,
+                 target_clusters: int | None = None):
+        self.target_clusters = target_clusters
         self.fps = fps
         self.umap_params = dict(n_neighbors=n_neighbors, min_dist=min_dist,
                                 n_components=umap_dim, random_state=random_state)
@@ -102,7 +104,10 @@ class BSOiD:
         Returns:
             dict with 'labels', 'embedding_2d', 'n_clusters'
         """
-        features = _compute_bsoid_features(data, self.fps)
+        # a list = several recordings fitted together; features never span two recordings
+        parts = [_compute_bsoid_features(d, self.fps) for d in data] if isinstance(data, list) \
+            else [_compute_bsoid_features(data, self.fps)]
+        features = np.concatenate(parts)
 
         self.scaler = StandardScaler()
         features_sc = self.scaler.fit_transform(features)
@@ -113,7 +118,21 @@ class BSOiD:
 
         # HDBSCAN
         import hdbscan
-        labels = hdbscan.HDBSCAN(min_cluster_size=self.min_cluster_size).fit_predict(embeddings)
+        def cluster(size: int) -> np.ndarray:
+            return hdbscan.HDBSCAN(min_cluster_size=size).fit_predict(embeddings)
+
+        size = self.min_cluster_size
+        labels = cluster(size)
+        if self.target_clusters:
+            # HDBSCAN has no cluster-count argument: double min_cluster_size while there are
+            # too many clusters and keep the setting whose count is closest to the target.
+            best = (abs(len(set(labels) - {-1}) - self.target_clusters), size, labels)
+            while len(set(labels) - {-1}) > self.target_clusters and size < len(embeddings) // 4:
+                size *= 2
+                labels = cluster(size)
+                best = min(best, (abs(len(set(labels) - {-1}) - self.target_clusters), size,
+                                  labels), key=lambda b: b[0])
+            _, size, labels = best
 
         # Random Forest on ORIGINAL high-dim features (not UMAP embeddings)
         self.classifier = RandomForestClassifier(
@@ -125,6 +144,8 @@ class BSOiD:
             'embedding_2d': embeddings[:, :2] if embeddings.shape[1] >= 2 else embeddings,
             'n_clusters': len(set(labels) - {-1}),
             'features': features_sc,
+            'segment_bins': [len(p) for p in parts],
+            'min_cluster_size': size,
         }
 
     def predict(self, data: np.ndarray) -> np.ndarray:

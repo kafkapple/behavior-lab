@@ -6,6 +6,8 @@ Install: pip install git+https://github.com/jeakwon/subtle.git
 Compatibility: scipy >= 1.12 removed signal.cwt. We monkey-patch the
 SUBTLE module's morlet_cwt to use a manual convolution-based CWT.
 """
+# no-split: one model wrapper; config, scipy/umap compat patches and subprocess isolation
+# share module state (file was already 421L before the 261001 one-line NaN fix).
 from __future__ import annotations
 
 import json
@@ -177,7 +179,7 @@ class SUBTLE:
     def _preprocess(self, seq: np.ndarray) -> np.ndarray:
         """Convert (T, K, D) -> (T, K*D) with centering."""
         T, K, D = seq.shape
-        mean = seq.mean(axis=(0, 1))
+        mean = np.nanmean(seq, axis=(0, 1))  # mean() would blank the array on one NaN
         centered = seq - mean
         return centered.reshape(T, K * D)
 
@@ -218,11 +220,17 @@ class SUBTLE:
             embedding_method=self.config.embedding_method, **self.config.extra)
         data_list = self._mapper.fit(flat)
 
+        # Mapper.Z/y/Y are in shuffled training order (Mapper.fit permutes frames before
+        # UMAP); the time-ordered labels live on the per-recording Data objects.
+        def in_time_order(attr: str):
+            vals = [getattr(d, attr, None) for d in data_list]
+            return np.concatenate(vals) if vals and all(v is not None for v in vals) else None
+
         data_obj = data_list[0] if data_list else None
         return {
-            "embeddings": getattr(self._mapper, "Z", None),
-            "subclusters": getattr(self._mapper, "y", None),
-            "superclusters": getattr(self._mapper, "Y", None),
+            "embeddings": in_time_order("Z"),
+            "subclusters": in_time_order("y"),
+            "superclusters": in_time_order("Y"),
             "transitions": getattr(data_obj, "TP", None) if data_obj else None,
             "retention": getattr(data_obj, "R", None) if data_obj else None,
         }
@@ -276,12 +284,14 @@ class SUBTLE:
         use_super = use_superclusters if use_superclusters is not None \
             else self.config.use_superclusters
 
-        # Concatenate sequences for transfer
+        # One array for transfer; the subprocess splits it back, so recordings stay separate
+        # sequences (handing SUBTLE the concatenation would splice them into one recording).
         kp = np.concatenate(sequences, axis=0) if len(sequences) > 1 else sequences[0]
+        lengths = [len(s) for s in sequences]
 
         with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as f:
             tmp_in = f.name
-            np.savez(f, keypoints=kp)
+            np.savez(f, keypoints=kp, lengths=np.array(lengths))
         tmp_out = tmp_in.replace(".npz", "_result.npz")
 
         script = f"""
@@ -293,14 +303,16 @@ multiprocessing.set_start_method('spawn', force=True)
 
 from behavior_lab.models.discovery.subtle_wrapper import SUBTLE, SUBTLEConfig
 
-kp = np.load('{tmp_in}')['keypoints']
+src = np.load('{tmp_in}')
+seqs = np.split(src['keypoints'], np.cumsum(src['lengths'])[:-1])
+assert [len(s) for s in seqs] == src['lengths'].tolist()
 config = SUBTLEConfig(fps={self.config.fps},
                       n_train_frames={self.config.n_train_frames},
                       use_superclusters={use_super},
                       isolate=False)
 model = SUBTLE(config=config)
 t0 = time.time()
-cr = model.fit([kp], use_superclusters={use_super})
+cr = model.fit(seqs, use_superclusters={use_super})
 elapsed = time.time() - t0
 
 np.savez('{tmp_out}',
@@ -380,8 +392,12 @@ print(json.dumps({{'n_clusters': int(cr.n_clusters), 'elapsed': elapsed}}))
         else:
             labels = np.zeros(0, dtype=int)
 
-        if hasattr(labels, "flatten") and labels.ndim > 1:
-            labels = labels.flatten()
+        level = None
+        if getattr(labels, "ndim", 1) > 1:
+            # (T, n_levels) supercluster hierarchy: use the finest level, one label per frame
+            # (flattening would interleave levels). All levels stay in metadata.
+            level = int(np.argmax([len(np.unique(labels[:, j])) for j in range(labels.shape[1])]))
+            labels = labels[:, level]
 
         n_clusters = len(set(labels)) if len(labels) > 0 else 0
 
@@ -392,6 +408,7 @@ print(json.dumps({{'n_clusters': int(cr.n_clusters), 'elapsed': elapsed}}))
             metadata={
                 "algorithm": "subtle",
                 "use_superclusters": use_super,
+                "supercluster_level": level,
                 "subclusters": subclusters,
                 "superclusters": superclusters,
                 "transitions": raw.get("transitions"),

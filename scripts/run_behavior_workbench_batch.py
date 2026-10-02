@@ -14,8 +14,12 @@ and per-cluster galleries). Heavy methods run in isolated envs via
 # BatchResult/metric_result + plot/html helpers; splitting fragments locality.
 from __future__ import annotations
 
+import argparse
+import fcntl
 import json
+import shutil
 import math
+import os
 import sys
 import time
 import traceback
@@ -35,16 +39,30 @@ from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, s
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from behavior_lab.core.skeleton import get_skeleton
+from behavior_lab.data import ingest
 from behavior_lab.data.features import SkeletonBackend
+from behavior_lab.data.preprocessing import Interpolator
 from behavior_lab.evaluation import compute_behavior_metrics
 from behavior_lab.models.discovery.bsoid import BSOiD
 from behavior_lab.models.discovery.clustering import cluster_features
 from behavior_lab.models.discovery.moseq import _PCAHMMFallback
+from behavior_lab.visualization.grid_report import render_grid_report
 
 
 OUT_DIR = ROOT / "outputs" / "behavior_analysis_workbench" / "batch"
 RANDOM_STATE = 42
 MAX_FRAMES = 1500
+# --target-clusters N: every method is steered to about N clusters (k-means k, HMM states,
+# B-SOiD min_cluster_size search); 0 = each method's own setting (k 8, 12 states, size 20).
+# Default 5: the count SUBTLE's supercluster hierarchy gives on these recordings (3 to 5),
+# so all methods are compared at a similar granularity (experiment note, matched cluster count).
+TARGET_CLUSTERS: int | None = 5
+KPMS = {"ar_iters": 50, "iters": 500, "ar_kappa": 1e6, "full_kappa": 1e4, "num_states": 20}  # keypoint-MoSeq tutorial values
+SUBTLE_TIMEOUT_S = 3600
+KPMS_ANTERIOR = ("nose", "nose1")
+KPMS_POSTERIOR = ("tail_base", "tailstart1", "root_tail")
+KPMS_TAIL = {"tail_tip", "tail1", "tailend1", "mid_tail", "tip_tail", "tail_middle"}
 
 
 @dataclass
@@ -66,6 +84,11 @@ class BatchResult:
     n_clusters: int | None = None
     elapsed_sec: float | None = None
     silhouette: float | None = None
+    noise_frac: float | None = None
+    median_bout_sec: float | None = None
+    n_repeats: int | None = None
+    repeat_ari_mean: float | None = None
+    repeat_ari_min: float | None = None
     ari: float | None = None
     nmi: float | None = None
     num_bouts: int | None = None
@@ -97,36 +120,47 @@ def load_datasets(max_frames: int = MAX_FRAMES) -> list[DatasetSlice]:
             notes={"source": str(calms), "shape": str(kp.shape), "sampled_sequences": int(n_seq)},
         ))
 
-    subtle = ROOT / "data" / "preprocessed" / "subtle" / "subtle_all.npz"
-    if subtle.exists():
-        kp = np.load(subtle, allow_pickle=True)["keypoints"][:max_frames].astype(np.float32)
+    # SUBTLE's own recordings (AVATAR system, 9 keypoints, 3D, 20 fps): one slice per recording.
+    # subtle_all.npz is their concatenation and is not used (a splice is not a real transition).
+    for path in sorted((ROOT / "data" / "preprocessed" / "subtle").glob("y5a5_*.npz")):
+        kp = np.load(path, allow_pickle=True)["keypoints"][:max_frames].astype(np.float32)
         datasets.append(DatasetSlice(
-            name="subtle",
+            name=f"subtle_{path.stem.split('_')[-1]}",
             keypoints=kp,
             fps=20.0,
-            notes={"source": str(subtle), "shape": str(kp.shape)},
+            notes={"source": str(path), "shape": str(kp.shape),
+                   "node_names": list(get_skeleton("subtle_mouse").joint_names)},
         ))
 
+    # Shank3KO: one KO and one WT recording from the same date, kept as separate slices.
+    # (Until 261001 this was a KO half spliced to a WT half with genotype as the label: the
+    # splice is a fake transition and the first files by name differ in recording date.)
     shank_dir = ROOT / "data" / "preprocessed" / "shank3ko"
-    if shank_dir.exists():
-        parts = []
-        labels = []
-        for label, pattern in [(0, "*_KO_*.npz"), (1, "*_WT_*.npz")]:
-            paths = sorted(shank_dir.glob(pattern))
-            if not paths:
-                continue
-            kp = np.load(paths[0], allow_pickle=True)["keypoints"][: max_frames // 2].astype(np.float32)
-            parts.append(kp)
-            labels.append(np.full(len(kp), label, dtype=int))
-        if parts:
-            kp = np.concatenate(parts, axis=0)[:max_frames]
-            lab = np.concatenate(labels, axis=0)[: len(kp)]
+    for stem in ("100_KO_male_56_20200615", "36_WT_male_56_20200615"):
+        path = shank_dir / f"{stem}.npz"
+        if path.exists():
+            kp = np.load(path, allow_pickle=True)["keypoints"][:max_frames].astype(np.float32)
             datasets.append(DatasetSlice(
-                name="shank3ko",
+                name=f"shank3ko_{stem.split('_')[1]}_{stem.split('_')[0]}",
                 keypoints=kp,
-                labels=lab,
                 fps=30.0,
-                notes={"source": str(shank_dir), "shape": str(kp.shape), "labels": "0=KO,1=WT"},
+                notes={"source": str(path), "shape": str(kp.shape),
+                       "node_names": list(get_skeleton("shank3ko").joint_names)},
+            ))
+
+    # Pooled slices: every method is fitted once on all recordings of a family, so cluster ids
+    # mean the same thing in every animal. Recordings stay separate sequences (``lengths``);
+    # nothing is computed across a recording boundary (see ``segments``).
+    for prefix in ("subtle_", "shank3ko_"):
+        group = [d for d in datasets if d.name.startswith(prefix)]
+        if len(group) > 1:
+            datasets.append(DatasetSlice(
+                name=f"{prefix}pooled",
+                keypoints=np.concatenate([d.keypoints for d in group]),
+                fps=group[0].fps,
+                notes={"source": "pooled fit", "recordings": [d.name for d in group],
+                       "lengths": [len(d.keypoints) for d in group],
+                       "node_names": group[0].notes["node_names"]},
             ))
 
     mabe = ROOT / "data" / "preprocessed" / "mabe22" / "mouse_user_train.npz"
@@ -148,12 +182,53 @@ def load_datasets(max_frames: int = MAX_FRAMES) -> list[DatasetSlice]:
             notes={"source": str(mabe), "shape": str(kp.shape), "sequences": 2},
         ))
 
-    return datasets
+    # AVATAR 3D keypoints (BS lane output). One slice per post-processing variant, native joint
+    # layout from the file (11 points), not remapped to SUBTLE's 9 (docs/architecture.md).
+    avatar_dir = Path(os.environ.get("BEHAVIOR_LAB_AVATAR_DIR",
+                                     "~/data/avatar_gslrm/keypoints")).expanduser()
+    paths = sorted(avatar_dir.glob("*_gslrm.npz"))
+    prefix = os.path.commonprefix([p.stem for p in paths]) if len(paths) > 1 else ""
+    for path in paths:
+        seq = ingest(path, units="gslrm_normalized")[0]
+        variant = path.stem[len(prefix):].removesuffix("gslrm").strip("_") or "base"
+        datasets.append(DatasetSlice(
+            name=f"avatar_{variant}",
+            keypoints=seq.keypoints[:max_frames],
+            fps=20.0,  # not stored in the file; AVATAR lane contract
+            notes={"source": str(path), "shape": str(seq.keypoints.shape),
+                   "units": "gslrm_normalized", "node_names": seq.metadata.get("node_names")},
+        ))
+
+    return [fill_missing(ds) for ds in datasets]
+
+
+def segments(ds: DatasetSlice) -> list[np.ndarray]:
+    """The recordings of a slice: one array, or one per recording for a pooled slice."""
+    lengths = ds.notes.get("lengths")
+    out = np.split(ds.keypoints, np.cumsum(lengths)[:-1]) if lengths else [ds.keypoints]
+    assert sum(len(s) for s in out) == len(ds.keypoints)
+    return out
+
+
+def fill_missing(ds: DatasetSlice) -> DatasetSlice:
+    """Interpolate NaN over time and record how much (zero-fill would be a real position)."""
+    miss = np.isnan(ds.keypoints)
+    ds.notes["nan_frac"] = round(float(miss.mean()), 4)
+    if miss.any():
+        m = miss.reshape(len(miss), -1).T  # (channels, T)
+        runs = np.diff(np.pad(m.astype(np.int8), ((0, 0), (1, 1))), axis=1)
+        # np.nonzero is row-major, so starts and ends pair up channel by channel
+        gaps = np.nonzero(runs == -1)[1] - np.nonzero(runs == 1)[1]
+        assert gaps.sum() == miss.reshape(len(miss), -1).sum()
+        ds.notes["max_gap_frames"] = int(gaps.max())
+        fill = Interpolator(max_gap=len(ds.keypoints))
+        ds.keypoints = fill(ds.keypoints).astype(np.float32)
+    return ds
 
 
 def metric_result(ds: DatasetSlice, method: str, labels: np.ndarray, features: np.ndarray | None,
-                  embedding: np.ndarray | None, elapsed: float, notes: dict[str, object] | None = None
-                  ) -> BatchResult:
+                  embedding: np.ndarray | None, elapsed: float, notes: dict[str, object] | None = None,
+                  label_fps: float | None = None) -> BatchResult:
     valid = labels >= 0
     n_clusters = len(set(labels[valid]) if valid.any() else set())
     sil = None
@@ -165,8 +240,10 @@ def metric_result(ds: DatasetSlice, method: str, labels: np.ndarray, features: n
         ari = float(adjusted_rand_score(ds.labels[valid], labels[valid])) if valid.any() else None
         nmi = float(normalized_mutual_info_score(ds.labels[valid], labels[valid])) if valid.any() else None
 
-    behavior = compute_behavior_metrics(labels, fps=ds.fps)
+    behavior = compute_behavior_metrics(labels, fps=label_fps or ds.fps)
     mean_bout = float(np.mean(list(behavior.bout_durations.values()))) if behavior.bout_durations else None
+    runs = np.diff(np.flatnonzero(np.r_[True, labels[1:] != labels[:-1], True]))
+    median_bout = float(np.median(runs) / (label_fps or ds.fps))
 
     ds_dir = OUT_DIR / "arrays" / ds.name
     ds_dir.mkdir(parents=True, exist_ok=True)
@@ -187,6 +264,8 @@ def metric_result(ds: DatasetSlice, method: str, labels: np.ndarray, features: n
         n_clusters=int(n_clusters),
         elapsed_sec=float(elapsed),
         silhouette=sil,
+        noise_frac=float((~valid).mean()),
+        median_bout_sec=median_bout,
         ari=ari,
         nmi=nmi,
         num_bouts=int(behavior.num_bouts),
@@ -210,25 +289,37 @@ def error_result(ds: DatasetSlice, method: str, exc: BaseException | str) -> Bat
 
 def run_kmeans(ds: DatasetSlice) -> BatchResult:
     t0 = time.time()
-    features = SkeletonBackend(fps=ds.fps, normalize_body_size=True).extract(ds.keypoints)
-    out = cluster_features(features, n_clusters=8, use_umap=True, random_state=RANDOM_STATE)
+    backend = SkeletonBackend(fps=ds.fps, normalize_body_size=True)  # per recording: no
+    features = np.concatenate([backend.extract(s) for s in segments(ds)])  # velocity across files
+    out = cluster_features(features, n_clusters=TARGET_CLUSTERS or 8, use_umap=True,
+                           random_state=RANDOM_STATE)
     return metric_result(ds, "kmeans_pca_umap", out["labels"], features, out["embedding_2d"], time.time() - t0)
 
 
 def run_bsoid(ds: DatasetSlice) -> BatchResult:
-    if ds.keypoints.shape[-1] != 2:
-        raise ValueError("B-SOiD route is run only on 2D slices in this batch")
     t0 = time.time()
-    out = BSOiD(fps=int(ds.fps), min_cluster_size=20, random_state=RANDOM_STATE).fit(ds.keypoints)
+    segs = segments(ds)
+    out = BSOiD(fps=int(ds.fps), min_cluster_size=20, random_state=RANDOM_STATE,
+                target_clusters=TARGET_CLUSTERS).fit(
+        segs if len(segs) > 1 else ds.keypoints)
+    labels, emb, label_fps = out["labels"], out.get("embedding_2d"), ds.fps / max(1, int(ds.fps) // 10)
+    if len(segs) > 1:  # bins of each recording back to its own frames, then one per-frame array
+        b, starts = max(1, int(ds.fps) // 10), np.cumsum([0] + out["segment_bins"])
+        idx = np.concatenate([starts[k] + np.minimum(np.arange(len(seg)) // b, n - 1)
+                              for k, (seg, n) in enumerate(zip(segs, out["segment_bins"]))])
+        labels, emb, label_fps = labels[idx], emb[idx], ds.fps
     return metric_result(
-        ds, "B-SOiD", out["labels"], out.get("features"), out.get("embedding_2d"),
-        time.time() - t0, notes={"label_rate": "10fps bins"},
+        ds, "B-SOiD", labels, out.get("features") if len(segs) == 1 else None, emb,
+        time.time() - t0,
+        notes={"label_rate": "10fps bins", "min_cluster_size": out["min_cluster_size"]},
+        label_fps=label_fps,  # labels are per bin (per frame for a pooled slice)
     )
 
 
 def run_pca_hmm(ds: DatasetSlice) -> BatchResult:
     t0 = time.time()
-    cr = _PCAHMMFallback(n_components=10, n_states=12, n_iter=50).fit(ds.keypoints)
+    cr = _PCAHMMFallback(n_components=10, n_states=TARGET_CLUSTERS or 12, n_iter=50,
+                         random_state=RANDOM_STATE).fit(ds.keypoints, lengths=ds.notes.get("lengths"))
     return metric_result(ds, "pca_hmm_moseq_fallback", cr.labels, cr.features, cr.embeddings, time.time() - t0)
 
 
@@ -236,33 +327,49 @@ def run_keypoint_moseq(ds: DatasetSlice) -> BatchResult:
     from behavior_lab.models.discovery.moseq import KeypointMoSeq
 
     t0 = time.time()
-    kp = ds.keypoints[: min(300, len(ds.keypoints))]
+    kp = ds.keypoints
+    names = ds.notes.get("node_names") or [f"kp{i}" for i in range(kp.shape[1])]
+    # the tutorial excludes the tail for mice; the tail base stays (heading / posterior anchor)
+    used = [n for n in names if n not in KPMS_TAIL]
+    anterior = [used.index(n) for n in KPMS_ANTERIOR if n in used][:1] or None
+    posterior = [used.index(n) for n in KPMS_POSTERIOR if n in used][:1] or None
     model = KeypointMoSeq(
-        project_dir=str(OUT_DIR / "keypoint_moseq" / ds.name),
-        num_iters=5,
-        latent_dim=min(6, max(2, kp.shape[1])),
-        bodypart_names=[f"kp{i}" for i in range(kp.shape[1])],
+        project_dir=str(OUT_DIR / "keypoint_moseq" / f"{ds.name}_seed{RANDOM_STATE}"),
+        num_ar_iters=KPMS["ar_iters"], num_iters=KPMS["iters"], kappa=KPMS["ar_kappa"],
+        full_kappa=KPMS["full_kappa"], num_states=KPMS["num_states"],
+        latent_dim=10, auto_latent_dim=True, seed=RANDOM_STATE,
+        bodypart_names=list(names), use_bodyparts=used,
+        anterior_idxs=anterior, posterior_idxs=posterior,
     )
-    cr = model.fit_predict(kp)
-    small_ds = DatasetSlice(ds.name, kp, ds.fps, ds.labels[: len(kp)] if ds.labels is not None else None)
-    return metric_result(small_ds, "keypoint_moseq", cr.labels, cr.features, cr.embeddings, time.time() - t0,
-                         notes={"max_frames": len(kp), "num_iters": 5})
+    segs = segments(ds)
+    cr = model.fit_predict(segs if len(segs) > 1 else kp)
+    notes = {k: v for k, v in cr.metadata.items() if k not in ("algorithm", "use_bodyparts")}
+    notes["heading_from_names"] = anterior is not None and posterior is not None
+    return metric_result(ds, "keypoint_moseq", cr.labels, cr.features, cr.embeddings,
+                         time.time() - t0, notes=notes)
 
 
 def run_subtle(ds: DatasetSlice) -> BatchResult:
     if ds.keypoints.shape[-1] != 3:
         raise ValueError("SUBTLE route is run only on 3D slices in this batch")
-    from behavior_lab.models.discovery.subtle_wrapper import SUBTLE
+    from behavior_lab.models.discovery.subtle_wrapper import SUBTLE, SUBTLEConfig
 
     t0 = time.time()
-    cr = SUBTLE(fps=int(ds.fps)).fit_predict(
-        [ds.keypoints[: min(1200, len(ds.keypoints))]],
-        isolate=True,
+    # no seed: upstream SUBTLE shuffles frames and runs UMAP unseeded, so repeats differ by design
+    cr = SUBTLE(config=SUBTLEConfig(fps=int(ds.fps), timeout=SUBTLE_TIMEOUT_S)).fit_predict(
+        segments(ds), isolate=True,
     )
-    small_ds = DatasetSlice(ds.name, ds.keypoints[: len(cr.labels)], ds.fps,
-                            ds.labels[: len(cr.labels)] if ds.labels is not None else None)
-    return metric_result(small_ds, "SUBTLE", cr.labels, cr.features, cr.embeddings, time.time() - t0,
+    save_subtle_map(ds, cr, f"seed{RANDOM_STATE}")
+    return metric_result(ds, "SUBTLE", cr.labels, cr.features, cr.embeddings, time.time() - t0,
                          notes={"max_frames": len(cr.labels)})
+
+
+def save_subtle_map(ds: DatasetSlice, cr, tag: str) -> None:
+    """Embedding + both cluster levels of ONE run, kept together for the cluster map."""
+    out = OUT_DIR / "arrays" / ds.name
+    out.mkdir(parents=True, exist_ok=True)
+    np.savez(out / f"subtle_map_{tag}.npz", embedding=cr.embeddings, labels=cr.labels,
+             subclusters=cr.metadata["subclusters"], superclusters=cr.metadata["superclusters"])
 
 
 def run_behavemae(ds: DatasetSlice) -> BatchResult:
@@ -362,65 +469,145 @@ def plot_summary(df: pd.DataFrame) -> None:
     plt.close(fig)
 
 
-def write_html(df: pd.DataFrame, datasets: list[DatasetSlice]) -> None:
-    rows = df.fillna("").to_dict(orient="records")
-    html_rows = "\n".join(
-        "<tr>" + "".join(f"<td>{row.get(col, '')}</td>" for col in df.columns) + "</tr>"
-        for row in rows
-    )
-    dataset_rows = "\n".join(
-        f"<tr><td>{d.name}</td><td>{d.keypoints.shape}</td><td>{d.fps}</td><td>{d.labels is not None}</td><td>{d.notes}</td></tr>"
-        for d in datasets
-    )
-    html = f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>Behavior Workbench Batch</title>
-<style>body{{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;margin:24px;line-height:1.4}}
-table{{border-collapse:collapse;font-size:13px}}td,th{{border:1px solid #ddd;padding:6px;vertical-align:top}}
-th{{background:#f4f4f4}}img{{max-width:1100px;width:100%;height:auto}}</style></head>
-<body>
-<h1>Behavior Analysis Workbench Batch</h1>
-<p>Seed={RANDOM_STATE}, max_frames={MAX_FRAMES}. Errors are retained to make missing or incompatible routes explicit.</p>
-<h2>Datasets</h2><table><tr><th>Name</th><th>Keypoints</th><th>FPS</th><th>Labels</th><th>Notes</th></tr>{dataset_rows}</table>
-<h2>Summary</h2><img src="batch_summary.png">
-<h2>Results</h2><table><tr>{''.join(f'<th>{c}</th>' for c in df.columns)}</tr>{html_rows}</table>
-</body></html>"""
-    (OUT_DIR / "batch_report.html").write_text(html, encoding="utf-8")
+def method_settings() -> dict[str, dict[str, object]]:
+    """Settings of each cell as run, read from the same constants the runners use."""
+    return {
+        "kmeans_pca_umap": {"clusters": TARGET_CLUSTERS or 8, "pca_variance": "default of cluster_features",
+                            "umap": "n_neighbors 15, min_dist 0.1", "body_size_normalized": True},
+        "B-SOiD": {"bin": "10 Hz", "umap": "n_neighbors 60, min_dist 0.0",
+                   "hdbscan_min_cluster_size": "20, doubled until the count is closest to the "
+                   f"target {TARGET_CLUSTERS}" if TARGET_CLUSTERS else 20, "classifier": "random forest, 200 trees"},
+        "pca_hmm_moseq_fallback": {"pca_components": 10, "states": TARGET_CLUSTERS or 12, "iterations": 50,
+                                   "covariance": "diag"},
+        "SUBTLE": {"embedding": "umap", "n_train_frames": 120000, "timeout_s": SUBTLE_TIMEOUT_S,
+                   "reported_level": "finest supercluster", "seed": "none upstream"},
+        "keypoint_moseq": {"ar_only_iterations": KPMS["ar_iters"], "ar_only_kappa": KPMS["ar_kappa"],
+                           "full_iterations": KPMS["iters"], "full_kappa": KPMS["full_kappa"],
+                           "num_states": KPMS["num_states"], "latent_dim": "min(10, 90% variance)",
+                           "nlags": 3, "tail_keypoints": "excluded"},
+    }
+
+
+def run_cell(ds: DatasetSlice, method: str, fn: Callable[[DatasetSlice], BatchResult],
+             repeats: int, seed0: int) -> BatchResult:
+    """Run one (dataset, method) cell ``repeats`` times; keep the first seed's row and labels,
+    store every repeat's labels, and record the pairwise ARI between repeats."""
+    global RANDOM_STATE
+    first, labs = None, []
+    for r in range(repeats):
+        RANDOM_STATE = seed0 + r  # ponytail: runners read the module global; pass a seed arg if this grows
+        np.random.seed(RANDOM_STATE)
+        res = fn(ds)
+        lab = np.load(ROOT / res.labels_path)
+        rep_dir = OUT_DIR / "arrays" / ds.name / "repeats"
+        rep_dir.mkdir(parents=True, exist_ok=True)
+        stem = Path(res.labels_path).stem.removesuffix("_labels")
+        np.save(rep_dir / f"{stem}_seed{RANDOM_STATE}.npy", lab)
+        labs.append(lab)
+        first = first or res
+        print(f"    seed {RANDOM_STATE}: clusters={res.n_clusters}, {res.elapsed_sec:.1f}s", flush=True)
+    np.save(ROOT / first.labels_path, labs[0])
+    first.n_repeats = repeats
+    if repeats > 1 and len({len(x) for x in labs}) == 1:
+        aris = [adjusted_rand_score(labs[i], labs[j])
+                for i in range(repeats) for j in range(i + 1, repeats)]
+        first.repeat_ari_mean, first.repeat_ari_min = float(np.mean(aris)), float(np.min(aris))
+    return first
+
+
+def save_results(rows: list[dict], slices: list[dict]) -> pd.DataFrame:
+    """Upsert by (dataset, method): methods live in separate envs and machines, so one run
+    fills only some cells. Called after every cell so a long run can be interrupted."""
+    with open(OUT_DIR / ".lock", "w") as lock:  # several envs may write the same folder at once
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        merged = {(r["dataset"], r["method"]): r for r in rows}
+        prev = OUT_DIR / "batch_results.json"
+        if prev.exists():
+            merged = {(r["dataset"], r["method"]): r
+                      for r in json.loads(prev.read_text())} | merged
+        df = pd.DataFrame(list(merged.values()))
+        df.to_csv(OUT_DIR / "batch_results.csv", index=False)
+        prev.write_text(json.dumps(list(merged.values()), indent=2), encoding="utf-8")
+
+        by_name = {s["name"]: s for s in slices}
+        slices_path = OUT_DIR / "dataset_slices.json"
+        if slices_path.exists():
+            by_name = {s["name"]: s for s in json.loads(slices_path.read_text())} | by_name
+        slices_path.write_text(json.dumps(list(by_name.values()), indent=2), encoding="utf-8")
+    return df
 
 
 def main() -> None:
+    global OUT_DIR, TARGET_CLUSTERS
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--datasets",
+                    help="comma list, prefix match, e.g. avatar,subtle (default: all found)")
+    ap.add_argument("--methods",
+                    help=f"comma list from: {', '.join(METHODS)}, or 'none' (default: all)")
+    ap.add_argument("--subtle-map", action="store_true",
+                    help="one extra SUBTLE run per dataset for the cluster map; rows untouched")
+    ap.add_argument("--max-frames", type=int, default=MAX_FRAMES)
+    ap.add_argument("--out", default="batch", help="output folder name under outputs/behavior_analysis_workbench/")
+    ap.add_argument("--repeats", type=int, default=1, help="runs per cell, seeds seed..seed+repeats-1")
+    ap.add_argument("--seed", type=int, default=RANDOM_STATE)
+    ap.add_argument("--kpms-ar-iters", type=int, default=KPMS["ar_iters"])
+    ap.add_argument("--kpms-iters", type=int, default=KPMS["iters"])
+    ap.add_argument("--kpms-kappa", type=float, default=KPMS["full_kappa"],
+                    help="kappa of the full-model stage (sets syllable duration)")
+    ap.add_argument("--kpms-states", type=int, default=KPMS["num_states"])
+    ap.add_argument("--target-clusters", type=int, default=TARGET_CLUSTERS,
+                    help="steer k-means, the HMM and B-SOiD to about this many clusters")
+    ap.add_argument("--merge", help="batch folder from another machine: upsert its rows and label files, run nothing")
+    args = ap.parse_args()
+    TARGET_CLUSTERS = args.target_clusters or None
+    KPMS.update(ar_iters=args.kpms_ar_iters, iters=args.kpms_iters,
+                full_kappa=args.kpms_kappa, num_states=args.kpms_states)
+
+    OUT_DIR = OUT_DIR.parent / args.out
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    datasets = load_datasets()
-    results: list[BatchResult] = []
+    if args.merge:
+        src = Path(args.merge)
+        shutil.copytree(src / "arrays", OUT_DIR / "arrays", dirs_exist_ok=True)
+        df = save_results(json.loads((src / "batch_results.json").read_text()),
+                          json.loads((src / "dataset_slices.json").read_text()))
+    else:
+        datasets = load_datasets(args.max_frames)
+        if args.datasets:
+            want = args.datasets.split(",")
+            datasets = [d for d in datasets if any(d.name.startswith(w) for w in want)]
+        methods = {m: METHODS[m] for m in args.methods.split(",") if m != "none"} \
+            if args.methods else METHODS
+        assert datasets, "no dataset matched"
+        slices = [{"name": d.name, "shape": list(d.keypoints.shape), "fps": d.fps,
+                   "has_labels": d.labels is not None, "notes": d.notes} for d in datasets]
+        for ds in datasets:
+            print(f"\nDataset {ds.name}: {ds.keypoints.shape}, fps={ds.fps}, "
+                  f"labels={ds.labels is not None}, nan_frac={ds.notes.get('nan_frac')}")
+            kp_file = OUT_DIR / "arrays" / ds.name / "keypoints.npy"  # for the cluster gallery
+            kp_file.parent.mkdir(parents=True, exist_ok=True)
+            np.save(kp_file, ds.keypoints)
+            if args.subtle_map:
+                from behavior_lab.models.discovery.subtle_wrapper import SUBTLE, SUBTLEConfig
+                cfg = SUBTLEConfig(fps=int(ds.fps), timeout=SUBTLE_TIMEOUT_S)
+                save_subtle_map(ds, SUBTLE(config=cfg).fit_predict([ds.keypoints], isolate=True),
+                                "extra")
+                continue
+            for method, fn in methods.items():
+                print(f"  {method}...", flush=True)
+                try:
+                    result = run_cell(ds, method, fn, args.repeats, args.seed)
+                    print(f"    ok: clusters={result.n_clusters}, repeat_ari={result.repeat_ari_mean}")
+                except Exception as exc:
+                    traceback.print_exc(limit=2)
+                    result = error_result(ds, method, exc)
+                    print(f"    error: {result.error}")
+                df = save_results([asdict(result)], slices)
+        df = save_results([], slices)
 
-    for ds in datasets:
-        print(f"\nDataset {ds.name}: {ds.keypoints.shape}, fps={ds.fps}, labels={ds.labels is not None}")
-        for method, fn in METHODS.items():
-            print(f"  {method}...", flush=True)
-            try:
-                result = fn(ds)
-                print(f"    ok: clusters={result.n_clusters}, sil={result.silhouette}, {result.elapsed_sec:.1f}s")
-            except Exception as exc:
-                traceback.print_exc(limit=2)
-                result = error_result(ds, method, exc)
-                print(f"    error: {result.error}")
-            results.append(result)
-
-    df = pd.DataFrame([asdict(r) for r in results])
-    df.to_csv(OUT_DIR / "batch_results.csv", index=False)
-    (OUT_DIR / "batch_results.json").write_text(
-        json.dumps([asdict(r) for r in results], indent=2),
-        encoding="utf-8",
-    )
-    (OUT_DIR / "dataset_slices.json").write_text(
-        json.dumps([
-            {"name": d.name, "shape": list(d.keypoints.shape), "fps": d.fps,
-             "has_labels": d.labels is not None, "notes": d.notes}
-            for d in datasets
-        ], indent=2),
-        encoding="utf-8",
-    )
+    if not args.merge:  # the settings these rows were produced with, for the page's protocol table
+        (OUT_DIR / "method_settings.json").write_text(json.dumps(method_settings(), indent=2))
     plot_summary(df)
-    write_html(df, datasets)
+    render_grid_report(OUT_DIR)
     print(f"\nWrote {OUT_DIR}")
 
 

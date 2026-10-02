@@ -102,6 +102,11 @@ class SUBTLELoader:
         filepath = Path(filepath)
         npz = np.load(filepath, allow_pickle=True)
         keypoints = npz["keypoints"].astype(np.float32)
+        if keypoints.shape[-2] != self.skeleton.num_joints:
+            raise ValueError(
+                f"{filepath.name}: {keypoints.shape[-2]} keypoints, but '{self.skeleton_name}' has "
+                f"{self.skeleton.num_joints}. Use behavior_lab.data.ingest() for other layouts."
+            )
 
         if keypoints.ndim == 3:
             # Single sequence (T, K, D)

@@ -31,7 +31,16 @@ class KeypointMoSeq:
                  anterior_idxs: Optional[List[int]] = None,
                  posterior_idxs: Optional[List[int]] = None,
                  num_states: int = 20,
-                 use_confidences: bool = False):
+                 use_confidences: bool = False,
+                 num_ar_iters: int = 0,
+                 full_kappa: Optional[float] = None,
+                 use_bodyparts: Optional[List[str]] = None,
+                 auto_latent_dim: bool = False,
+                 seed: int = 0):
+        """``num_ar_iters > 0`` switches to the two-stage fit of the keypoint-MoSeq tutorial
+        (AR-HMM only, then the full model for ``num_iters`` more, with ``full_kappa`` if given).
+        ``use_bodyparts`` = subset used for modeling (the tutorial excludes the tail for mice).
+        ``auto_latent_dim`` caps ``latent_dim`` at the dims explaining 90% of PCA variance."""
         self.project_dir = project_dir
         self.num_iters = num_iters
         self.latent_dim = latent_dim
@@ -41,6 +50,11 @@ class KeypointMoSeq:
         self.posterior_idxs = posterior_idxs
         self.num_states = num_states
         self.use_confidences = use_confidences
+        self.num_ar_iters = num_ar_iters
+        self.full_kappa = full_kappa
+        self.use_bodyparts = use_bodyparts
+        self.auto_latent_dim = auto_latent_dim
+        self.seed = seed
         self._model = None
         self._pca = None
         self._results = None
@@ -53,9 +67,12 @@ class KeypointMoSeq:
 
     def _to_kpms_format(self, keypoints: np.ndarray, name: str = 'rec_0'):
         """Convert (T, K, D) -> keypoint-moseq dict format."""
-        coords = {name: keypoints}
+        if isinstance(keypoints, list):  # several recordings fitted together: rec_0, rec_1, ...
+            coords = {f"rec_{i}": k for i, k in enumerate(keypoints)}
+        else:
+            coords = {name: keypoints}
         if self.use_confidences:
-            confs = {name: np.ones(keypoints.shape[:2])}
+            confs = {n: np.ones(k.shape[:2]) for n, k in coords.items()}
         else:
             confs = None
         return coords, confs
@@ -73,16 +90,19 @@ class KeypointMoSeq:
             raise ImportError("Install keypoint-moseq: pip install keypoint-moseq")
 
         coords, confs = self._to_kpms_format(keypoints, recording_name)
-        bodyparts = self.bodypart_names or [f'kp{i}' for i in range(keypoints.shape[1])]
-        anterior_idxs = self.anterior_idxs or self._infer_anterior_idxs(bodyparts)
-        posterior_idxs = self.posterior_idxs or self._infer_posterior_idxs(bodyparts)
+        n_kp = (keypoints[0] if isinstance(keypoints, list) else keypoints).shape[1]
+        bodyparts = self.bodypart_names or [f'kp{i}' for i in range(n_kp)]
+        used = self.use_bodyparts or bodyparts
+        # heading indices refer to positions within ``used``
+        anterior_idxs = self.anterior_idxs or self._infer_anterior_idxs(used)
+        posterior_idxs = self.posterior_idxs or self._infer_posterior_idxs(used)
 
         # Format data in the current keypoint-moseq API.
         data, metadata = kpms.format_data(
             coords,
             confs,
             bodyparts=bodyparts,
-            use_bodyparts=bodyparts,
+            use_bodyparts=used,
             **self._config,
         )
         if not self.use_confidences:
@@ -109,9 +129,14 @@ class KeypointMoSeq:
             **pca_kwargs,
         )
 
+        if self.auto_latent_dim:
+            dims90 = int(np.searchsorted(np.cumsum(self._pca.explained_variance_ratio_), 0.9) + 1)
+            self.latent_dim = min(self.latent_dim, dims90)
+
         init_kwargs = dict(
             data=data,
             pca=self._pca,
+            seed=self.seed,
             trans_hypparams={"num_states": self.num_states, "gamma": 1e3, "alpha": 5.7, "kappa": self.kappa},
             ar_hypparams={"latent_dim": self.latent_dim, "nlags": 3, "S_0_scale": 0.01, "K_0_scale": 10.0},
             obs_hypparams={"sigmasq_0": 0.1, "sigmasq_C": 0.1, "nu_sigma": 1e5, "nu_s": 5},
@@ -126,18 +151,19 @@ class KeypointMoSeq:
             init_kwargs["noise_prior"] = 1.0
 
         model = kpms.init_model(**init_kwargs)
+        fit_kwargs = dict(project_dir=self.project_dir, model_name='keypoint_moseq',
+                          save_every_n_iters=None, generate_progress_plots=False, verbose=False)
+        start = 0
+        if self.num_ar_iters:
+            model, _ = kpms.fit_model(model, data, metadata, ar_only=True,
+                                      num_iters=self.num_ar_iters, **fit_kwargs)
+            if self.full_kappa is not None:
+                model = kpms.update_hypparams(model, kappa=self.full_kappa)
+            start = self.num_ar_iters
 
         self._model, self._model_name = kpms.fit_model(
-            model,
-            data,
-            metadata,
-            project_dir=self.project_dir,
-            model_name='keypoint_moseq',
-            ar_only=False,
-            num_iters=self.num_iters,
-            save_every_n_iters=None,
-            generate_progress_plots=False,
-            verbose=False,
+            model, data, metadata, ar_only=False, start_iter=start,
+            num_iters=start + self.num_iters, **fit_kwargs,
         )
 
         self._results = kpms.extract_results(
@@ -168,7 +194,10 @@ class KeypointMoSeq:
         bodyparts = self.bodypart_names or [f'kp{i}' for i in range(keypoints.shape[1])]
         anterior_idxs = self.anterior_idxs or self._infer_anterior_idxs(bodyparts)
         posterior_idxs = self.posterior_idxs or self._infer_posterior_idxs(bodyparts)
-        data, metadata = kpms.format_data(coords, confs, bodyparts=bodyparts, use_bodyparts=bodyparts, **self._config)
+        used = self.use_bodyparts or bodyparts
+        anterior_idxs = self.anterior_idxs or self._infer_anterior_idxs(used)
+        posterior_idxs = self.posterior_idxs or self._infer_posterior_idxs(used)
+        data, metadata = kpms.format_data(coords, confs, bodyparts=bodyparts, use_bodyparts=used, **self._config)
         if not self.use_confidences:
             data.pop("conf", None)
         try:
@@ -223,11 +252,20 @@ class KeypointMoSeq:
     def fit_predict(self, keypoints: np.ndarray) -> ClusteringResult:
         """Fit and return structured ClusteringResult."""
         self.fit(keypoints)
-        labels = self.predict(keypoints)
+        if isinstance(keypoints, list):  # the fit's own results, recordings in input order
+            labels = np.concatenate([np.asarray(self._results[f"rec_{i}"]["syllable"])
+                                     for i in range(len(keypoints))])
+            assert len(labels) == sum(len(k) for k in keypoints)
+        else:
+            labels = self.predict(keypoints, recording_name='rec_0')  # reuse the fit's results
         return ClusteringResult(
             labels=labels,
             n_clusters=len(set(labels)),
-            metadata={"algorithm": "moseq", "latent_dim": self.latent_dim},
+            metadata={"algorithm": "moseq", "latent_dim": self.latent_dim, "seed": self.seed,
+                      "num_ar_iters": self.num_ar_iters, "num_iters": self.num_iters,
+                      "kappa": self.kappa, "full_kappa": self.full_kappa,
+                      "num_states": self.num_states,
+                      "use_bodyparts": self.use_bodyparts},
         )
 
     def _infer_anterior_idxs(self, bodyparts: List[str]) -> List[int]:
@@ -278,15 +316,18 @@ class _PCAHMMFallback:
         n_components: int = 10,
         n_states: int = 20,
         n_iter: int = 50,
+        random_state: int = 42,
     ):
+        self.random_state = random_state
         self.n_components = n_components
         self.n_states = n_states
         self.n_iter = n_iter
         self._pca: PCA | None = None
         self._hmm = None
 
-    def fit(self, keypoints: np.ndarray) -> "ClusteringResult":
-        """Fit PCA + HMM on (T, K, D) keypoint data."""
+    def fit(self, keypoints: np.ndarray, lengths: list[int] | None = None) -> "ClusteringResult":
+        """Fit PCA + HMM on (T, K, D) keypoint data; ``lengths`` = frames per recording when
+        several recordings are stacked (no transition is learned across a boundary)."""
         try:
             from hmmlearn.hmm import GaussianHMM
         except ImportError:
@@ -295,16 +336,18 @@ class _PCAHMMFallback:
         T, K, D = keypoints.shape
         flat = keypoints.reshape(T, K * D)
 
-        self._pca = PCA(n_components=min(self.n_components, flat.shape[1]))
+        self._pca = PCA(n_components=min(self.n_components, flat.shape[1]),
+                        random_state=self.random_state)
         reduced = self._pca.fit_transform(flat)
 
         self._hmm = GaussianHMM(
             n_components=self.n_states,
             n_iter=self.n_iter,
             covariance_type="diag",
+            random_state=self.random_state,
         )
-        self._hmm.fit(reduced)
-        labels = self._hmm.predict(reduced)
+        self._hmm.fit(reduced, lengths)
+        labels = self._hmm.predict(reduced, lengths)
 
         return ClusteringResult(
             labels=labels,

@@ -44,3 +44,4 @@ multirun/
 
 # Claude local permission grants (machine-specific)
 .claude/settings.local.json
+.venv-*/

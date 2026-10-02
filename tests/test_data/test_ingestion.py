@@ -111,3 +111,31 @@ def test_ingest_dannce_mat(tmp_path):
 def test_ingest_missing_file(tmp_path):
     with pytest.raises(FileNotFoundError):
         ingest(tmp_path / "nope.npz")
+
+
+def test_npz_keeps_names_and_valid(tmp_path):
+    kp = np.zeros((5, 3, 3), dtype=np.float32)
+    valid = np.ones((5, 3), dtype=bool)
+    valid[2, 1] = False
+    path = tmp_path / "a.npz"
+    np.savez(path, keypoints=kp, valid=valid, names=np.array(["nose", "neck", "tail"]))
+    seq = ingest(path)[0]
+    assert seq.metadata["node_names"] == ["nose", "neck", "tail"]
+    assert seq.metadata["valid"].shape == (5, 3) and not seq.metadata["valid"][2, 1]
+
+
+def test_npz_rejects_name_count_mismatch(tmp_path):
+    path = tmp_path / "a.npz"
+    kp = np.zeros((5, 3, 3), dtype=np.float32)
+    np.savez(path, keypoints=kp, names=np.array(["nose", "neck"]))
+    with pytest.raises(ValueError, match="2 names for 3 keypoints"):
+        ingest(path)
+
+
+def test_subtle_loader_rejects_other_joint_count(tmp_path):
+    from behavior_lab.data.loaders import get_loader
+
+    path = tmp_path / "eleven.npz"
+    np.savez(path, keypoints=np.zeros((5, 11, 3), dtype=np.float32))
+    with pytest.raises(ValueError, match="11 keypoints"):
+        get_loader("subtle", data_dir=tmp_path).load_preprocessed(path)

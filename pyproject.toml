@@ -40,14 +40,24 @@ clustering = ["umap-learn>=0.5"]
 loaders = ["h5py>=3.8"]
 # External model wrappers
 bsoid = ["umap-learn>=0.5", "hdbscan>=0.8"]
-moseq = ["keypoint-moseq>=0.4"]
+# 0.4.x pins jaxtyping==0.2.14 against an unpinned dynamax and does not import; >=0.6 depends on
+# jax-cuda12 (Linux wheels only), so the extra is Linux-only (261001). Working set: env_snapshots/kpms.yml
+moseq = [
+    "keypoint-moseq>=0.6; sys_platform == 'linux' and python_version < '3.13'",
+    # without this floor the resolver backtracks to jax-moseq 0.2.2 (jaxtyping==0.2.14 pin, import fails)
+    "jax-moseq>=0.3; sys_platform == 'linux' and python_version < '3.13'",
+    # dynamax pulls tfp-nightly unpinned; a newer nightly breaks against jax<0.7 (tfb.Bijector missing).
+    # Pinned to the set recorded in env_snapshots/kpms.yml.
+    "jax>=0.6,<0.7; sys_platform == 'linux' and python_version < '3.13'",
+    "tfp-nightly==0.26.0.dev20260704; sys_platform == 'linux' and python_version < '3.13'",
+]
 moseq-fallback = ["hmmlearn>=0.3"]
 subtle = ["subtle"]
-vame = ["vame-py>=0.14"]
-pyskl = ["pyskl", "mmcv>=2.0", "mmaction2>=1.0"]
+vame = ["vame-py>=0.14; python_version >= '3.12'"]
+# pyskl removed from extras (261001): not on PyPI, git source pins mmcv-full 1.5.0 which does not build; install separately if needed
 # Benchmark
 benchmark = ["joblib>=1.2"]
-external = ["behavior-lab[bsoid,moseq,subtle,vame,pyskl]"]
+# `external` aggregate removed (261001): moseq (jax) and the others pin conflicting numpy, see scripts/isolated_run.py. Install one external method per env.
 all = ["behavior-lab[torch,viz,clustering,bsoid,loaders,benchmark,behavemae]"]
 dev = ["behavior-lab[all]", "pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.1", "mypy>=1.0"]
 
@@ -74,3 +84,12 @@ pythonpath = ["src", "external/BehaveMAE"]
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
+
+[tool.uv]
+conflicts = [
+    [{ extra = "moseq" }, { extra = "vame" }, { extra = "subtle" }, { extra = "bsoid" }],
+]
+
+[tool.uv.sources]
+# PyPI "subtle" is an unrelated subtitle downloader (checked 261001); the SUBTLE package is installed from GitHub
+subtle = { git = "https://github.com/jeakwon/subtle.git" }

@@ -25,6 +25,12 @@ The canonical exchange format is always `(T,K,D)`: time, keypoint, coordinate.
 Multi-animal recordings can either be flattened into `(T, M*K, D)` or kept as
 separate tracks when a downstream method needs identity-specific handling.
 
+## Two-Stage View
+
+Pose estimation is Stage 0; representation (Stage 1) and discovery and analysis (Stage 2) are compared on the shared `(T,K,D)` contract.
+Canonical text lives in the vault note `30_Projects/Behavior-Lab/_Agent/261001_Behavior_two_stage_concept.md` (method placement table included); kept there to avoid two copies.
+Only the `kmeans_pca_umap` path honors `feature=` (`experiments/discovery.py`); other methods compute Stage 1 internally.
+
 ## Pose And Feature Sources
 
 Generated from `behavior_lab.data.features.catalog`:
@@ -75,6 +81,76 @@ Primary notebooks:
 - `notebooks/behavior_analysis_workbench/02_method_comparison_matrix.ipynb`
   - Structured comparison template for dataset x feature x method sweeps.
   - Supports B-SOiD, SUBTLE, keypoint-MoSeq, hBehaveMAE, and lightweight baselines.
+- `notebooks/behavior_analysis_workbench/03_batch_results_all_methods.ipynb`
+  - Reads the dataset x method grid written by `scripts/run_behavior_workbench_batch.py`.
+  - Tables and heatmaps per cell, then label agreement on one clip (ethogram per method, ARI between methods, ARI between dataset slices for one method).
+
+## Dataset x Method Grid
+
+One script fills the grid, run once per environment or machine; rows are merged by `(dataset, method)` into `outputs/behavior_analysis_workbench/<out>/`.
+
+```bash
+# light methods (main env; the HMM fallback needs --extra moseq-fallback)
+uv run python scripts/run_behavior_workbench_batch.py --out long --max-frames 30000 --repeats 3 \
+    --datasets avatar,subtle,shank3ko --methods kmeans_pca_umap,B-SOiD,pca_hmm_moseq_fallback
+# SUBTLE (own env)
+UV_PROJECT_ENVIRONMENT=.venv-subtle uv run --extra subtle --extra viz --extra clustering \
+    python scripts/run_behavior_workbench_batch.py --out long --max-frames 30000 --repeats 3 \
+    --datasets avatar,subtle,shank3ko --methods SUBTLE
+# keypoint-MoSeq: Linux only (own env, CPU works); then copy its folder back and merge
+UV_PROJECT_ENVIRONMENT=.venv-moseq uv sync --python 3.11 --extra moseq --extra viz --extra clustering
+JAX_PLATFORMS=cpu .venv-moseq/bin/python scripts/run_behavior_workbench_batch.py --out long \
+    --max-frames 30000 --repeats 3 --datasets avatar,subtle,shank3ko --methods keypoint_moseq
+uv run python scripts/run_behavior_workbench_batch.py --out long --merge <copied folder>
+# shareable page (plain HTML source; the vault's build_page.py adds theme and back link)
+uv run python -m behavior_lab.visualization.grid_report outputs/behavior_analysis_workbench/long  # report, gallery, playback
+```
+
+Slices and inputs
+
+- A slice is one recording or one pose variant, fitted on its own. SUBTLE recordings (`y5a5_*`, 9 keypoints) and two same-date Shank3KO recordings (16 keypoints) run at full length; AVATAR slices come from `$BEHAVIOR_LAB_AVATAR_DIR` (default `~/data/avatar_gslrm/keypoints/*_gslrm.npz`), one per pose post-processing variant, in the file's native 11-point layout (see `architecture.md` "Pose Output Contract").
+- Recordings are never spliced: a splice is a fake transition for temporal models. `*_pooled` slices fit each method once on all recordings of a family while keeping them separate sequences (`notes.lengths`; features per recording, HMM `lengths`, SUBTLE list of recordings, keypoint-MoSeq dict of recordings), so cluster ids mean the same in every animal. Fitting one model on pooled animals is the usual practice for behavior maps (Berman et al., 2014; Kwon et al., 2024). No body-size or position normalization is added for the pooled fit; `correspondence.recording_purity` (NMI between cluster and recording) shows when clusters mostly tell the animals apart.
+- Missing keypoints are interpolated over time before any method runs; `nan_frac` and `max_gap_frames` are stored per slice.
+
+Repeats and agreement
+
+- `--repeats N` runs seeds `seed..seed+N-1`; the seed reaches kmeans/UMAP, B-SOiD, the HMM fallback and keypoint-MoSeq. SUBTLE has no seed upstream, so its repeats differ by design. `repeat_ari_mean` per cell is the noise floor for every other comparison.
+- `behavior_lab.visualization.agreement` (used by notebook 03 and the HTML report) reports ARI with a circular-shift null, AMI, and homogeneity in both directions, because ARI alone drops when one method merely splits another's labels more finely.
+- B-SOiD labels are 10 Hz bins; bout durations use that rate. Bins are whole frames starting at frame 0 with a short tail dropped, so `stretch_labels` maps frame `i` to bin `i // bin_size` (the last bin covers the tail); other length ratios fall back to `floor(i * L / T)`.
+
+Reading the page
+
+- Result grid: each method has one fixed color. Green marks the most repeatable method per slice (highest repeat ARI among unflagged rows); it is a stability mark, not a quality ranking, and a seeded kmeans on a fixed feature set will usually take it. Rows are flagged, and left out of that ranking, when the segmentation is degenerate: fewer than 3 clusters, a median bout of one label step, or noise above 30% (own loose rule).
+- Figures: the page embeds light previews; each links to a full-resolution PNG (180 dpi) written to `<batch_dir>/figs_report/`. The link base is the fourth CLI argument (`figs_href`): a folder copied next to the published page, or a `file://` URL of the batch folder when the page is only read on this machine.
+- Page order: keypoint layouts, run setup, result grid over all cells, then one section per dataset family (name prefix) with one subsection per slice. Each slice has the same foldable blocks (`visualization.grid_slice`): label sequences and agreement, cluster sizes, cluster maps on shared axes, SUBTLE's own map, cluster correspondence.
+- Keypoint layouts (`visualization.keypoint_schema`): one real frame per family (the one closest to the median pairwise joint distances, not a mean pose), joints as colored points and bones as lines. Joint names are written once, in the table next to it, with the same color per joint index (`joint_color`) that the playback page uses. Methods take any `(T, K, D)` layout; bones are only needed for drawing and come from the skeleton registry, and keypoint-MoSeq finds nose and tail base by joint name. AVATAR files carry joint names but no bone list, so `_grid_common.DISPLAY_BONES` draws lines assumed from the names (a drawing aid, not a skeleton definition).
+- Result rows: sortable (click a header), descriptive results first, slice cell tinted by dataset family, repeat ARI shaded by value. Nothing is marked "best": no column measures quality. Overview charts show the same rows as dots per slice.
+- Colors: `cluster_map.rank_colors` gives the 12 largest clusters of a sequence a color and greys the rest; every cluster figure and the player use it. A 20-color cycle repeated colors for methods with more than 20 clusters.
+- Shared cluster maps (`cluster_map.pose_embedding`, `plot_method_maps`): every frame is placed by a 2D PCA of pairwise joint distances, joint heights and centroid speed; the points are the same in every panel and only the coloring (one method's labels) changes. It shows whether a method's clusters differ in posture along two axes, nothing more: overlap does not mean a bad method, and B-SOiD has an advantage because its features include the same joint distances. PCA rather than UMAP because k-means and B-SOiD cluster on UMAP and UMAP draws islands where there are none. A second block shows each method on its own stored embedding; clean islands there are separation by construction.
+- Map axes: `_grid_common.family_embeddings` fits the posture PCA once on all recordings of a family, so every slice of the family has identical axes. PCA is linear and deterministic, unlike UMAP or t-SNE, whose positions depend on the seed and are not comparable between separately fitted embeddings.
+- Cluster correspondence graph (`visualization.correspondence.plot_meta_graph`): clusters of all methods as vertices, matched pairs above the shifted null as edges weighted by Jaccard, connected components as groups; after the cluster-ensemble meta-graph of Strehl & Ghosh (2002), with connected components in place of their METIS partitioning. Vertical position has no meaning.
+- Shifted nulls on a pooled slice shift inside each recording (`agreement.shift_within`); rolling the whole sequence would move labels onto another animal and make every comparison look significant.
+- Data and methods section: dataset descriptions and per-method pipeline text live in `_grid_common` (`DATASET_INFO`, `METHOD_INFO`); the settings column is read from `method_settings.json`, which the batch script writes from the constants it ran with.
+- Dynamics (`visualization.dynamics`): every method on one 10 Hz grid (majority label per bin) before bout lengths and transition rates are computed, because those follow the label rate otherwise. Per method: share of each 30 s window per cluster with transitions per minute, transition probabilities between the 8 largest clusters, bout length histogram with the 0.1 s floor marked.
+- Cluster correspondence (`agreement.match_clusters`): one-to-one pairs between two methods by Jaccard overlap of frames (Hungarian assignment, noise left out), sorted by Jaccard. Jaccard grows with cluster size, so each pair shows the Jaccard expected for independent clusters of those sizes. `p` comes from 200 circular shifts and compares against the best Jaccard over all cluster pairs of the shifted data, so picking the best of many pairs is accounted for. A group of each method's largest clusters is labelled as such: it is expected from size alone. Matching needs the same frames, so it is never done across recordings.
+- Playback (`batch_player.html`, `visualization.player`): 3D skeleton (drag to rotate), position on the shared map and every method's label row in sync at 10 Hz; pose, map point and labels are subsampled with one index vector. The legend switches clusters of the chosen method on and off; playback skips switched-off steps and marks every skip as a cut (trail reset), so separate bouts never read as continuous motion.
+- SUBTLE cluster map (`visualization.cluster_map`): one run's UMAP embedding colored by subcluster and supercluster, with transition arrows. The batch script stores `subtle_map_seed<seed>.npz` per SUBTLE run so embedding and labels always come from the same run; `--subtle-map` adds one extra run without touching the result rows.
+- Cluster gallery (`batch_gallery.html`): per method, skeleton GIFs of the 6 most frequent clusters on the slices that have a map. Below them, the 6 best matched cluster pairs across methods (p < 0.05, largest-cluster pairs left out), each drawn from frames both methods assign to the pair. Each GIF is one real bout of median length (at most 2 s) with 0.5 s of context, never several bouts stitched. AVATAR is drawn as points because its bone list is not registered in behavior-lab.
+
+keypoint-MoSeq recipe and install
+
+- `--target-clusters N` (default 5; 0 = each method's own setting) steers the methods to a common cluster count for a matched comparison: k-means `k = N`, HMM `N` states, and B-SOiD doubles HDBSCAN `min_cluster_size` from 20 and keeps the value whose count is closest to `N` (recorded in the row notes). SUBTLE's hierarchy only offers its supercluster levels (1 to 5 here) or the subclusters (75), so it matches at `N = 5` only. B-SOiD's default `min_cluster_size = 20` bins is 2 s of data: on a pooled 100-minute slice it gives 206 clusters and 56% noise, against 6 clusters and 3% noise at 160.
+- `--kpms-kappa` and `--kpms-states` set the full-model kappa and the state upper bound (defaults 1e4 and 20; upstream default for states is 100, and all 20 are used on 12,000-frame recordings, so the bound is binding).
+- Fit = the modeling tutorial's two stages: AR-HMM only for 50 iterations, then the full model for 500 with kappa 1e4; tail keypoints excluded; `latent_dim = min(10, dims for 90% variance)`. kappa is not tuned to a target syllable duration, so read `median_bout_sec` before its agreement numbers.
+- It installs on Linux with Python < 3.13 only: `keypoint-moseq>=0.6` depends on `jax-cuda12-pjrt` (Linux wheels), and 0.4.x does not import against current `dynamax`. The lock pins `jax 0.6.x` and `tfp-nightly==0.26.0.dev20260704` (the set in `env_snapshots/kpms.yml`); a newer nightly breaks `dynamax`.
+- Measured on a 1-CPU WSL box: 20 iterations on 12,010 frames in 61.5 s including compilation.
+
+Results and their numbers live in the vault experiment note `30_Projects/Behavior-Lab/_Agent/Experiment/261002_behaviorlab_discovery_grid_long_run.md` and the page built from the grid; they are not copied here.
+
+SUBTLE wrapper labels written before 2026-10-01 are not in time order: `SUBTLE.fit()` returned `Mapper.y`, which is in the shuffled training order, and flattened the `(T, n_levels)` supercluster array (label length `T * n_levels`). Measured on 1,200 SUBTLE frames: mean bout 1.07 frames in the returned order against 9.02 frames in time order. Fixed in `subtle_wrapper.py`.
+
+- Affected: anything temporal computed from `SUBTLE.fit()` / `fit_predict()` labels (bout durations, transitions, ethograms, ARI against frame labels), i.e. the `SUBTLE` rows of the June `batch/batch_results.csv`.
+- Not affected: cluster counts and UMAP scatter plots (order-independent), which is all `phase4_report.md` and `subtle_pipeline_reference.md` report for SUBTLE; and `notebooks/calms21_behavior_discovery/01_subtle_baseline.ipynb`, which calls the upstream API and reads the per-session, time-ordered `out.y`.
 
 ## Minimal API
 
