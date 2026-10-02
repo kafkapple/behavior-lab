@@ -53,6 +53,9 @@ from behavior_lab.visualization.grid_report import render_grid_report
 OUT_DIR = ROOT / "outputs" / "behavior_analysis_workbench" / "batch"
 RANDOM_STATE = 42
 MAX_FRAMES = 1500
+# --target-clusters N: every method is steered to about N clusters (k-means k, HMM states,
+# B-SOiD min_cluster_size search); None = each method's own setting.
+TARGET_CLUSTERS: int | None = None
 KPMS = {"ar_iters": 50, "iters": 500, "ar_kappa": 1e6, "full_kappa": 1e4, "num_states": 20}  # keypoint-MoSeq tutorial values
 SUBTLE_TIMEOUT_S = 3600
 KPMS_ANTERIOR = ("nose", "nose1")
@@ -286,14 +289,16 @@ def run_kmeans(ds: DatasetSlice) -> BatchResult:
     t0 = time.time()
     backend = SkeletonBackend(fps=ds.fps, normalize_body_size=True)  # per recording: no
     features = np.concatenate([backend.extract(s) for s in segments(ds)])  # velocity across files
-    out = cluster_features(features, n_clusters=8, use_umap=True, random_state=RANDOM_STATE)
+    out = cluster_features(features, n_clusters=TARGET_CLUSTERS or 8, use_umap=True,
+                           random_state=RANDOM_STATE)
     return metric_result(ds, "kmeans_pca_umap", out["labels"], features, out["embedding_2d"], time.time() - t0)
 
 
 def run_bsoid(ds: DatasetSlice) -> BatchResult:
     t0 = time.time()
     segs = segments(ds)
-    out = BSOiD(fps=int(ds.fps), min_cluster_size=20, random_state=RANDOM_STATE).fit(
+    out = BSOiD(fps=int(ds.fps), min_cluster_size=20, random_state=RANDOM_STATE,
+                target_clusters=TARGET_CLUSTERS).fit(
         segs if len(segs) > 1 else ds.keypoints)
     labels, emb, label_fps = out["labels"], out.get("embedding_2d"), ds.fps / max(1, int(ds.fps) // 10)
     if len(segs) > 1:  # bins of each recording back to its own frames, then one per-frame array
@@ -303,14 +308,15 @@ def run_bsoid(ds: DatasetSlice) -> BatchResult:
         labels, emb, label_fps = labels[idx], emb[idx], ds.fps
     return metric_result(
         ds, "B-SOiD", labels, out.get("features") if len(segs) == 1 else None, emb,
-        time.time() - t0, notes={"label_rate": "10fps bins"},
+        time.time() - t0,
+        notes={"label_rate": "10fps bins", "min_cluster_size": out["min_cluster_size"]},
         label_fps=label_fps,  # labels are per bin (per frame for a pooled slice)
     )
 
 
 def run_pca_hmm(ds: DatasetSlice) -> BatchResult:
     t0 = time.time()
-    cr = _PCAHMMFallback(n_components=10, n_states=12, n_iter=50,
+    cr = _PCAHMMFallback(n_components=10, n_states=TARGET_CLUSTERS or 12, n_iter=50,
                          random_state=RANDOM_STATE).fit(ds.keypoints, lengths=ds.notes.get("lengths"))
     return metric_result(ds, "pca_hmm_moseq_fallback", cr.labels, cr.features, cr.embeddings, time.time() - t0)
 
@@ -464,11 +470,12 @@ def plot_summary(df: pd.DataFrame) -> None:
 def method_settings() -> dict[str, dict[str, object]]:
     """Settings of each cell as run, read from the same constants the runners use."""
     return {
-        "kmeans_pca_umap": {"clusters": 8, "pca_variance": "default of cluster_features",
+        "kmeans_pca_umap": {"clusters": TARGET_CLUSTERS or 8, "pca_variance": "default of cluster_features",
                             "umap": "n_neighbors 15, min_dist 0.1", "body_size_normalized": True},
         "B-SOiD": {"bin": "10 Hz", "umap": "n_neighbors 60, min_dist 0.0",
-                   "hdbscan_min_cluster_size": 20, "classifier": "random forest, 200 trees"},
-        "pca_hmm_moseq_fallback": {"pca_components": 10, "states": 12, "iterations": 50,
+                   "hdbscan_min_cluster_size": "20, doubled until the count is closest to the "
+                   f"target {TARGET_CLUSTERS}" if TARGET_CLUSTERS else 20, "classifier": "random forest, 200 trees"},
+        "pca_hmm_moseq_fallback": {"pca_components": 10, "states": TARGET_CLUSTERS or 12, "iterations": 50,
                                    "covariance": "diag"},
         "SUBTLE": {"embedding": "umap", "n_train_frames": 120000, "timeout_s": SUBTLE_TIMEOUT_S,
                    "reported_level": "finest supercluster", "seed": "none upstream"},
@@ -546,8 +553,12 @@ def main() -> None:
     ap.add_argument("--kpms-kappa", type=float, default=KPMS["full_kappa"],
                     help="kappa of the full-model stage (sets syllable duration)")
     ap.add_argument("--kpms-states", type=int, default=KPMS["num_states"])
+    ap.add_argument("--target-clusters", type=int, default=None,
+                    help="steer k-means, the HMM and B-SOiD to about this many clusters")
     ap.add_argument("--merge", help="batch folder from another machine: upsert its rows and label files, run nothing")
     args = ap.parse_args()
+    global TARGET_CLUSTERS
+    TARGET_CLUSTERS = args.target_clusters
     KPMS.update(ar_iters=args.kpms_ar_iters, iters=args.kpms_iters,
                 full_kappa=args.kpms_kappa, num_states=args.kpms_states)
 
