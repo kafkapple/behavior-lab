@@ -47,7 +47,8 @@ is unchanged and stays the file for recordings from 2023-08-22 on. Numbers: vaul
   `scripts/analysis/_exp_261002_avatar_calib_drift_{by_date,plot}.py`. They were left untouched on
   261002 because training jobs were reading that checkout. This module reproduces the BS residuals
   on the 12 dated samples to 1e-12 px.
-- `~/dev/behavior-tools` has an earlier POC (`splitter`, uncommitted `calibration/`). Superseded by
-  this module; its 1200x1000-for-every-cell default cuts the bottom camera.
+- `~/dev/behavior-tools`: the earlier POC is parked on branch `archive/260928_avatar_rig_poc`
+  (local only), not on its main. Superseded by this module; its equal-size grid cells cut the
+  bottom camera.
 - Not covered: recordings that are not 3600x2000, per-date extrinsic re-estimation for recordings
   before 2023-08-22.
