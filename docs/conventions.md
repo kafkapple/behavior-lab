@@ -35,7 +35,7 @@
 |---|---:|---:|---|---|
 | **KP22** (마우스) | 22 | 21 | `BehaviorSplatter/src/behaviorsplatter/temporal_deform/keypoints_22.py` — `KP22_NAMES`·`SKELETON_BONES` | BehaviorSplatter, MAMMAL, Li2023 |
 | **rat23** (s-DANNCE) | 23 | 22 | `sdannce-poc/src/sdannce_utils/constants.py` — `KP_NAMES`·`SKELETON_EDGES` | sdannce-poc, s-DANNCE 세션 |
-| **SBeA16** | 16 | 15 | `behavior-lab/scripts/sbea_dlc_triangulate.py` — `BODYPARTS`·`render_sbea_report.py::EDGES` | SBeA |
+| **SBeA16** | 16 | 15 | `behavior-lab/scripts/sbea_dlc_triangulate.py` — `BODYPARTS`·`sbea_report_figs.py::EDGES` | SBeA |
 
 - KP22 업스트림 정의: `FaceLift/configs/keypoints/mouse_22.yaml` (가장 풍부) · 요약 `BehaviorSplatter/docs/geometry/keypoint_skeleton_conventions.md`
 - **해부학 배선 규칙**(3종 공통): 전지는 흉추/목에, 후지는 천추/꼬리뿌리에 붙는다. 네 다리를 몸통 중앙 한 점에

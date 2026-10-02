@@ -48,8 +48,12 @@ is unchanged and stays the file for recordings from 2023-08-22 on. Numbers: vaul
   (BS dev `81171ffd`). Revisit only if behavior-lab becomes a BS dependency.
 - `~/dev/behavior-tools`: the earlier POC is parked on branch `archive/260928_avatar_rig_poc`
   (local only), not on its main.
-- Not covered: recordings that are not 3600x2000, per-date extrinsic re-estimation for recordings
-  before 2023-08-22.
+- Not built, no current need (261002): a split rule for recordings that are not 3600x2000 (one
+  of ten JH folders, 3592x2000; the four training candidates are all 3600x2000), and per-date
+  extrinsic re-estimation for recordings before 2023-08-22 (the quarter-turn table above is tried
+  first). The one-off script behind `cam3_extrinsic_refit_261002.json` was not found in
+  BehaviorSplatter (all branches), behavior-lab, or Olaf `~/data/avatar_gslrm`; rewrite it here
+  if the refit is needed.
 - `run_sleap_one.py` stays outside the repos on purpose: it is an 11-line caller of the SUBTLE
   checkout next to it (`run_tools_pose_inference("sleap", ...)` with
   `configs/SLEAP/AVATAR3D_11_config.json` and `model/SLEAP/260504.single_instance.n=1423-1`) and
