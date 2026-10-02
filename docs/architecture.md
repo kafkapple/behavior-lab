@@ -29,6 +29,7 @@ behavior-lab/
 ├── training/          Trainer + SSL trainer
 ├── evaluation/        Classification + Cluster + LinearProbe metrics
 ├── pose/              [dlc] DLC SuperAnimal + YOLO wrappers
+├── rig/               [viz] multi-camera rig: calibration, DLT, AVATAR layout (docs/avatar_rig.md)
 ├── visualization/     [viz] Skeleton (colored, multi-person), HTML report
 │   ├── colors         Body-part palette + multi-person distinction
 │   ├── skeleton       plot/animate/compare (auto body-part coloring)
