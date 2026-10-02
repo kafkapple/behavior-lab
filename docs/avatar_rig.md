@@ -40,15 +40,14 @@ In recordings up to 2023-05-23 the bottom camera image is a quarter turn away fr
 is unchanged and stays the file for recordings from 2023-08-22 on. Numbers: vault note
 `261002_AVATAR_calib_residual_by_date.md`.
 
-## Open (duplicates to retire)
+## Open
 
-- BehaviorSplatter still carries the originals: `scripts/data_prep/avatar_split_composite.py`, the
-  `load_calib` / `triangulate` / `reproj_px` functions inside `avatar_keypoints_to_gslrm.py`, and
-  `scripts/analysis/_exp_261002_avatar_calib_drift_{by_date,plot}.py`. They were left untouched on
-  261002 because training jobs were reading that checkout. This module reproduces the BS residuals
-  on the 12 dated samples to 1e-12 px.
+- BehaviorSplatter keeps `load_calib` / `triangulate` / `reproj_px` inside
+  `scripts/data_prep/avatar_keypoints_to_gslrm.py`: five analysis scripts import them and the
+  weighted `triangulate` exists only there. Its split and residual-by-date scripts were removed
+  (BS dev `81171ffd`). Revisit only if behavior-lab becomes a BS dependency.
 - `~/dev/behavior-tools`: the earlier POC is parked on branch `archive/260928_avatar_rig_poc`
-  (local only), not on its main. Superseded by this module; its equal-size grid cells cut the
-  bottom camera.
+  (local only), not on its main.
 - Not covered: recordings that are not 3600x2000, per-date extrinsic re-estimation for recordings
-  before 2023-08-22.
+  before 2023-08-22, and the 2D keypoint script (`run_sleap_one.py`, in no repo; `pose/` is the
+  candidate home).
