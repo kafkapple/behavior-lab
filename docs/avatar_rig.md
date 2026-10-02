@@ -30,6 +30,15 @@ pytest tests/test_data/test_rig_avatar.py
 
 Needs the `viz` extra (opencv, matplotlib) and `ffmpeg` / `ffprobe` on PATH for `split`.
 
+## Bottom camera before 2023-08-22
+
+In recordings up to 2023-05-23 the bottom camera image is a quarter turn away from the calibrated one.
+`behavior_lab.rig.multiview.rotate_image_90` derives the matching camera table (no fitting) and
+`write_calib` writes it. The derived file used for experiments is
+`~/data/avatar_gslrm/config_cam3rot90_until_20230523.toml` (Mac and Olaf); the original `config.toml`
+is unchanged and stays the file for recordings from 2023-08-22 on. Numbers: vault note
+`261002_AVATAR_calib_residual_by_date.md`.
+
 ## Open (duplicates to retire)
 
 - BehaviorSplatter still carries the originals: `scripts/data_prep/avatar_split_composite.py`, the

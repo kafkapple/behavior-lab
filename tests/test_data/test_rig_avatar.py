@@ -85,3 +85,21 @@ def test_residual_zero_when_exact_and_positive_when_one_camera_is_off(calib):
     assert exact["triangulated_frac"] == 1.0 and exact["median_px"] < 1e-3
     off = avatar.residuals(_kp(cams, shift_cam=2, shift=50.0), cams)
     assert off["median_px"] > 5 and int(np.argmax(off["per_cam_median_px"])) == 2
+
+
+def test_rotate_image_90_matches_rotating_the_pixels(calib):
+    import tomllib
+
+    from behavior_lab.rig.multiview import rotate_image_90, write_calib
+
+    cfg = tomllib.loads(calib.read_text())
+    cfg["cam_3"]["matrix"] = [[1000.0, 0.0, 560.0], [0.0, 1010.0, 680.0], [0.0, 0.0, 1.0]]
+    cfg["cam_3"]["distortions"] = [-0.1, 0.02, 0.003, -0.002, 0.0]
+    write_calib(cfg, calib)
+    old = load_calib(calib)[2]
+    cfg["cam_3"] = rotate_image_90(cfg["cam_3"])
+    write_calib(cfg, calib)
+    new = load_calib(calib)[2]
+    X = np.array([0.03, -0.02, 0.01])
+    x, y = _project(X, old)
+    assert np.allclose(_project(X, new), [y, 1200 - x], atol=1e-6)
