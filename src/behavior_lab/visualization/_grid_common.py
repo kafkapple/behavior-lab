@@ -189,7 +189,10 @@ METHOD_INFO = {
     "B-SOiD": ("displacement, pairwise joint distances, angular change, averaged in 100 ms bins",
                "none beyond the 100 ms bin", "data-driven (HDBSCAN on UMAP), with a noise label",
                "10 Hz bin", "yes"),
-    "pca_hmm_moseq_fallback": ("raw coordinates, not centered or aligned, PCA",
+    "pca_hmm_moseq_fallback": ("raw coordinates, not centered or aligned, PCA; the first two "
+                               "components mostly follow the animal's position in the arena "
+                               "(|r| 0.84 to 0.90 with the centroid on the pooled SUBTLE "
+                               "recordings), so its states largely encode where the animal is",
                                "Gaussian HMM", "fixed", "frame", "yes"),
     "SUBTLE": ("coordinates centered per recording, Morlet wavelet spectrogram, PCA, UMAP",
                "wavelet window; superclusters merge subclusters by transitions",

@@ -25,7 +25,7 @@ from .cluster_map import (
     plot_subtle_cluster_map,
     pose_embedding,
 )
-from .correspondence import plot_meta_graph, plot_recording_shares
+from .correspondence import plot_meta_graph, plot_recording_shares, recording_purity
 from .dynamics import COMMON_HZ, plot_dynamics
 from .keypoint_schema import joint_color, plot_keypoint_schema
 
@@ -94,6 +94,69 @@ def _matching(matches: dict[tuple[str, str], dict]) -> str:
                 + _table(["cluster", "partners (Jaccard)", "methods", "mean Jaccard", "note"], sup))
     else:
         out += "<p>No cluster is paired with p &lt; 0.05 in two or more other methods.</p>"
+    return out
+
+
+# Columns where one row of a slice can lead: label and which end leads. No direction is defined
+# for the cluster count. A lead is a descriptive mark (largest or smallest value among the
+# unflagged rows of that slice, ties excluded), not a quality ranking: there is no ground truth.
+LEAD_METRICS = {"repeat_ari_mean": ("highest repeat ARI", max),
+                "median_bout_sec": ("longest median bout", max),
+                "noise_frac": ("lowest noise", min)}
+
+
+def slice_leads(ok: list[dict], flags: dict) -> dict[tuple[str, str], str]:
+    """``(slice, metric) -> method`` holding the unique extreme among unflagged rows."""
+    out = {}
+    for ds in dict.fromkeys(r["dataset"] for r in ok):
+        for metric, (_, pick) in LEAD_METRICS.items():
+            cand = [r for r in ok if r["dataset"] == ds and r.get(metric) is not None
+                    and not flags[(ds, r["method"])]]
+            if len(cand) < 2:
+                continue
+            best = pick(r[metric] for r in cand)
+            holders = [r["method"] for r in cand if r[metric] == best]
+            if len(holders) == 1:
+                out[(ds, metric)] = holders[0]
+    return out
+
+
+def trend_summary(batch_dir: Path, ok: list[dict], leads: dict, slices: list[dict]) -> list[str]:
+    """Bullets for the top of the page (HTML): the overall pattern across all cells."""
+    per, aris = settings_summary(batch_dir)
+    methods = sorted(per)
+    n_slices = len({r["dataset"] for r in ok})
+
+    def med(metric):
+        vals = {m: [r[metric] for r in ok if r["method"] == m and r.get(metric) is not None]
+                for m in methods}
+        order = sorted((m for m in methods if vals[m]), key=lambda m: -np.median(vals[m]))
+        return ", ".join(f"{html.escape(m)} {np.median(vals[m]):.2f}" for m in order)
+
+    def lead_counts(metric):
+        counts = {m: sum(v == m for (_, k), v in leads.items() if k == metric) for m in methods}
+        return ", ".join(f"{html.escape(m)} {c}" for m, c in
+                         sorted(counts.items(), key=lambda kv: -kv[1]) if c)
+
+    out = [f"<b>Agreement between methods</b>: ARI median {np.median(aris):.2f}, range "
+           f"{min(aris):.2f} to {max(aris):.2f} over {len(aris)} method pairs on the same frames "
+           "(keypoint-MoSeq left out).",
+           "<b>Repeat ARI</b> (same input, other seed), median over slices: "
+           f"{med('repeat_ari_mean')}."
+           f" Slices led (of {n_slices}): {lead_counts('repeat_ari_mean') or 'none'}.",
+           f"<b>Median bout</b> in seconds, median over slices: {med('median_bout_sec')}. "
+           f"Slices led: {lead_counts('median_bout_sec') or 'none'}.",
+           "<b>Clusters</b>: " + ", ".join(
+               f"{html.escape(m)} {per[m]['clusters'][0]}"
+               + (f" to {per[m]['clusters'][1]}" if per[m]['clusters'][0] != per[m]['clusters'][1]
+                  else "") for m in methods) + "."]
+    pooled = [s for s in slices if s["notes"].get("lengths")]
+    nmi = [recording_purity(stretch_labels(v, sum(s["notes"]["lengths"])), s["notes"]["lengths"])[0]
+           for s in pooled for k, v in _labels(batch_dir, s["name"]).items()]
+    if nmi:
+        out.append(f"<b>Pooled fits</b> ({len(pooled)} slices): NMI between cluster and recording "
+                   f"{min(nmi):.2f} to {max(nmi):.2f} (0 = clusters shared by the animals, "
+                   "1 = clusters are the animals).")
     return out
 
 

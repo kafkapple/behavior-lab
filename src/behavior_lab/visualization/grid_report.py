@@ -5,7 +5,8 @@ Plain content only (h1, header-meta, tldr, sections with embedded figures); the 
 hand-edit the output. Usage:
 ``python -m behavior_lab.visualization.grid_report <batch_dir> [gallery_href] [player_href]
 [figs_href] [baseline_dir] [baseline_href]``; ``baseline_dir`` is a batch run under each
-method's own settings, summarized in one table on this page; figures are embedded as previews and link to full-resolution PNGs written to
+method's own settings, summarized in one table on this page; figures are embedded as previews and
+link to full-resolution PNGs written to
 ``<batch_dir>/figs_report/`` (copy that folder next to the published page as ``figs_href``);
 writes ``batch_report.html``, ``batch_gallery.html`` (per-cluster GIFs) and
 ``batch_player.html`` (synchronized playback) into the batch folder.
@@ -52,7 +53,15 @@ from ._grid_common import (
     set_figs,
 )
 from .agreement import label_agreement
-from .grid_slice import baseline_block, plot_grid_overview, schema_block, slice_blocks
+from .grid_slice import (
+    LEAD_METRICS,
+    baseline_block,
+    plot_grid_overview,
+    schema_block,
+    slice_blocks,
+    slice_leads,
+    trend_summary,
+)
 
 
 def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None, *,
@@ -83,17 +92,8 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
                  "</code> · rebuild with <code>python -m behavior_lab.visualization.grid_report"
                  "</code></div>")
 
-    rep = [r for r in ok if r.get("repeat_ari_mean") is not None]
-    by_method = {m: [r["repeat_ari_mean"] for r in rep if r["method"] == m] for m in methods}
-    stab = "; ".join(f"{m} {min(v):.2f} to {max(v):.2f}" for m, v in by_method.items() if v)
-    tldr = [f"{len(ok)} of {len(rows)} cells ran; {len(failed)} failed or are not applicable "
-            "(listed under Failures).",
-            "Unsupervised labels have no ground truth here: every number describes agreement or "
-            "stability, not accuracy."]
-    if stab:
-        tldr.insert(1, f"Repeat-run ARI (same input, different seed), range over slices: {stab}.")
-    parts.append('<div class="tldr"><ul>' + "".join(f"<li>{html.escape(x)}</li>" for x in tldr)
-                 + "</ul></div>")
+    tldr_at = len(parts)  # filled after the rows are analysed (leads need the flags)
+    parts.append("")
 
     families = list(dict.fromkeys(_family(d) for d in datasets))
     by_name = {s["name"]: s for s in slices}
@@ -191,12 +191,28 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
         body.append(f"<tr><td>{html.escape(ds)}</td>{''.join(tds)}</tr>")
     parts.append(f"<table><tr><th>slice</th>{head}</tr>{''.join(body)}</table>")
 
+    lead = slice_leads(ok, flags)
+    lead_n = {(r["dataset"], r["method"]): sum(lead.get((r["dataset"], k)) == r["method"]
+                                               for k in LEAD_METRICS) for r in ok}
+    parts[tldr_at] = ('<div class="tldr"><ul>'
+                      f"<li>{len(ok)} of {len(rows)} cells ran; {len(failed)} failed or are not "
+                      "applicable (listed under Failures).</li>"
+                      + "".join(f"<li>{x}</li>"
+                                for x in trend_summary(batch_dir, ok, lead,
+                                                       [by_name[d] for d in datasets]))
+                      + "<li>Unsupervised labels have no ground truth here: every number "
+                      "describes agreement or stability, not accuracy.</li></ul></div>")
     parts.append("<h3>All rows</h3><p>One row per slice and method; click a column header to "
                  "sort. Columns run from the descriptive results (clusters, median bout, repeat "
                  "ARI, noise, flag) to the run details. The slice cell is tinted by dataset "
-                 "family, the method cell carries the method color, and the repeat ARI cell is "
-                 "shaded by its value. No cell is marked “best”: no column measures quality, "
-                 "and more clusters or longer bouts are not better.</p>")
+                 "family and the method cell carries the method color.</p><ul>"
+                 "<li><b>▲ and bold</b>: the leading value of that slice in the column "
+                 "(highest repeat ARI, longest median bout, lowest noise) among unflagged rows; "
+                 "ties are not marked. The method cell of a leading row is bold and shows how "
+                 "many columns it leads.</li>"
+                 "<li>A lead is a description, not a ranking of quality: there is no ground "
+                 "truth, a trivial segmentation is easy to repeat, and a longer bout is not a "
+                 "better bout. The cluster count has no leading direction.</li></ul>")
     fam_var = {f: FAMILY_VARS[i % len(FAMILY_VARS)] for i, f in enumerate(families)}
     body = []
     for r in sorted(ok, key=lambda r: (datasets.index(r["dataset"]), r["method"])):
@@ -209,15 +225,26 @@ def render_grid_report(batch_dir: str | Path, out_html: str | Path | None = None
                          "22%, transparent)")
             elif c == "method":
                 style = f"border-left:5px solid {color[r['method']]}"
+                if lead_n[key]:
+                    style += ";font-weight:700"
             elif c == "repeat_ari_mean" and r.get(c) is not None:
                 style = (f"background:color-mix(in srgb, var(--a1) {max(0, r[c]) * 45:.0f}%, "
-                         "transparent)" + (";font-weight:600" if top.get(r["dataset"])
-                                           == r["method"] else ""))
+                         "transparent)")
+            leads_here = lead.get((r["dataset"], c)) == r["method"]
+            if leads_here:
+                style += (";font-weight:700;outline:2px solid var(--a1);outline-offset:-2px")
+            text = _fmt(r.get(c))
+            if c == "method" and lead_n[key]:
+                text += f' <span style="color:var(--a1)">▲×{lead_n[key]}</span>'
+            elif leads_here:
+                text = "▲ " + text
             if c == "flag":
                 tds.append('<td style="color:var(--warn)">'
                            f'{html.escape("; ".join(flags[key]))}</td>')
             else:
-                tds.append(f'<td style="{style}">{_fmt(r.get(c))}</td>')
+                v = r.get(c)
+                dv = f' data-v="{v}"' if isinstance(v, (int, float)) else ""
+                tds.append(f'<td style="{style}"{dv}>{text}</td>')
         body.append(f"<tr>{''.join(tds)}</tr>")
     head = "".join(f"<th>{html.escape(ROW_HEAD.get(c, c))}</th>" for c in ROW_COLS)
     parts.append(f'<table class="sortable"><thead><tr>{head}</tr></thead><tbody>'
