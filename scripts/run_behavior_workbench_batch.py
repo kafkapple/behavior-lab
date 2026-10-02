@@ -317,10 +317,17 @@ def run_subtle(ds: DatasetSlice) -> BatchResult:
     cr = SUBTLE(config=SUBTLEConfig(fps=int(ds.fps), timeout=SUBTLE_TIMEOUT_S)).fit_predict(
         [ds.keypoints], isolate=True,
     )
-    small_ds = DatasetSlice(ds.name, ds.keypoints[: len(cr.labels)], ds.fps,
-                            ds.labels[: len(cr.labels)] if ds.labels is not None else None)
-    return metric_result(small_ds, "SUBTLE", cr.labels, cr.features, cr.embeddings, time.time() - t0,
+    save_subtle_map(ds, cr, f"seed{RANDOM_STATE}")
+    return metric_result(ds, "SUBTLE", cr.labels, cr.features, cr.embeddings, time.time() - t0,
                          notes={"max_frames": len(cr.labels)})
+
+
+def save_subtle_map(ds: DatasetSlice, cr, tag: str) -> None:
+    """Embedding + both cluster levels of ONE run, kept together for the cluster map."""
+    out = OUT_DIR / "arrays" / ds.name
+    out.mkdir(parents=True, exist_ok=True)
+    np.savez(out / f"subtle_map_{tag}.npz", embedding=cr.embeddings, labels=cr.labels,
+             subclusters=cr.metadata["subclusters"], superclusters=cr.metadata["superclusters"])
 
 
 def run_behavemae(ds: DatasetSlice) -> BatchResult:
@@ -474,7 +481,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--datasets",
                     help="comma list, prefix match, e.g. avatar,subtle (default: all found)")
-    ap.add_argument("--methods", help=f"comma list from: {', '.join(METHODS)} (default: all)")
+    ap.add_argument("--methods",
+                    help=f"comma list from: {', '.join(METHODS)}, or 'none' (default: all)")
+    ap.add_argument("--subtle-map", action="store_true",
+                    help="one extra SUBTLE run per dataset for the cluster map; rows untouched")
     ap.add_argument("--max-frames", type=int, default=MAX_FRAMES)
     ap.add_argument("--out", default="batch", help="output folder name under outputs/behavior_analysis_workbench/")
     ap.add_argument("--repeats", type=int, default=1, help="runs per cell, seeds seed..seed+repeats-1")
@@ -497,13 +507,23 @@ def main() -> None:
         if args.datasets:
             want = args.datasets.split(",")
             datasets = [d for d in datasets if any(d.name.startswith(w) for w in want)]
-        methods = {m: METHODS[m] for m in args.methods.split(",")} if args.methods else METHODS
+        methods = {m: METHODS[m] for m in args.methods.split(",") if m != "none"} \
+            if args.methods else METHODS
         assert datasets, "no dataset matched"
         slices = [{"name": d.name, "shape": list(d.keypoints.shape), "fps": d.fps,
                    "has_labels": d.labels is not None, "notes": d.notes} for d in datasets]
         for ds in datasets:
             print(f"\nDataset {ds.name}: {ds.keypoints.shape}, fps={ds.fps}, "
                   f"labels={ds.labels is not None}, nan_frac={ds.notes.get('nan_frac')}")
+            kp_file = OUT_DIR / "arrays" / ds.name / "keypoints.npy"  # for the cluster gallery
+            kp_file.parent.mkdir(parents=True, exist_ok=True)
+            np.save(kp_file, ds.keypoints)
+            if args.subtle_map:
+                from behavior_lab.models.discovery.subtle_wrapper import SUBTLE, SUBTLEConfig
+                cfg = SUBTLEConfig(fps=int(ds.fps), timeout=SUBTLE_TIMEOUT_S)
+                save_subtle_map(ds, SUBTLE(config=cfg).fit_predict([ds.keypoints], isolate=True),
+                                "extra")
+                continue
             for method, fn in methods.items():
                 print(f"  {method}...", flush=True)
                 try:
@@ -514,6 +534,7 @@ def main() -> None:
                     result = error_result(ds, method, exc)
                     print(f"    error: {result.error}")
                 df = save_results([asdict(result)], slices)
+        df = save_results([], slices)
 
     plot_summary(df)
     render_grid_report(OUT_DIR)

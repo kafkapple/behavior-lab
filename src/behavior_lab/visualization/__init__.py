@@ -24,6 +24,7 @@ from .colors import (
 from .html_report import generate_pipeline_report, fig_to_base64
 from .comparison import render_comparison_report, render_cluster_gallery
 from .agreement import label_agreement, plot_label_agreement, stretch_labels
+from .cluster_map import plot_cluster_map, plot_subtle_cluster_map, transition_matrix
 from .video_overlay import (
     render_skeleton_on_frame,
     overlay_keypoints_on_video,

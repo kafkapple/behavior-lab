@@ -118,6 +118,12 @@ Repeats and agreement
 - `behavior_lab.visualization.agreement` (used by notebook 03 and the HTML report) reports ARI with a circular-shift null, AMI, and homogeneity in both directions, because ARI alone drops when one method merely splits another's labels more finely.
 - B-SOiD labels are 10 Hz bins; bout durations use that rate and bins map to frames by `floor(i * L / T)`.
 
+Reading the page
+
+- Result grid: each method has one fixed color. Green marks the most repeatable method per slice (highest repeat ARI among unflagged rows); it is a stability mark, not a quality ranking, and a seeded kmeans on a fixed feature set will usually take it. Rows are flagged, and left out of that ranking, when the segmentation is degenerate: fewer than 3 clusters, a median bout of one label step, or noise above 30% (own loose rule).
+- SUBTLE cluster map (`visualization.cluster_map`): one run's UMAP embedding colored by subcluster and supercluster, with transition arrows. The batch script stores `subtle_map_seed<seed>.npz` per SUBTLE run so embedding and labels always come from the same run; `--subtle-map` adds one extra run without touching the result rows.
+- Cluster gallery (`batch_gallery.html`): per method, skeleton GIFs of the 6 most frequent clusters on the slices that have a map. Each GIF is one real bout of median length with 1 s of context, never several bouts stitched. AVATAR is drawn as points because its bone list is not registered in behavior-lab.
+
 keypoint-MoSeq recipe and install
 
 - Fit = the modeling tutorial's two stages: AR-HMM only for 50 iterations, then the full model for 500 with kappa 1e4; tail keypoints excluded; `latent_dim = min(10, dims for 90% variance)`. kappa is not tuned to a target syllable duration, so read `median_bout_sec` before its agreement numbers.
