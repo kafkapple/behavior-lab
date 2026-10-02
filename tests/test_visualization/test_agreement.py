@@ -22,3 +22,32 @@ def test_stretch_handles_binned_labels():
     agr = label_agreement({"native": np.repeat(binned, 2), "binned": binned})
     assert (out == np.repeat(binned, 2)).all()  # integer ratio: exact
     assert agr["ari"][0, 1] == 1.0
+
+
+def test_stretch_labels_whole_frame_bins():
+    from behavior_lab.visualization.agreement import stretch_labels
+
+    bins = np.arange(6004)  # B-SOiD: 2-frame bins from frame 0, short tail dropped
+    out = stretch_labels(bins, 12010)
+    assert out[0] == 0 and out[1] == 0 and out[2] == 1
+    assert out[12007] == 6003 and out[-1] == 6003  # tail keeps the last bin, no drift
+
+
+def test_match_clusters_recovers_relabelled_split():
+    from behavior_lab.visualization.agreement import match_clusters
+
+    rng = np.random.default_rng(0)
+    a = np.repeat(rng.integers(0, 4, 300), 20)
+    b = (a + 5) % 4 + 10                     # the same segmentation under other ids
+    b[a == 0] = np.where(np.arange((a == 0).sum()) % 2, 20, 21)  # cluster 0 split in two
+    b[:50] = -1                              # noise is ignored
+    m = match_clusters(a, b, n_shifts=50)
+    exact = [d for d in m["pairs"] if d["a"] != 0]
+    assert len(exact) == 3 and all(d["jaccard"] > 0.95 and d["p"] < 0.05 for d in exact)
+    assert all(d["jaccard"] > d["expected"] for d in m["pairs"])
+    half = next(d for d in m["pairs"] if d["a"] == 0)
+    assert 0.4 < half["jaccard"] < 0.6
+    assert m["p_mean"] < 0.05
+
+    unrelated = match_clusters(a, np.repeat(rng.integers(0, 4, 300), 20), n_shifts=50)
+    assert unrelated["p_mean"] > 0.05

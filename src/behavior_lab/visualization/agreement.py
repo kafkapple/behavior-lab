@@ -17,8 +17,16 @@ from sklearn.metrics import (
 def stretch_labels(labels: np.ndarray, T: int) -> np.ndarray:
     """Nearest-neighbour resample to length T (methods that emit bins, e.g. B-SOiD 10 Hz)."""
     labels = np.asarray(labels)
+    L = len(labels)
+    if L == T:
+        return labels
+    b = round(T / L)
+    if b >= 1 and 0 <= T - L * b < 2 * b:
+        # whole-frame bins that start at frame 0 (B-SOiD drops a short tail): bin k covers
+        # frames [k*b, (k+1)*b); proportional stretching would drift by one bin at the end
+        return labels[np.minimum(np.arange(T) // b, L - 1)]
     # frame i belongs to bin floor(i * L / T); linspace over (0, L-1) would shift bin edges
-    return labels if len(labels) == T else labels[np.arange(T) * len(labels) // T]
+    return labels[np.arange(T) * L // T]
 
 
 def label_agreement(seqs: dict[str, np.ndarray], *, n_shifts: int = 20,
@@ -88,4 +96,58 @@ def plot_label_agreement(seqs: dict[str, np.ndarray], title: str = "", *, fps: f
     return fig, agr
 
 
-__all__ = ["label_agreement", "plot_label_agreement", "stretch_labels"]
+def _jaccard(a: np.ndarray, b: np.ndarray, ids_a: np.ndarray, ids_b: np.ndarray):
+    """Jaccard matrix and contingency counts over frames where neither label is noise (-1)."""
+    keep = (a >= 0) & (b >= 0)
+    C = np.zeros((len(ids_a), len(ids_b)))
+    np.add.at(C, (np.searchsorted(ids_a, a[keep]), np.searchsorted(ids_b, b[keep])), 1)
+    union = C.sum(axis=1, keepdims=True) + C.sum(axis=0, keepdims=True) - C
+    return np.divide(C, union, out=np.zeros_like(C), where=union > 0), C
+
+
+def match_clusters(a: np.ndarray, b: np.ndarray, *, n_shifts: int = 200,
+                   seed: int = 0) -> dict[str, object]:
+    """One-to-one correspondence between the clusters of two label sequences.
+
+    Similarity = Jaccard overlap of the frame sets (frames in both / frames in either), noise
+    frames (-1) dropped on both sides. The assignment maximizes total Jaccard (Hungarian).
+    Jaccard grows with cluster size, so each pair also carries ``expected``: the Jaccard two
+    independent clusters of those sizes would have. The null repeats the whole procedure after
+    circularly shifting ``b``: ``p`` of a pair = share of shifts whose best Jaccard over all
+    cluster pairs reaches that pair's value (corrects for picking the best of many pairs),
+    ``p_mean`` = the same for the mean Jaccard of the assignment.
+    """
+    from scipy.optimize import linear_sum_assignment
+
+    T = max(len(a), len(b))
+    a, b = stretch_labels(a, T), stretch_labels(b, T)
+    ids_a, ids_b = np.unique(a[a >= 0]), np.unique(b[b >= 0])
+    J, C = _jaccard(a, b, ids_a, ids_b)
+    rows, cols = linear_sum_assignment(-J)
+    n = C.sum()
+    rng = np.random.default_rng(seed)
+    null_best, null_mean = np.zeros(n_shifts), np.zeros(n_shifts)
+    for k, s in enumerate(rng.integers(max(1, T // 10), max(2, T - T // 10), size=n_shifts)):
+        Jn, _ = _jaccard(a, np.roll(b, int(s)), ids_a, ids_b)
+        r, c = linear_sum_assignment(-Jn)
+        null_best[k], null_mean[k] = Jn.max(), Jn[r, c].mean()
+    pairs = []
+    for i, j in zip(rows, cols):
+        if C[i, j] == 0:
+            continue
+        na, nb = C[i].sum(), C[:, j].sum()
+        e = na * nb / n  # frames shared by independent clusters of these sizes
+        pairs.append({"a": int(ids_a[i]), "b": int(ids_b[j]), "n_a": int(na), "n_b": int(nb),
+                      "n_both": int(C[i, j]), "jaccard": float(J[i, j]),
+                      "expected": float(e / (na + nb - e)),
+                      "p": float((1 + (null_best >= J[i, j]).sum()) / (1 + n_shifts)),
+                      "largest": bool(na == C.sum(axis=1).max() and nb == C.sum(axis=0).max())})
+    pairs.sort(key=lambda d: -d["jaccard"])
+    mean = float(J[rows, cols].mean())
+    assert all(0 <= d["jaccard"] <= 1 and 0 <= d["expected"] <= 1 for d in pairs)
+    return {"pairs": pairs, "mean_matched": mean, "null_mean_matched": float(null_mean.mean()),
+            "p_mean": float((1 + (null_mean >= mean).sum()) / (1 + n_shifts)),
+            "n_frames": int(n), "n_a": len(ids_a), "n_b": len(ids_b)}
+
+
+__all__ = ["label_agreement", "match_clusters", "plot_label_agreement", "stretch_labels"]

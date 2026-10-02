@@ -84,4 +84,83 @@ def plot_subtle_cluster_map(embedding: np.ndarray, subclusters: np.ndarray,
     return fig
 
 
-__all__ = ["plot_cluster_map", "plot_subtle_cluster_map", "transition_matrix"]
+def pose_embedding(keypoints: np.ndarray) -> np.ndarray:
+    """Method-neutral 2D axes for one recording: PCA of posture and speed.
+
+    Features need no alignment and no skeleton: all pairwise joint distances, joint heights
+    (third coordinate, when present) and centroid speed, each standardized. No discovery
+    method in the grid clusters on these axes, so no method is favored when all are drawn on
+    them. Linear, so distances on the plane are meaningful up to the variance it keeps.
+    Returns ``(T, 2)``; ``pose_embedding.explained`` holds the last call's variance ratio.
+    """
+    from sklearn.decomposition import PCA
+
+    kp = np.asarray(keypoints, dtype=float)
+    i, j = np.triu_indices(kp.shape[1], k=1)
+    feats = [np.linalg.norm(kp[:, i] - kp[:, j], axis=-1)]
+    if kp.shape[2] >= 3:
+        feats.append(kp[:, :, 2])
+    speed = np.linalg.norm(np.diff(kp.mean(axis=1), axis=0, prepend=kp[:1].mean(axis=1)), axis=1)
+    feats.append(speed[:, None])
+    X = np.concatenate(feats, axis=1)
+    X = (X - np.median(X, axis=0)) / (X.std(axis=0) + 1e-9)
+    X = np.clip(X, -5, 5)  # tracking-loss frames would otherwise set the axes
+    pca = PCA(n_components=2, random_state=0).fit(X)
+    pose_embedding.explained = float(pca.explained_variance_ratio_.sum())
+    return pca.transform(X)
+
+
+def plot_method_maps(embedding: np.ndarray, seqs: dict[str, np.ndarray], title: str = ""):
+    """The same embedding once per method, colored by that method's labels (small multiples)."""
+    import matplotlib.pyplot as plt
+
+    from .agreement import stretch_labels
+
+    n = len(seqs)
+    cols = min(n, 3)
+    rows = -(-n // cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(4.6 * cols, 4.3 * rows), squeeze=False,
+                             constrained_layout=True)
+    for ax in axes.ravel()[n:]:
+        ax.axis("off")
+    for ax, (name, lab) in zip(axes.ravel(), seqs.items()):
+        plot_cluster_map(embedding, stretch_labels(lab, len(embedding)), name, ax=ax)
+    fig.suptitle(title, fontsize=10)
+    return fig
+
+
+def cluster_sizes(labels: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
+    """``(ids, share of labelled steps, noise share)``, largest cluster first."""
+    labels = np.asarray(labels)
+    ids, counts = np.unique(labels[labels >= 0], return_counts=True)
+    order = np.argsort(-counts)
+    return ids[order], counts[order] / len(labels), float((labels < 0).mean())
+
+
+def plot_cluster_sizes(seqs: dict[str, np.ndarray], title: str = ""):
+    """Per method: share of time in each cluster, largest first, with count and top-3 share."""
+    import matplotlib.pyplot as plt
+
+    fig, axes = plt.subplots(1, len(seqs), figsize=(3.3 * len(seqs), 2.8), squeeze=False,
+                             constrained_layout=True, sharey=True)
+    cmap = plt.get_cmap("tab20")
+    for ax, (name, lab) in zip(axes[0], seqs.items()):
+        ids, share, noise = cluster_sizes(lab)
+        all_ids = sorted(ids.tolist())  # same color per id as plot_cluster_map
+        ax.bar(range(len(ids)), share, color=[cmap(all_ids.index(c) % 20) for c in ids])
+        if len(ids) <= 20:
+            ax.set_xticks(range(len(ids)))
+            ax.set_xticklabels(ids, fontsize=6)
+        else:
+            ax.set_xticks([])
+        note = f", noise {noise:.0%}" if noise else ""
+        ax.set_title(f"{name}\n{len(ids)} clusters, top 3 = {share[:3].sum():.0%}{note}",
+                     fontsize=8)
+        ax.set_xlabel("cluster (by size)", fontsize=8)
+    axes[0][0].set_ylabel("share of time")
+    fig.suptitle(title, fontsize=10)
+    return fig
+
+
+__all__ = ["cluster_sizes", "plot_cluster_map", "plot_cluster_sizes", "plot_method_maps",
+           "plot_subtle_cluster_map", "pose_embedding", "transition_matrix"]
