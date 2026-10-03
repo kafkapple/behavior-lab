@@ -1,6 +1,10 @@
 """AVATAR rig module: layout cells, triangulation round trip, residual of exact and of shifted
 detections."""
 
+import json
+import shutil
+import subprocess
+
 import cv2
 import numpy as np
 import pytest
@@ -103,3 +107,20 @@ def test_rotate_image_90_matches_rotating_the_pixels(calib):
     X = np.array([0.03, -0.02, 0.01])
     x, y = _project(X, old)
     assert np.allclose(_project(X, new), [y, 1200 - x], atol=1e-6)
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
+def test_split_writes_cells_and_manifest_and_probes_agree(calib, tmp_path):
+    comp = tmp_path / "rec.mp4"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=3600x2000:rate=20:duration=0.3",
+         "-pix_fmt", "yuv420p", str(comp)],
+        check=True,
+    )
+    out = tmp_path / "split"
+    paths = avatar.split_composite(comp, calib, out, "rec", threads=2)
+    assert [p.name for p in paths] == [f"rec_cam_{i}.mp4" for i in range(1, 6)]
+    assert avatar._probe(paths[2]) == (1200, 1200, 6)
+    manifest = json.loads((out / "rec_split.json").read_text())
+    assert manifest["frames"] == 6 and manifest["cells"]["cam_5"] == [1200, 1000, 1200, 1000]
+    assert avatar._probe_ffmpeg(comp) == avatar._probe(comp) == (3600, 2000, 6)

@@ -23,6 +23,9 @@ import argparse
 import datetime as dt
 import gzip
 import json
+import os
+import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -39,6 +42,9 @@ _RIG = yaml.safe_load(RIG_YAML.read_text())
 COMPOSITE: tuple[int, int] = tuple(_RIG["composite"])
 ORIGIN: dict[str, tuple[int, int]] = {c: tuple(o) for c, o in _RIG["origin"].items()}
 CALIB_DATE: dt.date = _RIG["calib_date"]
+# Hosts without ffmpeg/ffprobe on PATH point these at a binary (eren: imageio_ffmpeg, no ffprobe).
+FFMPEG: str = os.environ.get("BEHAVIOR_LAB_FFMPEG", "ffmpeg")
+FFPROBE: str | None = os.environ.get("BEHAVIOR_LAB_FFPROBE") or shutil.which("ffprobe")
 
 
 def cells(calib: str | Path) -> dict[str, tuple[int, int, int, int]]:
@@ -57,11 +63,27 @@ def cells(calib: str | Path) -> dict[str, tuple[int, int, int, int]]:
     return cs
 
 
+def _probe_ffmpeg(p: Path) -> tuple[int, int, int]:
+    """Same triple without ffprobe (eren has only the imageio ffmpeg binary): decodeless pass."""
+    err = subprocess.run(
+        [FFMPEG, "-nostdin", "-i", str(p), "-map", "0:v:0", "-c", "copy", "-f", "null", "-"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stderr
+    size = re.search(r"Video:.*?, (\d{2,5})x(\d{2,5})", err)
+    frames = re.findall(r"frame=\s*(\d+)", err)
+    assert size and frames, f"could not read size and frame count of {p.name} from ffmpeg"
+    return int(size[1]), int(size[2]), int(frames[-1])
+
+
 def _probe(p: Path) -> tuple[int, int, int]:
+    if not FFPROBE:
+        return _probe_ffmpeg(p)
     out = (
         subprocess.run(
             [
-                "ffprobe",
+                FFPROBE,
                 "-v",
                 "error",
                 "-count_frames",
@@ -84,23 +106,32 @@ def _probe(p: Path) -> tuple[int, int, int]:
 
 
 def split_composite(
-    composite: Path, calib: Path, out: Path, prefix: str, crf: int = 18
+    composite: Path, calib: Path, out: Path, prefix: str, crf: int = 18, threads: int = 0
 ) -> list[Path]:
-    """One mp4 per camera at its calibrated size; asserts size and frame count of each."""
+    """One mp4 per camera at its calibrated size; asserts size and frame count of each.
+
+    The cut rule is fixed: cell origins from configs/rig/avatar.yaml, no per-recording offset (a
+    1-2 px offset is below the residual resolution, 261002). `<prefix>_split.json` records the rule
+    and the counts next to the outputs. threads > 0 caps ffmpeg on a shared host.
+    """
     W, H, n = _probe(composite)
     assert (W, H) == COMPOSITE, (
         f"{composite.name} is {W}x{H}, the layout is defined for {COMPOSITE[0]}x{COMPOSITE[1]} only"
     )
     out.mkdir(parents=True, exist_ok=True)
+    cap = ["-threads", str(threads)] if threads else []
+    cs = cells(calib)
     written = []
-    for c, (x, y, w, h) in cells(calib).items():
+    for c, (x, y, w, h) in cs.items():
         dst = out / f"{prefix}_{c}.mp4"
         subprocess.run(
             [
-                "ffmpeg",
+                FFMPEG,
+                "-nostdin",
                 "-v",
                 "error",
                 "-y",
+                *cap,
                 "-i",
                 str(composite),
                 "-vf",
@@ -112,12 +143,27 @@ def split_composite(
                 "-pix_fmt",
                 "yuv420p",
                 "-an",
+                *cap,
                 str(dst),
             ],
             check=True,
         )
         assert _probe(dst) == (w, h, n), f"{c}: wrote {_probe(dst)}, expected {(w, h, n)}"
         written.append(dst)
+    (out / f"{prefix}_split.json").write_text(
+        json.dumps(
+            {
+                "composite": composite.name,
+                "composite_size": [W, H],
+                "composite_bytes": composite.stat().st_size,
+                "frames": n,
+                "cells": {c: list(b) for c, b in cs.items()},
+                "rule": "origins from configs/rig/avatar.yaml, no offset",
+                "crf": crf,
+            },
+            indent=1,
+        )
+    )
     return written
 
 
@@ -191,6 +237,7 @@ def main() -> None:
     for name in ("--composite", "--calib", "--out"):
         s.add_argument(name, type=Path, required=True)
     s.add_argument("--prefix", required=True)
+    s.add_argument("--threads", type=int, default=0, help="cap ffmpeg threads (shared host)")
     a = ap.parse_args()
     if a.cmd == "residual":
         d = residual_by_date(a.calib, a.kp, thr=a.thr, min_cams=a.min_cams, n_frames=a.frames)
@@ -213,7 +260,11 @@ def main() -> None:
         )
     else:
         for dst in split_composite(
-            a.composite.expanduser(), a.calib.expanduser(), a.out.expanduser(), a.prefix
+            a.composite.expanduser(),
+            a.calib.expanduser(),
+            a.out.expanduser(),
+            a.prefix,
+            threads=a.threads,
         ):
             print(dst)
 
