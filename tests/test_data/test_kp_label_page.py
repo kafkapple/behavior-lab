@@ -90,3 +90,15 @@ def test_one_keypoint_can_be_replaced_or_cleared_and_the_note_lands_once(tmp_pat
     assert (first.loc["nose1", "x_px"], first.loc["neck1", "x_px"], first.loc["neck1", "visible"]) == (1.0, 50.0, 0)
     assert pd.isna(first.loc["tail1", "visible"])
     assert list(df["note"].dropna()) == ["ear=tip  tail1=mid"]          # once per image, comma removed
+
+
+def test_examples_are_optional_marked_and_must_belong_to_the_template(tmp_path):
+    t = _template(tmp_path)
+    ex = tmp_path / "ex.json"
+    ex.write_text(json.dumps({"cam_1": [{"image": "images/f003_cam1.jpg", "model": "M", "pts": {"nose1": [1, 2]}}]}))
+    html = page.build(t, tmp_path / "p.html", ex).read_text()
+    assert '"examples": {"cam_1"' in html and "채점에서 제외" in html
+    assert '"examples"' not in page.build(t, tmp_path / "q.html").read_text()
+    ex.write_text(json.dumps({"cam_1": [{"image": "images/other.jpg", "model": "M", "pts": {}}]}))
+    with pytest.raises(ValueError, match="not in the template"):
+        page.build(t, tmp_path / "r.html", ex)
