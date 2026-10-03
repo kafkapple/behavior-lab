@@ -68,6 +68,7 @@ get_model('name')
 
 | Document | 핵심 내용 | 관련 |
 |----------|----------|------|
+| **[AVATAR Keypoint Models](avatar_keypoint_models.md)** | AVATAR 멀티뷰에서 돌렸거나 계획한 keypoint 모델 목록, 라벨 표 → DLC/LP·COCO·SLEAP 변환(`pose/labels.py`), 남은 우선순위 | pose/ |
 | **[Dataset Catalog](datasets.md)** | 전체 데이터셋 사양: joints, classes, formats, skeletons | core, loaders |
 | **[E2E Verification](e2e_verification.md)** | 실데이터 파이프라인 검증: 로더→전처리→B-SOiD→평가→시각화 | all modules |
 

@@ -609,6 +609,9 @@ dev = [
 dlc = [
     { name = "deeplabcut", extra = ["modelzoo"] },
 ]
+labels = [
+    { name = "pandas" },
+]
 loaders = [
     { name = "h5py" },
 ]
@@ -685,6 +688,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.24" },
     { name = "omegaconf", specifier = ">=2.3" },
     { name = "opencv-python-headless", marker = "extra == 'viz'", specifier = ">=4.8" },
+    { name = "pandas", marker = "extra == 'labels'", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "python-multipart", marker = "extra == 'web'", specifier = ">=0.0.6" },
@@ -708,7 +712,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.23" },
     { name = "vame-py", marker = "python_full_version >= '3.12' and extra == 'vame'", specifier = ">=0.14" },
 ]
-provides-extras = ["torch", "visual", "cebra", "videomae", "behavemae", "dlc", "sleap", "web", "viz", "clustering", "loaders", "bsoid", "moseq", "moseq-fallback", "subtle", "vame", "benchmark", "all", "dev"]
+provides-extras = ["torch", "visual", "cebra", "videomae", "behavemae", "dlc", "sleap", "labels", "web", "viz", "clustering", "loaders", "bsoid", "moseq", "moseq-fallback", "subtle", "vame", "benchmark", "all", "dev"]
 
 [[package]]
 name = "bleach"
