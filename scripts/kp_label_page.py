@@ -101,7 +101,7 @@ if (typeof document !== "undefined") {
     const cw = Math.min(o.image_w, Math.max(...xs) + m) - x0, ch = Math.min(o.image_h, Math.max(...ys) + m) - y0;
     for (const k in e.pts) s[k] = [e.pts[k][0] - x0, e.pts[k][1] - y0, 1];
     cap.textContent = `${e.model} 출력, ${e.image} (${exi % list.length + 1}/${list.length}). 정답이 아니다. E = 다음 예시`; ecv.style.display = "";
-    eim.onload = () => { ecv.width = 300; ecv.height = Math.round(300 * ch / cw); ectx.drawImage(eim, x0, y0, cw, ch, 0, 0, ecv.width, ecv.height);
+    eim.onload = () => { ecv.width = 340; ecv.height = Math.round(340 * ch / cw); ectx.drawImage(eim, x0, y0, cw, ch, 0, 0, ecv.width, ecv.height);
       points(ectx, s, ecv.width / cw, ecv.height / ch, 3, null); };
     if (eim.dataset.src !== e.image) { eim.dataset.src = e.image; eim.src = e.image; } else eim.onload();
   }
@@ -113,7 +113,7 @@ if (typeof document !== "undefined") {
     const cap = document.getElementById("refcap");
     if (c === undefined) { rcv.style.display = "none"; cap.textContent = "기준 이미지 없음: 이 카메라에서 끝낸 이미지가 아직 없습니다."; return; }
     const o = SPEC.images[c]; cap.textContent = `내가 끝낸 같은 카메라 이미지: ${o.image}`; rcv.style.display = "";
-    rim.onload = () => { rcv.width = 300; rcv.height = Math.round(300 * o.image_h / o.image_w); rctx.drawImage(rim, 0, 0, rcv.width, rcv.height);
+    rim.onload = () => { rcv.width = 340; rcv.height = Math.round(340 * o.image_h / o.image_w); rctx.drawImage(rim, 0, 0, rcv.width, rcv.height);
       points(rctx, state[o.image], rcv.width / o.image_w, rcv.height / o.image_h, 2, null); };
     if (rim.dataset.src !== o.image) { rim.dataset.src = o.image; rim.src = o.image; } else rim.onload();
   }
@@ -171,33 +171,28 @@ HTML = """<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name=
 body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif}
 main{display:flex;gap:16px;padding:16px;flex-wrap:wrap}
 canvas{border:1px solid var(--line);max-width:100%;max-height:92vh;cursor:crosshair}
-aside{width:320px;position:sticky;top:16px;align-self:flex-start;max-height:96vh;overflow:auto}details{margin:8px 0}summary{cursor:pointer;font-weight:700}
+aside{width:360px;position:sticky;top:16px;align-self:flex-start;max-height:96vh;overflow:auto}details{margin:8px 0}summary{cursor:pointer;font-weight:700}
 li{margin:2px 0}textarea{width:100%;box-sizing:border-box;font:inherit}#ref{border:1px solid var(--line);max-width:100%}.mut{color:var(--mut)}button,input{font:inherit}
 </style></head><body><main><div><h1 style="font-size:16px;margin:0 0 8px" id="title"></h1><canvas id="cv"></canvas></div>
-<aside><p id="next" style="font-weight:700"></p><p class="mut" id="count"></p><div id="legend"></div>
-<p><textarea id="note" rows="2" placeholder="이 이미지의 메모 (예: 앞발 좌우 불확실)"></textarea></p>
+<aside><p id="next" style="font-weight:700"></p><p class="mut" id="count"></p><div id="legend" style="columns:2;font-size:13px"></div>
+<p id="warn" style="color:#d9480f;font-weight:700"></p><details open id="exbox"><summary>예시 (모델 출력, 정답 아님)</summary><p class="mut" id="excap"></p><canvas id="ex" style="border:1px solid var(--line);max-width:100%"></canvas>
+<p class="mut">점의 정의를 익히는 용도다. 모델이 틀린 점도 있다. 예시와 내 눈이 다르면 내 눈을 따른다.</p></details><details open><summary>기준 이미지 (내 라벨)</summary><p class="mut" id="refcap"></p><canvas id="ref"></canvas></details><p><textarea id="note" rows="2" placeholder="이 이미지의 메모 (예: 앞발 좌우 불확실)"></textarea></p>
 <p><button id="export">Export CSV</button> <span class="mut">중간 저장용으로도 쓴다</span></p><p>Import CSV <input id="import" type="file" accept=".csv"></p>
-<details open><summary>조작</summary><ul>
-<li>클릭 = 보임 (visible 1)</li><li>Shift+클릭 = 가려졌지만 위치 추정 (visible 0)</li><li>S = 건너뜀 (빈칸)</li>
-<li>Backspace = 마지막 점 되돌리기</li><li>목록의 이름 클릭 = 그 keypoint 선택. 다음 클릭이 그 점을 다시 찍는다</li>
-<li>선택한 뒤 X 또는 Delete = 그 keypoint 만 지움. Esc = 선택 취소</li>
-<li>방향키 = 이전, 다음 이미지. Z = 확대. - 와 = 는 점 크기</li></ul></details>
-<details open><summary>라벨 규칙</summary><ul>
+<details open><summary>잘 모르겠을 때</summary><ul>
+<li>가려졌지만 몸의 모양으로 위치를 짐작할 수 있다: Shift+클릭</li>
+<li>화면 밖이거나 어디인지 짐작할 수 없다: S 로 건너뜀. 억지로 찍지 않는다</li>
+<li>좌우를 구분할 수 없다: 두 점 모두 S 로 건너뛰고 메모에 적는다</li>
+<li>규칙 자체가 애매하다: 아래 기준 이미지와 같은 방식으로 찍고 메모에 적는다</li></ul></details><details><summary>라벨 규칙</summary><ul>
 <li>한 사람이 모든 이미지를 찍는다</li><li>왼쪽, 오른쪽은 동물 자신의 기준이다</li>
 <li>바닥 카메라는 배 쪽 시점이다. 머리 방향 기준 화면 오른쪽이 동물의 왼쪽이다</li>
 <li>nose1 = 코끝. neck1 = 두 귀 사이 뒤쪽</li><li>earL1, earR1 = 귀 끝 (임시 규칙)</li>
 <li>foreleg, hindleg = 발 (바닥에 닿는 끝)</li><li>tailstart1 = 꼬리 시작. tailend1 = 꼬리 끝</li>
 <li>tail1 = 꼬리 시작과 꼬리 끝의 가운데 (임시 규칙)</li>
-<li>첫 이미지 메모에 ear=tip tail1=mid 를 적는다</li><li>예시 창 밖의 모델 출력과 selection.csv 는 보지 않는다</li></ul></details>
-<details open><summary>잘 모르겠을 때</summary><ul>
-<li>가려졌지만 몸의 모양으로 위치를 짐작할 수 있다: Shift+클릭</li>
-<li>화면 밖이거나 어디인지 짐작할 수 없다: S 로 건너뜀. 억지로 찍지 않는다</li>
-<li>좌우를 구분할 수 없다: 두 점 모두 S 로 건너뛰고 메모에 적는다</li>
-<li>규칙 자체가 애매하다: 아래 기준 이미지와 같은 방식으로 찍고 메모에 적는다</li></ul></details>
-<p id="warn" style="color:#d9480f;font-weight:700"></p>
-<details open id="exbox"><summary>예시 (모델 출력, 정답 아님)</summary><p class="mut" id="excap"></p><canvas id="ex" style="border:1px solid var(--line);max-width:100%"></canvas>
-<p class="mut">점의 정의를 익히는 용도다. 모델이 틀린 점도 있다. 예시와 내 눈이 다르면 내 눈을 따른다.</p></details>
-<details open><summary>기준 이미지 (내 라벨)</summary><p class="mut" id="refcap"></p><canvas id="ref"></canvas></details>
+<li>첫 이미지 메모에 ear=tip tail1=mid 를 적는다</li><li>예시 창 밖의 모델 출력과 selection.csv 는 보지 않는다</li></ul></details><details><summary>조작</summary><ul>
+<li>클릭 = 보임 (visible 1)</li><li>Shift+클릭 = 가려졌지만 위치 추정 (visible 0)</li><li>S = 건너뜀 (빈칸)</li>
+<li>Backspace = 마지막 점 되돌리기</li><li>목록의 이름 클릭 = 그 keypoint 선택. 다음 클릭이 그 점을 다시 찍는다</li>
+<li>선택한 뒤 X 또는 Delete = 그 keypoint 만 지움. Esc = 선택 취소</li>
+<li>방향키 = 이전, 다음 이미지. Z = 확대. - 와 = 는 점 크기</li></ul></details>
 <p class="mut">모델 출력은 일부러 보여 주지 않는다. 같은 keypoint 는 모든 이미지에서 같은 방식으로 찍는다.</p></aside></main>
 <script>__JS__</script></body></html>
 """
