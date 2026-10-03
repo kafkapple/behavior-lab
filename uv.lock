@@ -610,7 +610,9 @@ dlc = [
     { name = "deeplabcut", extra = ["modelzoo"] },
 ]
 labels = [
+    { name = "h5py" },
     { name = "pandas" },
+    { name = "pillow" },
 ]
 loaders = [
     { name = "h5py" },
@@ -672,6 +674,7 @@ requires-dist = [
     { name = "deeplabcut", extras = ["modelzoo"], marker = "extra == 'dlc'", specifier = ">=3.0.0rc1" },
     { name = "einops", specifier = ">=0.6" },
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.100" },
+    { name = "h5py", marker = "extra == 'labels'", specifier = ">=3.8" },
     { name = "h5py", marker = "extra == 'loaders'", specifier = ">=3.8" },
     { name = "h5py", marker = "extra == 'sleap'", specifier = ">=3.8" },
     { name = "hdbscan", marker = "extra == 'bsoid'", specifier = ">=0.8" },
@@ -689,6 +692,7 @@ requires-dist = [
     { name = "omegaconf", specifier = ">=2.3" },
     { name = "opencv-python-headless", marker = "extra == 'viz'", specifier = ">=4.8" },
     { name = "pandas", marker = "extra == 'labels'", specifier = ">=2.0" },
+    { name = "pillow", marker = "extra == 'labels'", specifier = ">=9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "python-multipart", marker = "extra == 'web'", specifier = ">=0.0.6" },

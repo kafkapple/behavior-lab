@@ -3,6 +3,7 @@
     python scripts/kp_compare.py assemble --avatar-dir <260929_AVATAR_SUBTLE_overlay_compare> --out preds/all.csv
     python scripts/kp_compare.py boxes --table preds/all.csv --model sleap_1423 --images-dir <gt_label dir> --out boxes.csv
     python scripts/kp_compare.py score --table preds/all.csv --calib config.toml --out results.json
+    python scripts/kp_compare.py report --avatar-dir <AVATAR dir> --out comparison.html   (needs all.csv and results.json in kp_gt_261003/)
 
 Inputs of `assemble` (AVATAR dir): selection.csv frames in `gt_label_261002/`, `outputs/<clip>_<model>.json.gz` (SUBTLE
 schema), `kp_gt_261003/<model>/<prefix>_cam{1-5}.csv` (DLC video CSV, one row per selection frame in order, so the video must be
@@ -78,8 +79,15 @@ def main() -> None:
     s.add_argument("--table", type=Path, required=True)
     s.add_argument("--calib", type=Path, required=True)
     s.add_argument("--out", type=Path, required=True)
+    r = sub.add_parser("report")
+    r.add_argument("--avatar-dir", type=Path, required=True)
+    r.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
-    if args.cmd == "assemble":
+    if args.cmd == "report":
+        from behavior_lab.pose.predictors.report import build
+
+        print(build(args.avatar_dir, args.out))
+    elif args.cmd == "assemble":
         df = assemble(args.avatar_dir, args.out)
         print(args.out, len(df), "rows;", sorted(df["model"].unique()))
     elif args.cmd == "boxes":

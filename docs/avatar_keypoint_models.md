@@ -59,7 +59,7 @@ plus `kp_model_selection` (status: plan). UNVERIFIED = read in a note, not confi
 - AVATAR rig (calibration, DLT, residuals): `src/behavior_lab/rig/avatar.py`, `docs/avatar_rig.md`
 - `src/behavior_lab/pose/predictors/`: long prediction table + SUBTLE/DLC adapters, body-part map, agreement and reprojection,
   model registry (15 candidates with status), runners `run_dlc.py` (SuperAnimal) and `run_vitpose.py` (ViTPose++ AP-10K)
-- `scripts/kp_compare.py` (assemble, boxes, score) and `scripts/kp_label_page.py` (human labelling page, no predictions shown)
+- `scripts/kp_compare.py` (assemble, boxes, score) and `scripts/kp_label_page.py` (human labelling page, no predictions shown), `scripts/slp_label_report.py` + `pose/slp_labels.py` (SLEAP label files without images: counts, outside-image points, train/val leakage, L/R check, dashboard), `kp_compare.py report` (comparison page)
 - Not wrapped as modules: SLEAP, YOLO and RT-DETR inference (their outputs are read from SUBTLE json), Lightning Pose, DANNCE
 
 ## Zero-shot run on the 150 GT images (2026-10-03, label-free)
