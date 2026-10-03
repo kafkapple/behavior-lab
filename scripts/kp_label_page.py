@@ -188,7 +188,7 @@ li{margin:2px 0}textarea{width:100%;box-sizing:border-box;font:inherit}#ref{bord
 <li>nose1 = 코끝. neck1 = 두 귀 사이 뒤쪽</li><li>earL1, earR1 = 귀 끝 (임시 규칙)</li>
 <li>foreleg, hindleg = 발 (바닥에 닿는 끝)</li><li>tailstart1 = 꼬리 시작. tailend1 = 꼬리 끝</li>
 <li>tail1 = 꼬리 시작과 꼬리 끝의 가운데 (임시 규칙)</li>
-<li>첫 이미지 메모에 ear=tip tail1=mid 를 적는다</li><li>모델 출력과 selection.csv 는 보지 않는다</li></ul></details>
+<li>첫 이미지 메모에 ear=tip tail1=mid 를 적는다</li><li>예시 창 밖의 모델 출력과 selection.csv 는 보지 않는다</li></ul></details>
 <details open><summary>잘 모르겠을 때</summary><ul>
 <li>가려졌지만 몸의 모양으로 위치를 짐작할 수 있다: Shift+클릭</li>
 <li>화면 밖이거나 어디인지 짐작할 수 없다: S 로 건너뜀. 억지로 찍지 않는다</li>
