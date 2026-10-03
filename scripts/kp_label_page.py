@@ -132,6 +132,9 @@ if (typeof document !== "undefined") {
     const r = cv.getBoundingClientRect(), img = SPEC.images[cur];
     place(img.image, (ev.clientX - r.left) * img.image_w / r.width, (ev.clientY - r.top) * img.image_h / r.height, ev.shiftKey ? 0 : 1);
   });
+  function go(d) { const n = cur + d; if (n >= 0 && n < SPEC.images.length) { cur = n; load(); } }
+  document.getElementById("prev").onclick = () => go(-1);
+  document.getElementById("nextimg").onclick = () => go(1);
   document.addEventListener("keydown", ev => {
     const img = SPEC.images[cur].image;
     if (ev.target === note) return;                    // typing a note must not trigger shortcuts
@@ -173,7 +176,7 @@ main{display:flex;gap:16px;padding:16px;flex-wrap:wrap}
 canvas{border:1px solid var(--line);max-width:100%;max-height:92vh;cursor:crosshair}
 aside{width:360px;position:sticky;top:16px;align-self:flex-start;max-height:96vh;overflow:auto}details{margin:8px 0}summary{cursor:pointer;font-weight:700}
 li{margin:2px 0}textarea{width:100%;box-sizing:border-box;font:inherit}#ref{border:1px solid var(--line);max-width:100%}.mut{color:var(--mut)}button,input{font:inherit}
-</style></head><body><main><div><h1 style="font-size:16px;margin:0 0 8px" id="title"></h1><canvas id="cv"></canvas></div>
+</style></head><body><main><div><h1 style="font-size:16px;margin:0 0 8px"><button id="prev">◀ 이전</button> <button id="nextimg">다음 ▶</button> <span id="title"></span></h1><canvas id="cv"></canvas></div>
 <aside><p id="next" style="font-weight:700"></p><p class="mut" id="count"></p><div id="legend" style="columns:2;font-size:13px"></div>
 <p id="warn" style="color:#d9480f;font-weight:700"></p><details open id="exbox"><summary>예시 (모델 출력, 정답 아님)</summary><p class="mut" id="excap"></p><canvas id="ex" style="border:1px solid var(--line);max-width:100%"></canvas>
 <p class="mut">점의 정의를 익히는 용도다. 모델이 틀린 점도 있다. 예시와 내 눈이 다르면 내 눈을 따른다.</p></details><details open><summary>기준 이미지 (내 라벨)</summary><p class="mut" id="refcap"></p><canvas id="ref"></canvas></details><p><textarea id="note" rows="2" placeholder="이 이미지의 메모 (예: 앞발 좌우 불확실)"></textarea></p>
@@ -192,7 +195,7 @@ li{margin:2px 0}textarea{width:100%;box-sizing:border-box;font:inherit}#ref{bord
 <li>클릭 = 보임 (visible 1)</li><li>Shift+클릭 = 가려졌지만 위치 추정 (visible 0)</li><li>S = 건너뜀 (빈칸)</li>
 <li>Backspace = 마지막 점 되돌리기</li><li>목록의 이름 클릭 = 그 keypoint 선택. 다음 클릭이 그 점을 다시 찍는다</li>
 <li>선택한 뒤 X 또는 Delete = 그 keypoint 만 지움. Esc = 선택 취소</li>
-<li>방향키 = 이전, 다음 이미지. Z = 확대. - 와 = 는 점 크기</li></ul></details>
+<li>방향키 또는 위의 이전, 다음 버튼 = 이미지 이동. 메모 칸에 커서가 있으면 방향키가 듣지 않는다. Z = 확대. - 와 = 는 점 크기</li></ul></details>
 <p class="mut">모델 출력은 일부러 보여 주지 않는다. 같은 keypoint 는 모든 이미지에서 같은 방식으로 찍는다.</p></aside></main>
 <script>__JS__</script></body></html>
 """
