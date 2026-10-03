@@ -144,6 +144,10 @@ def split_composite(
                 "-pix_fmt",
                 "yuv420p",
                 "-an",
+                # one input frame -> one output frame: the default cfr sync duplicated one frame of a
+                # 11,998-frame source (599.95 s x 20 fps = 11,999 slots, eren 261004) and shifted every index after it
+                "-fps_mode",
+                "passthrough",
                 *cap,
                 str(dst),
             ],
