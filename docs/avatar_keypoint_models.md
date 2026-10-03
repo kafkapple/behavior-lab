@@ -29,10 +29,9 @@ plus `kp_model_selection` (status: plan). UNVERIFIED = read in a note, not confi
 |---|---|
 | SLEAP retrain / fine-tune | planned after hand labels; blocked: training package and weights not reachable (UNVERIFIED path) |
 | Lightning Pose (+EKS) | planned, not installed on any host searched; multi-view LP has no context frames or unsupervised losses yet |
-| SuperAnimal-TopViewMouse | judged unsuitable (top view only; AVATAR has one bottom camera) |
 | DANNCE / s-DANNCE | no AVATAR mention found; appear only as datasets and as "dropped to v0.3" in `kp_benchmark_v0.1.md` |
 | DeepLabCut own training | none on AVATAR; the DLC scripts here target MAMMAL / Li 2023 |
-| MAMMAL, SBeA, PoseSplatter, ViTPose, RTMPose | no AVATAR keypoint use found |
+| MAMMAL, SBeA, PoseSplatter, RTMPose | no AVATAR keypoint use found; RTMPose skipped (AP-10K domain, same as ViTPose++) |
 
 "No mention found" covers the searched paths only (vault, this repo, BehaviorSplatter notes), not the hosts.
 
@@ -58,7 +57,19 @@ plus `kp_model_selection` (status: plan). UNVERIFIED = read in a note, not confi
 - DLC: scaffolds for MAMMAL / Li 2023 (`scripts/01_train_dlc_resnet50.sh` to `04_zeroshot_superanimal.sh`, `benchmark_kp_dlc.py`)
 - `scripts/sbea_export_dlc_csv.py` writes predictions (with likelihood) for the SBeA triangulator; it is not the label exporter
 - AVATAR rig (calibration, DLT, residuals): `src/behavior_lab/rig/avatar.py`, `docs/avatar_rig.md`
-- No pose predictor (Lightning Pose, SuperAnimal, YOLO, RT-DETR, DANNCE) is wrapped as a module
+- `src/behavior_lab/pose/predictors/`: long prediction table + SUBTLE/DLC adapters, body-part map, agreement and reprojection,
+  model registry (15 candidates with status), runners `run_dlc.py` (SuperAnimal) and `run_vitpose.py` (ViTPose++ AP-10K)
+- `scripts/kp_compare.py` (assemble, boxes, score) and `scripts/kp_label_page.py` (human labelling page, no predictions shown)
+- Not wrapped as modules: SLEAP, YOLO and RT-DETR inference (their outputs are read from SUBTLE json), Lightning Pose, DANNCE
+
+## Zero-shot run on the 150 GT images (2026-10-03, label-free)
+
+- 9 predictors on the same images: 6 existing + SuperAnimal-Quadruped + SuperAnimal-TopViewMouse + ViTPose++ AP-10K
+- Median distance to SLEAP 1423 (px): SuperAnimal-Quadruped nose 5, tail base 9; TopViewMouse nose 6, tail base 8; ViTPose++ nose 51, tail base 182
+- Reprojection median (px): SLEAP 1423 8.6, SuperAnimal-Quadruped 9.3 (90 of 790 candidates triangulated), TopViewMouse 10.2, ViTPose++ 60.3
+- Pitfalls found: a DLC video must be built from the selection images only (an earlier 30-frame page set is disjoint from the GT frames and gave 132 px);
+  the ViTPose++ checkpoint's id2label is COCO-17 order, the AP-10K expert needs the mmpose AP-10K order
+- Page: vault `260929_AVATAR_SUBTLE_overlay_compare/261003_AVATAR_keypoint_predictor_comparison.html`
 
 ## Priority of what remains
 
