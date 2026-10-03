@@ -43,6 +43,7 @@ def test_page_embeds_spec_and_has_no_prediction_source(tmp_path):
     html = out.read_text()
     assert '"keypoints": ["nose1", "neck1", "tail1"]' in html
     assert "predict" not in html.split("<script>")[1].lower().replace("predictions are never shown", "")
+    assert "라벨 규칙" in html and "잘 모르겠을 때" in html and 'id="ref"' in html
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node needed to run the page logic")
@@ -67,3 +68,25 @@ def test_js_export_roundtrips_through_the_validator(tmp_path):
     assert pd.isna(first.loc["tail1", "visible"])               # skipped = blank
     assert df[df.frame == 7]["visible"].isna().all()            # undone
     assert first.loc["nose1", "x_px"] == pytest.approx(10.0)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node needed to run the page logic")
+def test_one_keypoint_can_be_replaced_or_cleared_and_the_note_lands_once(tmp_path):
+    out = page.build(_template(tmp_path), tmp_path / "p.html")
+    (tmp_path / "page.js").write_text(out.read_text().split("<script>")[1].split("</script>")[0])
+    img = "images/f003_cam1.jpg"
+    (tmp_path / "drive.js").write_text(
+        "const m = require('./page.js'); m.state = {};\n"
+        f"const i = '{img}'; m.place(i, 1, 1, 1); m.place(i, 2, 2, 1); m.place(i, 3, 3, 1);\n"
+        "m.select('neck1'); m.place(i, 50, 60, 0);\n"          # re-place the selected keypoint only
+        "m.select('tail1'); m.clearKp(i, 'tail1');\n"          # clear one keypoint, the others stay
+        "m.setNote(i, 'ear=tip, tail1=mid');\n"
+        "process.stdout.write(m.csv());")
+    res = subprocess.run(["node", "drive.js"], cwd=tmp_path, capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    (tmp_path / "labels.csv").write_text(res.stdout)
+    df = load_label_table(tmp_path / "labels.csv", keypoints=KP)
+    first = df[df.frame == 3].set_index("keypoint")
+    assert (first.loc["nose1", "x_px"], first.loc["neck1", "x_px"], first.loc["neck1", "visible"]) == (1.0, 50.0, 0)
+    assert pd.isna(first.loc["tail1", "visible"])
+    assert list(df["note"].dropna()) == ["ear=tip  tail1=mid"]          # once per image, comma removed
