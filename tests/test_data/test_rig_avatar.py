@@ -123,4 +123,4 @@ def test_split_writes_cells_and_manifest_and_probes_agree(calib, tmp_path):
     assert avatar._probe(paths[2]) == (1200, 1200, 6)
     manifest = json.loads((out / "rec_split.json").read_text())
     assert manifest["frames"] == 6 and manifest["cells"]["cam_5"] == [1200, 1000, 1200, 1000]
-    assert avatar._probe_ffmpeg(comp) == avatar._probe(comp) == (3600, 2000, 6)
+    assert avatar._probe_cv2(comp) == avatar._probe(comp) == (3600, 2000, 6)

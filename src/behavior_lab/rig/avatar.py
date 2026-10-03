@@ -24,11 +24,11 @@ import datetime as dt
 import gzip
 import json
 import os
-import re
 import shutil
 import subprocess
 from pathlib import Path
 
+import cv2
 import numpy as np
 import tomllib
 import yaml
@@ -63,23 +63,24 @@ def cells(calib: str | Path) -> dict[str, tuple[int, int, int, int]]:
     return cs
 
 
-def _probe_ffmpeg(p: Path) -> tuple[int, int, int]:
-    """Same triple without ffprobe (eren has only the imageio ffmpeg binary): decodeless pass."""
-    err = subprocess.run(
-        [FFMPEG, "-nostdin", "-i", str(p), "-map", "0:v:0", "-c", "copy", "-f", "null", "-"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stderr
-    size = re.search(r"Video:.*?, (\d{2,5})x(\d{2,5})", err)
-    frames = re.findall(r"frame=\s*(\d+)", err)
-    assert size and frames, f"could not read size and frame count of {p.name} from ffmpeg"
-    return int(size[1]), int(size[2]), int(frames[-1])
+def _probe_cv2(p: Path) -> tuple[int, int, int]:
+    """Same triple without ffprobe (eren has only the imageio ffmpeg binary): container metadata via OpenCV.
+
+    ffmpeg's own stats show no frame counter for a stream copy (eren build, 261004), so it cannot count.
+    """
+    cap = cv2.VideoCapture(str(p))
+    try:
+        w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    finally:
+        cap.release()
+    assert w and h and n, f"OpenCV could not read size and frame count of {p.name}"
+    return w, h, n
 
 
 def _probe(p: Path) -> tuple[int, int, int]:
     if not FFPROBE:
-        return _probe_ffmpeg(p)
+        return _probe_cv2(p)
     out = (
         subprocess.run(
             [
