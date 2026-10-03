@@ -18,8 +18,12 @@ tr.g td{background:var(--card);font-weight:700}#grid{flex:1;display:grid;grid-te
 #leg div{white-space:nowrap}.sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}"""
 
 
-def build(avatar_dir: str | Path, out: str | Path) -> Path:
-    """avatar_dir holds gt_label_*/images/ and kp_gt_*/{all.csv, results.json} (see scripts/kp_compare.py)."""
+def build(avatar_dir: str | Path, out: str | Path, embed: dict[str, str | Path] | None = None) -> Path:
+    """avatar_dir holds gt_label_*/images/ and kp_gt_*/{all.csv, results.json} (see scripts/kp_compare.py).
+
+    `embed` maps a tab title to another self-contained report page (e.g. the SLEAP training-label dashboard); each is shown in an iframe,
+    so the pages keep their own scripts and one file carries the whole dashboard.
+    """
     from PIL import Image
 
     DIR, OUT = Path(avatar_dir), Path(out)
@@ -121,5 +125,16 @@ conf ≥ <input id="th" type="range" min="0" max="0.95" step="0.05" value="0.5">
 <li>ViTPose++ AP-10K names follow mmpose ap10k.py; the checkpoint's own label list is COCO-17 order and would swap eyes, nose and neck.</li>
 <li>Lightning Pose, DLC training, SLEAP retraining and DANNCE need labels (DANNCE also 3D and calibration) and are not run.</li></ul>
 """
+    if embed:
+        import html as _html
+
+        tabs = ["Predictors", *embed]
+        bar = "".join(f'<button class="tb" data-i="{i}">{_html.escape(t)}</button> ' for i, t in enumerate(tabs))
+        frames = "".join(f'<div class="tab" data-i="{i + 1}" hidden><iframe loading="lazy" style="width:100%;height:3200px;border:0" srcdoc="{_html.escape(Path(f).read_text(), quote=True)}"></iframe></div>'
+                         for i, f in enumerate(embed.values()))
+        switch = "<script>document.querySelectorAll('.tb').forEach(b=>b.onclick=()=>{const i=b.dataset.i;document.querySelectorAll('.tab').forEach(t=>t.hidden=t.dataset.i!==i)})</script>"
+        body = f'<div style="margin-bottom:12px">{bar}</div><div class="tab" data-i="0">{body}</div>{frames}'
+        OUT.write_text(page("AVATAR keypoint dashboard", body, js, data, EXTRA_CSS).replace("</body>", switch + "</body>"))
+        return OUT
     OUT.write_text(page("AVATAR keypoint predictor comparison", body, js, data, EXTRA_CSS))
     return OUT

@@ -121,5 +121,9 @@ def test_predictor_report_builds_from_a_minimal_directory(tmp_path):
         "detection": {m: {"cells": 4, "detected": 1.0, "confident": 1.0} for m in ("sleap_1423", "superanimal_quadruped")},
         "reprojection": [{"model": m, "n_triangulated": 0, "n_candidates": 2, "median_px": None, "p90_px": None} for m in ("sleap_1423", "superanimal_quadruped")],
         "agreement": [{"a": "sleap_1423", "b": "superanimal_quadruped", "part": "nose", "n": 2, "median_px": 1.5, "p90_px": 2.0}]}))
+    side = tmp_path / "side.html"
+    side.write_text('<html><body>"quoted" <b>x</b></body></html>')
+    one = report.build(tmp_path, tmp_path / "one.html", embed={"Training labels": side}).read_text()
+    assert "Training labels" in one and "srcdoc=" in one and "&quot;quoted&quot;" in one and '<div class="tab" data-i="0">' in one
     html = report.build(tmp_path, tmp_path / "cmp.html").read_text()
     assert "SuperAnimal-Quadruped" in html and "Lightning Pose" in html and '"kn"' in html and "1.5" in html

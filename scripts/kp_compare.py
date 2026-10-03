@@ -82,11 +82,12 @@ def main() -> None:
     r = sub.add_parser("report")
     r.add_argument("--avatar-dir", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
+    r.add_argument("--embed", action="append", default=[], help="TITLE=path/to/page.html, shown as a tab")
     args = ap.parse_args()
     if args.cmd == "report":
         from behavior_lab.pose.predictors.report import build
 
-        print(build(args.avatar_dir, args.out))
+        print(build(args.avatar_dir, args.out, dict(e.split("=", 1) for e in args.embed) or None))
     elif args.cmd == "assemble":
         df = assemble(args.avatar_dir, args.out)
         print(args.out, len(df), "rows;", sorted(df["model"].unique()))

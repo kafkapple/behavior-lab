@@ -28,7 +28,7 @@ plus `kp_model_selection` (status: plan). UNVERIFIED = read in a note, not confi
 | Method | State |
 |---|---|
 | SLEAP retrain / fine-tune | planned after hand labels. Labels and weights are readable on justingpu1 `~/spkim/SUBTLE_gpu/model/SLEAP/260504.single_instance.n=1423-1/` (1280 train + 142 val labelled frames, 289 of them AVATAR). The embedded images (`20260504_reorganize.pkg.slp`) were not found there; source videos are `D:/spkim/data/AVATAR_split/*` (checked 2026-10-03) |
-| Lightning Pose (+EKS) | planned; installed on justingpu1 (conda env `ltn-pose`, repo `~/spkim/coding/lightning-pose`, seen 2026-10-03, import not tested); multi-view LP has no context frames or unsupervised losses yet |
+| Lightning Pose (+EKS) | planned; installed on justingpu1 (conda env `ltn-pose`, repo `~/spkim/coding/lightning-pose`, seen 2026-10-03, import not tested). Also installs and imports on WSL with `uv run --python 3.10 --with lightning-pose` (lightning_pose 2.4.2, torch 2.14.1+cu130, cuda True; training not run); multi-view LP has no context frames or unsupervised losses yet |
 | DANNCE / s-DANNCE | no AVATAR mention found; appear only as datasets and as "dropped to v0.3" in `kp_benchmark_v0.1.md` |
 | DeepLabCut own training | none on AVATAR; the DLC scripts here target MAMMAL / Li 2023 |
 | MAMMAL, SBeA, PoseSplatter, RTMPose | no AVATAR keypoint use found; RTMPose skipped (AP-10K domain, same as ViTPose++) |
