@@ -6,6 +6,7 @@ import collections
 import json
 import logging
 import mimetypes
+import re
 import sys
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -42,7 +43,17 @@ def _routes(root: Path):
             raise ValueError("no 2D keypoints in this file")
         return {"cam": cam, "kp": np.round(core.kp_cell(s, cam), 4).tolist()}
 
+    docs = HERE.parents[1] / "docs" / "dev"  # manuals shown in the page: docs/dev/subtle_*.md
+
+    def doc(q):
+        name = q["name"][0]
+        if not re.fullmatch(r"subtle_[\w\-]+\.md", name) or not (docs / name).is_file():
+            raise ValueError(f"unknown doc {name}")
+        return {"name": name, "text": (docs / name).read_text(encoding="utf-8")}
+
     return {
+        "docs": lambda q, b: sorted(p.name for p in docs.glob("subtle_*.md")),
+        "doc": lambda q, b: doc(q),
         "kp2d": lambda q, b: kp2d(q),
         "sessions": lambda q, b: core.scan(root),
         "session": lambda q, b: session(q),
@@ -50,8 +61,9 @@ def _routes(root: Path):
         "project": lambda q, b: core.load_project(root, q["name"][0]),
         "save_project": lambda q, b: {"saved": core.save_project(root, b)},
         "frequency": lambda q, b: core.frequency(root, core.load_project(root, q["name"][0]),
-                                                  q.get("level", ["super"])[0]),
-        "analyze": lambda q, b: {"job": core.start_job(root, b["paths"], int(b.get("max_frames", 0)))},
+                                                  q.get("level", ["super"])[0],
+                                                  int(q["sl"][0]) if "sl" in q else None),
+        "analyze": lambda q, b: {"job": core.start_job(root, b["paths"], int(b.get("max_frames", 0)), b.get("seed"))},
         "job": lambda q, b: {k: v for k, v in core.JOBS[q["id"][0]].items()} | {
             "elapsed": round(__import__("time").time() - core.JOBS[q["id"][0]]["t0"], 1)},
         "log": lambda q, b: list(LOGBUF),

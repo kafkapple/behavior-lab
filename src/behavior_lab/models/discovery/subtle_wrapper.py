@@ -49,6 +49,7 @@ class SUBTLEConfig:
     use_superclusters: bool = True
     isolate: bool = False
     timeout: int = 600
+    seed: Optional[int] = None  # None = SUBTLE's own unseeded behavior (UMAP, Leiden, DIB sampling all random)
     extra: dict = field(default_factory=dict)
 
     @classmethod
@@ -162,13 +163,13 @@ class SUBTLE:
 
     def __init__(self, fps: int = 20, n_train_frames: int = 120_000,
                  embedding_method: str = "umap", config: Optional[SUBTLEConfig] = None,
-                 **kwargs):
+                 seed: Optional[int] = None, **kwargs):
         if config is not None:
             self.config = config
         else:
             self.config = SUBTLEConfig(
                 fps=fps, n_train_frames=n_train_frames,
-                embedding_method=embedding_method, extra=kwargs,
+                embedding_method=embedding_method, seed=seed, extra=kwargs,
             )
         self._mapper = None
 
@@ -218,6 +219,14 @@ class SUBTLE:
         self._mapper = subtle.Mapper(
             fs=self.config.fps, n_train_frames=self.config.n_train_frames,
             embedding_method=self.config.embedding_method, **self.config.extra)
+        if self.config.seed is not None:  # the Mapper takes no seed: fix numpy (DIB, sampling) and UMAP here
+            import random
+            random.seed(self.config.seed)
+            np.random.seed(self.config.seed)
+            from umap import UMAP
+            self._mapper.umap = UMAP(n_neighbors=50, n_components=2, random_state=self.config.seed)
+            from subtle.module import Phenograph  # Leiden/Louvain: phenograph.cluster takes `seed`
+            self._mapper.pheno = Phenograph(seed=self.config.seed)
         data_list = self._mapper.fit(flat)
 
         # Mapper.Z/y/Y are in shuffled training order (Mapper.fit permutes frames before
@@ -309,6 +318,7 @@ assert [len(s) for s in seqs] == src['lengths'].tolist()
 config = SUBTLEConfig(fps={self.config.fps},
                       n_train_frames={self.config.n_train_frames},
                       use_superclusters={use_super},
+                      seed={self.config.seed},
                       isolate=False)
 model = SUBTLE(config=config)
 t0 = time.time()

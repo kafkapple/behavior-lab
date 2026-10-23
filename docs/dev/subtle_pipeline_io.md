@@ -35,6 +35,19 @@ Line numbers are for the clone of 261023; re-check after a `git pull` there.
 - Our wrapper (`behavior_lab.models.discovery.subtle_wrapper`, `_preprocess`) does the same centering (with `nanmean`). 261023 correction: an earlier version of this note said the wrapper skipped it; that was wrong.
 - What can still differ: Mapper parameters (`fs`, `embedding_method`, `n_train_frames`). The app takes them from its form; the viewer uses the wrapper defaults (20 fps, 120,000 frames, umap). The app's default values were not found yet.
 
+## 4b. Randomness and supercluster levels (verified in `engine/subtle/mapper.py` and `module.py`)
+- The Justin app sets no seed anywhere (no `seed` or `random_state` in the app, celery tasks or utils).
+- Random parts of one fit:
+  - `UMAP(n_neighbors=50, n_components=2)` has no `random_state` (`mapper.py:69`).
+  - `Phenograph()` clusters the 2D embedding with Leiden (k=30, min cluster size 10); `phenograph.cluster` accepts `seed`, the engine does not pass it.
+  - Training frames are sampled with `np.random` when there are more than `n_train_frames` (`mapper.py:147`, `176`).
+  - `run_DIB` draws a random beta and a random cluster count k at each of N=1000 iterations (`module.py:269-270`), so the supercluster solutions are random.
+- Subclusters: Phenograph decides the number; it was 39-55 in our 8-animal fits.
+- Superclusters: `Y` is (frames, levels). Each column is one DIB solution with its own number of clusters (min 2, max 30 in `run_DIB`).
+- The app lets the user pick a level (`subtleSuperclusterSize`); the number of superclusters is therefore chosen after the fit, not set before it.
+- Our wrapper's default picks the level with the most clusters; the viewer now lists all levels (`L0: n clusters`).
+- Why two fits gave 4 and 5 clusters (261023): same 8 animals, first 3,000 frames each, default settings, no seed. The number of levels DIB finds changed from run to run.
+
 ## 5. File names
 - The app finds the video of a result through database file ids (`resize_file_id`); the fallback strips `_det.json.gz` from the name.
 - Our viewer pairs by stem (name minus `_det`, `_sleap_*`), in any subfolder.

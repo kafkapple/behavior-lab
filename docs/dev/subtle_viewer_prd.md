@@ -62,7 +62,7 @@ Legend: ✅ done and checked, 🟡 done, not checked in a browser, ⬜ not start
 | Cluster levels | subcluster and supercluster mode | 🟡 both, switch in the page |
 | 3D skeleton playback | modal with frame slider, speed, grid | 🟡 canvas, frame slider, drag rotate |
 | Video next to skeleton | by file id | 🟡 by file stem; never tested with a real video |
-| Group comparison with saved groups | not found in the app | ✅ projects, groups, metadata, saved as json |
+| Group comparison | DEK tab: group A vs B, per cluster and kinematic feature, Welch t-test, heatmap (`calculateDekStatistics`) | 🟡 saved groups and cluster frequency only; no kinematic comparison yet (P10) |
 | Frequency table with sum check | not found in the app | ✅ sum = 100 and one-fit check, asserted in selftest |
 | Cluster id to color | per page | ✅ one function for all views |
 | Overlay on video (2D points on 5 cameras) | not found | ⬜ PRD P5 |
@@ -96,5 +96,33 @@ Goal: the viewer must not stay tied to SUBTLE or to the AVATAR 5-camera rig.
 | Cluster map (embedding scatter) | 🟡 zoom, pan, click to jump; needs the embedding stored by the job (stored from 261023) |
 | 2D keypoints on the raw video | 🟡 camera cell mapping checked on one frame (points on the mouse); bones colored by cluster |
 | Note: the Justin app has no keypoint-on-video overlay | video is shown next to the 3D skeleton only (`infer_api.js` has no drawing on the video) |
-| Open: reproducibility | 🔴 two joint fits of the same 8 animals gave 4 and 5 super clusters (261023). No random seed is set in the wrapper call. Fix before any group claim: fixed seed, then repeat the fit and compare. |
+| Reproducibility | ✅ with `seed=0` (numpy, random, UMAP, Phenograph) two joint fits of the 8 animals gave identical sub and super labels (55 subclusters, 5 levels, 261023). Earlier unseeded fits differed (4 vs 5 levels). Note: the first 'seeded' tests were not seeded because the seed did not reach the isolated subprocess; fixed in `SUBTLE.__init__`. |
 | Open: video in a real browser | headless capture showed the overlay but a black video area; Range serving and codec (H.264 High, yuv420p) checked by request, playback itself not confirmed |
+
+### Further differences found 261023
+| Function | Justin app | SUBTLE Lite Viewer |
+|---|---|---|
+| Train a model, save it, load it, map new files | train task stores the Mapper as `.pkl`; analysis task loads it (`celery_tasks.py`) | ⬜ P9 (the wrapper already has save, load, predict) |
+| Supercluster size choice | select box over the DIB levels (`subtleSuperclusterSize`) | 🟡 level select (`L0: n clusters`) |
+| Cluster select all or none, replay | `selectAllClustersBtn`, `selectNoneClustersBtn`, `clusterSelectionInput` | 🟡 click chips, double-click solo, replay skips other clusters, next bout |
+| Kinematics (angle, edge, vertex; DEK) | `Kinematics` class, per-cluster means, group heatmap | ⬜ P10 |
+| Significance stars | not found (Welch t-test p-value is computed with a self-made t CDF approximation; no multiple-comparison correction) | ⬜ P11 |
+| Seed | none anywhere in the app | 🟡 seed field (default 0) |
+| Video next to skeleton | `View switch` button shows video or skeleton, an `_resize.mp4` copy is used | 🟡 video with 2D keypoint overlay (the desktop `SUBTLE_tools/label_editor.py` has a Skeleton overlay on video) |
+| Manuals | none in the app | 🟡 Manuals list in the page |
+
+## 9. Stages requested 261023 (plan; each stage = own commit and own check)
+- P9 Train, save, load, map.
+  - Job types `train` (fit on chosen sessions, save `model.pkl` and `model.json` with config, seed, training sessions, frames, cluster counts per level, model id) and `map` (load model, `predict_raw`, write sidecars whose `fit_id` is the model id).
+  - Check: map the training sessions with the saved model; report the label agreement with the training labels; frequency refuses sessions with different model ids (already true for `fit_id`).
+  - Needs only keypoints (`.json.gz` with `skeleton3d`); a video is optional.
+- P10 Kinematics and DEK.
+  - Reuse `engine/subtle/kinematics.py` (101 lines) or the public `subtle.Kinematics` and `avatar_configs`; the viewer's own copy only if the import is not possible.
+  - Per animal, per cluster mean of each feature; group A vs B with `scipy.stats.ttest_ind(equal_var=False)`; optional permutation test for small n; Benjamini-Hochberg correction as an option; heatmap of t with stars.
+- P11 Cluster statistics and plots.
+  - Unit = animal. Per cluster: pct per animal, group test (exact permutation by default), bar or box plot with one dot per animal, stars ( * p<0.05, ** p<0.01, *** p<0.001 ) after the chosen correction, n shown.
+- P12 Reproducibility.
+  - SUBTLE randomness: UMAP has no `random_state`; Phenograph uses Leiden; DIB draws random beta and cluster count (`module.py:269-270`); frame sampling uses `np.random`.
+  - The wrapper now takes `seed` (numpy, random, UMAP). Leiden is not seeded by it: check by repeating the fit.
+  - Show the agreement between two seeds (adjusted Rand index) on the page.
+- P13 Manuals in the viewer: the Manuals list reads `docs/dev/subtle_*.md`; this PRD, the pipeline note and the viewer manual are listed.

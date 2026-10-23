@@ -155,7 +155,7 @@ def list_projects(root: Path) -> list[str]:
     return sorted(p.name.removesuffix(".project.json") for p in project_dir(root).glob("*.project.json"))
 
 
-def frequency(root: Path, proj: dict, level: str = "super") -> dict:
+def frequency(root: Path, proj: dict, level: str = "super", sl: int | None = None) -> dict:
     """Per-group cluster pct. ok=False when a group's pct sum is not 100 or a session has no labels."""
     key, res, fits = ("super" if level == "super" else "sub"), {}, set()
     for g, sessions in proj.get("groups", {}).items():
@@ -167,7 +167,7 @@ def frequency(root: Path, proj: dict, level: str = "super") -> dict:
             if lab is None:
                 missing.append(rel)
                 continue
-            cnt.update(int(x) for x in np.asarray(lab).reshape(len(lab), -1)[:, -1])
+            cnt.update(int(x) for x in pick_level(lab, sl))
         n = sum(cnt.values())
         pct = {str(c): 100.0 * v / n for c, v in sorted(cnt.items())} if n else {}
         total = sum(pct.values())
@@ -184,6 +184,14 @@ def _job_log(j: dict, msg: str) -> None:
     log.info("job %s: %s", j["id"], msg)
 
 
+def pick_level(lab, sl: int | None = None) -> np.ndarray:
+    """1-D labels from sub (1-D) or super (T, levels). sl=None -> the level with the most clusters (wrapper default)."""
+    a = np.asarray(lab)
+    if a.ndim == 1:
+        return a
+    return a[:, int(np.argmax([len(np.unique(a[:, j])) for j in range(a.shape[1])])) if sl is None else sl]
+
+
 def split_by_lengths(labels, lengths: list[int]) -> list[list]:
     """Cut the concatenated joint-fit labels back into one list per session; length must match exactly."""
     assert len(labels) == sum(lengths), f"label count {len(labels)} != frames {sum(lengths)}"
@@ -191,18 +199,18 @@ def split_by_lengths(labels, lengths: list[int]) -> list[list]:
     return [np.asarray(labels[a:b]).tolist() for a, b in zip(cuts[:-1], cuts[1:])]
 
 
-def start_job(root: Path, paths: list[str], max_frames: int = 0) -> str:
+def start_job(root: Path, paths: list[str], max_frames: int = 0, seed: int | None = None) -> str:
     """One SUBTLE fit over ALL given sessions, so cluster ids mean the same thing in every session."""
     j = {"id": uuid.uuid4().hex[:8], "paths": paths, "stage": "queued", "pct": 0, "t0": time.time(),
          "done": False, "error": None, "log": []}
     JOBS[j["id"]] = j
     while len(JOBS) > JOBS_MAX:
         JOBS.popitem(last=False)
-    threading.Thread(target=_run_job, args=(root, j, max_frames), daemon=True).start()
+    threading.Thread(target=_run_job, args=(root, j, max_frames, seed), daemon=True).start()
     return j["id"]
 
 
-def _run_job(root: Path, j: dict, max_frames: int) -> None:
+def _run_job(root: Path, j: dict, max_frames: int, seed: int | None) -> None:
     try:
         j.update(stage="load", pct=10)
         seqs = []
@@ -214,17 +222,18 @@ def _run_job(root: Path, j: dict, max_frames: int) -> None:
         lengths = [len(s) for s in seqs]
         j.update(stage=f"joint fit on {len(seqs)} sessions (UMAP + clustering, isolated subprocess)", pct=30)
         from behavior_lab.models.discovery.subtle_wrapper import SUBTLE
-        res = SUBTLE(fps=20).fit_predict(seqs, use_superclusters=True, isolate=True)
+        res = SUBTLE(fps=20, seed=seed).fit_predict(seqs, use_superclusters=True, isolate=True)
         j.update(stage="write", pct=90)
         sub = res.metadata.get("subclusters")
-        sup_parts = split_by_lengths(np.asarray(res.labels), lengths)
+        sup_all = res.metadata.get("superclusters")  # (T, levels): one column per DIB solution, coarse to fine as returned
+        sup_parts = split_by_lengths(np.asarray(sup_all if sup_all is not None else res.labels), lengths)
         sub_parts = split_by_lengths(np.asarray(sub), lengths) if sub is not None else [None] * len(seqs)
         fit_id = uuid.uuid4().hex[:8]  # same id on every session of this fit; frequency() requires one id per project
         emb = getattr(res, "embeddings", None)
         emb_parts = split_by_lengths(np.round(np.asarray(emb), 3), lengths) if emb is not None else [None] * len(seqs)
         for rel, a, b, e, n in zip(j["paths"], sub_parts, sup_parts, emb_parts, lengths):
             _side(safe(root, rel)).write_text(json.dumps(
-                {"subcluster": a, "supercluster": b, "embedding": e, "n_frames": n, "fit_id": fit_id,
+                {"subcluster": a, "supercluster": b, "embedding": e, "n_frames": n, "fit_id": fit_id, "seed": seed,
                  "fit_sessions": j["paths"]}))
         _CACHE.clear()  # sidecars changed
         j.update(stage="done", pct=100)
