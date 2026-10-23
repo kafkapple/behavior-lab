@@ -51,14 +51,24 @@
   - Not excluded: frames whose 3D points were copied from earlier frames (the viewer's loader reads no per-frame flag). Speed terms of such frames are zero, so read speed differences with care.
 
 ## Level sweep and saved results
-- Question it answers: which number of superclusters (level) shows a group difference, without fooling ourselves by trying many.
-- Stats tab, `Sweep n`: for every level with at least 2 clusters, the |Welch t| of each cluster's per-animal share. The null is every split of the animals into groups of the observed sizes (exact up to 20,000 splits).
-- Selection correction (max-T): each p is the share of null splits whose maximum over all levels and clusters reaches the observed value. The recommended n is the level whose best |t| is largest relative to its own null 95 percent line; the headline p_fw covers the choice of level too.
-- Reading it: if no cluster is below .05 after this correction, the page says so in red and recommends nothing to report. With 3 vs 5 animals the smallest possible p is 0.0179 (1 of 56 splits).
+- Question it answers: which number of superclusters (level) shows a group difference, without fooling ourselves by trying many levels.
+- "Most clusters" is not a valid rule: it ignores the data. The sweep compares every level on one criterion chosen before looking (select next to `Sweep n`).
+  - `omnibus` (default): PERMANOVA pseudo-F on Hellinger-transformed shares of all clusters together. One number per level; handles the sum-to-100 constraint; no cluster multiplicity.
+  - `maxt`: the largest |Welch t| of any cluster.
+  - `nsig`: number of clusters whose raw permutation p is below .05.
+  - `meanp`: mean raw permutation p over the clusters (lower is better).
+- Null and selection correction: every criterion is a statistic with its own null over all splits of the animals into groups of the observed sizes (exact up to 20,000 splits). Levels are compared by the z-score against that null; the best level's z is referred to the null of the best level over all splits, which gives p_fw (Westfall-Young max-T logic applied across levels). Cluster flags use max-T over all levels and clusters.
+- Why this is valid here: the clustering never sees the group labels, so permuting labels does not require refitting. Conditions: units exchangeable under the null, criterion chosen beforehand, levels from one fit. `/fact --deep` (Gemini, GPT, web) agreed on these conditions; PERMANOVA also reacts to unequal group spread, and zero shares need Hellinger rather than Aitchison.
+- Reading it: if p_fw is not below .05, the page says in red that no difference should be reported. With 3 vs 5 animals the smallest possible p is 0.0179 (1 of 56 splits).
 - `Use n=k` switches the level; the legend marks significant clusters with ★ and exploratory ones (raw p below .05, not significant) with ☆. `Show flagged only` filters the map, timeline and replay to them.
-- `Export results` writes `<root>/.subtle_results/<project>/<time>_n<k>/`: `sweep_levels.csv`, `clusters.csv`, `summary.json`, `sweep.png` (level sweep, shares per animal, embedding with the flagged clusters), and `cluster_<id>_<tag>.mp4`, up to 3 bouts per group from the proxy video with 2D keypoints and a caption. If nothing is significant, the 2 clusters with the largest |t| are clipped and tagged `exploratory_not_significant`. A group without a per-camera video is skipped and the log says so.
-- Checks: planted effect found, hand-known p (2 of 70), 30 null assignments below 15 percent, and all 56 assignments of the real 8 animals gave 2 false positives (3.6 percent).
-- Demo (cort 3 vs veh 5, first 3,000 frames): recommended n = 4, p_fw = 0.57, no significant cluster; no clip for veh because only cort1 has video locally.
+- `Export results` writes `<root>/.subtle_results/<project>/<time>_n<k>/`: `sweep_levels.csv` (all criteria, plus the recommended n per criterion), `clusters.csv`, `summary.json`, `sweep.png`, and `cluster_<id>_<tag>.mp4` (up to 3 bouts per group from the proxy video, 2D keypoints and a caption). If nothing is significant, the 2 clusters with the largest |t| are clipped and tagged `exploratory_not_significant`. A group without per-camera video is skipped and the log says so.
+- Checks: planted effect found, hand-known p (2 of 70), and all 56 assignments of the real 8 animals gave 2 false positives (3.6 percent) for each of the four criteria.
+- Demo (cort 3 vs veh 5, first 3,000 frames): omnibus n = 4 (p_fw 0.39), maxt n = 4 (0.50), nsig n = 2 (1.0), meanp n = 2 (0.57). No criterion is significant.
+
+## Proxy videos for all sessions
+- `python tools/subtle_viewer/fetch_cams.py <root> --project <name>` makes five camera proxies per session next to the session file. The 5-camera composite (about 10 GB) is copied from the server one session at a time, cut into the five cells in one decoding pass (cells from `core.CELLS`), written half size (H.264 CRF 28, keyframe every 20 frames), checked against the session's frame count, and then deleted.
+- Safe to re-run: sessions with all five proxies are skipped. Needs 14 GB free. Overlay viewing only; inference must use the raw video.
+- Defaults point at the CORT 28d composites on the lab server; change `--remote-dir` and `PREFIX` in the module for another dataset. Time: about 25 to 30 minutes per session.
 
 ## Seed stability
 - Stats tab, `Seed stability`: refits the project sessions with seeds 0, 1, 2 (isolated, sidecars untouched; about 80 s per seed for 8 animals at 3,000 frames) and saves `<name>.stability.json`.

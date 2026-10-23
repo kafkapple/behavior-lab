@@ -26,9 +26,13 @@ COL = {0: (90, 200, 250), 1: (255, 159, 10)}            # group A blue, group B 
 
 def tables(R: dict, out: Path) -> None:
     with open(out / "sweep_levels.csv", "w", newline="") as f:
-        w = csv.writer(f); w.writerow(["level", "n_clusters", "max_abs_t", "p_level_maxT", "level_thr95", "score", "recommended"])
+        cr = list(R["criteria"])
+        w = csv.writer(f); w.writerow(["level", "n_clusters", "max_abs_t", "level_thr95"] + [f"{c}_{x}" for c in cr for x in ("z", "p_level")] + ["recommended_by_" + R["recommended"]["criterion"]])
         for o in R["levels"]:
-            w.writerow([o["level"], o["k"], f"{o['max_abs_t']:.4f}", f"{o['p_level']:.4f}", f"{o['thr95']:.4f}", f"{o['score']:.4f}", int(o["level"] == R["recommended"]["level"])])
+            w.writerow([o["level"], o["k"], f"{o['max_abs_t']:.4f}", f"{o['thr95']:.4f}"] + [f"{o['criteria'][c][x]:.4f}" for c in cr for x in ("z", "p_level")] + [int(o["level"] == R["recommended"]["level"])])
+        w.writerow([]); w.writerow(["criterion", "recommended_n_clusters", "z", "p_fw_selection_corrected"])
+        for c, v in R["by_criterion"].items():
+            w.writerow([c, v["k"], f"{v['z']:.4f}", f"{v['p_fw']:.4f}"])
     a, b = R["groups"]
     with open(out / "clusters.csv", "w", newline="") as f:
         w = csv.writer(f); w.writerow(["level", "n_clusters", "cluster", f"mean_{a}", f"mean_{b}", "diff", "hedges_g", "t", "p_perm_raw", "p_adj_maxT_over_levels", "flag"])
@@ -48,7 +52,7 @@ def figure(R: dict, root: Path, out: Path) -> None:
     x = [o["k"] for o in R["levels"]]
     ax[0].bar(x, [o["max_abs_t"] for o in R["levels"]], color=["#d62728" if o["level"] == rec["level"] else "#999" for o in R["levels"]])
     ax[0].plot(x, [o["thr95"] for o in R["levels"]], "k_", ms=22, label="level null 95%")
-    ax[0].axhline(R["global_thr95"], color="k", ls="--", label="all-level null 95%"); ax[0].set(xlabel="number of superclusters", ylabel="max |t| over clusters", title=f"Level sweep (recommended n={rec['k']}, p_fw={rec['p_fw']:.2f})"); ax[0].legend()
+    ax[0].axhline(R["global_thr95"], color="k", ls="--", label="all-level null 95%"); ax[0].set(xlabel="number of superclusters", ylabel="max |t| over clusters", title=f"Level sweep [{rec['criterion']}] recommended n={rec['k']}, p_fw={rec['p_fw']:.2f}"); ax[0].legend()
     a, b = R["groups"]
     for i, c in enumerate(lv["ids"]):
         for g, col, dx in ((a, "#5ac8fa", -.12), (b, "#ff9f0a", .12)):
@@ -116,13 +120,13 @@ def clips(R: dict, root: Path, out: Path, flag: list[int], tag: str, j: dict) ->
     return written
 
 
-def start(root: Path, name: str) -> str:
-    return model._job(root, _run, name)
+def start(root: Path, name: str, criterion: str = "omnibus") -> str:
+    return model._job(root, _run, name, criterion)
 
 
-def _run(root: Path, j: dict, name: str) -> None:
+def _run(root: Path, j: dict, name: str, criterion: str = "omnibus") -> None:
     j.update(stage="sweep", pct=5)
-    R = sweep.project_sweep(root, core.load_project(root, name)); rec = R["recommended"]
+    R = sweep.project_sweep(root, core.load_project(root, name), criterion); rec = R["recommended"]
     out = root / ".subtle_results" / name / f"{time.strftime('%y%m%d_%H%M%S')}_n{rec['k']}"; out.mkdir(parents=True)
     tables(R, out); j.update(stage="figure", pct=30); figure(R, root, out)
     lv = next(o for o in R["levels"] if o["level"] == rec["level"])

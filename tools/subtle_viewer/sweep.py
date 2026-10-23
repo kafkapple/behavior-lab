@@ -31,56 +31,82 @@ def welch_t(S: np.ndarray, a: list[int], b: list[int]) -> np.ndarray:
 
 
 def splits(n: int, na: int, seed: int = 0) -> tuple[list[tuple[int, ...]], bool]:
+    """All splits of n animals into na + (n - na); the observed split (animals 0..na-1) is always first."""
+    obs = tuple(range(na))
     if comb(n, na) <= CAP:
-        return list(combinations(range(n), na)), True
+        return [obs] + [s for s in combinations(range(n), na) if s != obs], True
     rng = np.random.default_rng(seed)
-    return [tuple(sorted(rng.permutation(n)[:na])) for _ in range(CAP)], False
+    return [obs] + [tuple(sorted(rng.permutation(n)[:na])) for _ in range(CAP - 1)], False
 
 
-def sweep_levels(levels: dict[int, list[np.ndarray]], groups: list[list[int]], names: list[str]) -> dict:
-    """levels: level index -> per-animal label arrays. groups: animal indices of group A and B (first two groups)."""
+def pseudo_f(X: np.ndarray, a: list[int], b: list[int]) -> float:
+    """PERMANOVA pseudo-F (Euclidean distance) of Hellinger-transformed shares: between-group over within-group sum of squares."""
+    ss = lambda Z: float(((Z - Z.mean(0)) ** 2).sum())  # noqa: E731
+    within = ss(X[a]) + ss(X[b])
+    return (ss(X) - within) / (within / (len(a) + len(b) - 2)) if within > 0 else 0.0
+
+
+CRITERIA = {"omnibus": "pseudo-F of all cluster shares together (Hellinger)", "maxt": "largest |t| of any cluster",
+            "nsig": "number of clusters with raw permutation p < .05", "meanp": "mean raw permutation p over clusters (lower is better)"}
+
+
+def sweep_levels(levels: dict[int, list[np.ndarray]], groups: list[list[int]], names: list[str], criterion: str = "omnibus") -> dict:
+    """levels: level index -> per-animal label arrays. groups: animal indices of group A and B (first two groups).
+    Every criterion is a statistic with its own permutation null; levels are compared on the z-score against that null,
+    and the maximum over levels is again referred to the null (selection-corrected p_fw)."""
+    if criterion not in CRITERIA:
+        raise ValueError(f"criterion must be one of {sorted(CRITERIA)}")
     A, B = groups[0], groups[1]
     animals = A + B
     n, na = len(animals), len(A)
     sp, exact = splits(n, na)
-    obs_split = tuple(range(na))                                  # animals reordered so that A comes first
-    out, null_t, null_d = [], {}, {}
+    S = len(sp)
+    out, stat = [], {}                                              # stat[level][criterion] = array over splits (larger = stronger evidence)
     for j, labs in levels.items():
         labs = [labs[i] for i in animals]
         ids = sorted({int(c) for l in labs for c in np.unique(l)})
         if len(ids) < 2:
             continue                                              # one cluster has no variance to test
-        S = shares(labs, ids)
-        t_obs, d_obs = welch_t(S, list(range(na)), list(range(na, n))), S[:na].mean(0) - S[na:].mean(0)
-        T = np.array([np.abs(welch_t(S, list(s), [i for i in range(n) if i not in s])) for s in sp])
-        D = np.array([np.abs(S[list(s)].mean(0) - np.delete(S, list(s), 0).mean(0)) for s in sp])
-        null_t[j], null_d[j] = T, D
-        out.append({"level": j, "k": len(ids), "ids": ids, "t": t_obs.tolist(), "diff": d_obs.tolist(), "means": {names[0]: S[:na].mean(0).tolist(), names[1]: S[na:].mean(0).tolist()},
-                    "values": {names[0]: S[:na].T.tolist(), names[1]: S[na:].T.tolist()},
-                    "g": [stats.hedges_g(S[:na, c], S[na:, c]) for c in range(len(ids))],
-                    "p_raw": [float((D[:, c] >= abs(d_obs[c]) - 1e-12).mean()) for c in range(len(ids))],
-                    "max_abs_t": float(np.abs(t_obs).max())})
+        Sh = shares(labs, ids)
+        H = np.sqrt(Sh / 100.0)
+        T = np.array([np.abs(welch_t(Sh, list(s), [i for i in range(n) if i not in s])) for s in sp])             # (splits, clusters)
+        D = np.array([np.abs(Sh[list(s)].mean(0) - np.delete(Sh, list(s), 0).mean(0)) for s in sp])
+        F = np.array([pseudo_f(H, list(s), [i for i in range(n) if i not in s]) for s in sp])
+        P = np.empty_like(D)                                       # raw permutation p of every split's cluster difference, by rank in that cluster's null
+        for c in range(D.shape[1]):
+            srt = np.sort(D[:, c]); P[:, c] = (S - np.searchsorted(srt, D[:, c] - 1e-12, side="left")) / S
+        stat[j] = {"omnibus": F, "maxt": T.max(1), "nsig": (P < 0.05).sum(1).astype(float), "meanp": -P.mean(1)}
+        t_obs, d_obs = T[0] * np.sign(welch_t(Sh, list(range(na)), list(range(na, n))) + 1e-300), Sh[:na].mean(0) - Sh[na:].mean(0)
+        out.append({"level": j, "k": len(ids), "ids": ids, "t": t_obs.tolist(), "diff": d_obs.tolist(), "means": {names[0]: Sh[:na].mean(0).tolist(), names[1]: Sh[na:].mean(0).tolist()},
+                    "values": {names[0]: Sh[:na].T.tolist(), names[1]: Sh[na:].T.tolist()}, "g": [stats.hedges_g(Sh[:na, c], Sh[na:, c]) for c in range(len(ids))],
+                    "p_raw": P[0].tolist(), "max_abs_t": float(T[0].max()), "_T": T})
     if not out:
         raise ValueError("no level with at least 2 clusters")
-    gmax = np.max([null_t[o["level"]].max(1) for o in out], axis=0)           # per split: maximum over every level and cluster
-    obs_global = max(o["max_abs_t"] for o in out)
-    thr_global = float(np.quantile(gmax, 0.95))
+    z = {}                                                          # z[criterion][level] = null-standardized statistic per split
+    for cr in CRITERIA:
+        z[cr] = {o["level"]: (stat[o["level"]][cr] - stat[o["level"]][cr].mean()) / (stat[o["level"]][cr].std() or 1.0) for o in out}
+    gz = {cr: np.max([z[cr][o["level"]] for o in out], axis=0) for cr in CRITERIA}               # per split: best level
+    gmax = np.max([o["_T"].max(1) for o in out], axis=0)           # per split: largest |t| over every level and cluster (cluster-level flags)
     for o in out:
-        Tm = null_t[o["level"]].max(1)
-        o["p_level"] = float((Tm >= o["max_abs_t"] - 1e-9).mean())          # best cluster within this level
-        o["thr95"] = float(np.quantile(Tm, 0.95))
-        o["score"] = o["max_abs_t"] / o["thr95"] if o["thr95"] > 0 else 0.0   # above 1 = passes this level's own 95 percent line
-        o["p_adj"] = [float((gmax >= abs(t) - 1e-9).mean()) for t in o["t"]]   # selection-corrected, every level and cluster
-    best = max(out, key=lambda o: (round(o["score"], 6), -o["k"]))
-    rec = {"level": best["level"], "k": best["k"], "score": best["score"], "p_level": best["p_level"], "p_fw": float((gmax >= obs_global - 1e-9).mean()),
+        T = o.pop("_T"); Tm = T.max(1)
+        o["p_adj"] = [float((gmax >= abs(t) - 1e-9).mean()) for t in o["t"]]
+        o["p_level"] = float((Tm >= o["max_abs_t"] - 1e-9).mean()); o["thr95"] = float(np.quantile(Tm, 0.95))
+        o["score"] = o["max_abs_t"] / o["thr95"] if o["thr95"] > 0 else 0.0
+        o["criteria"] = {cr: {"obs": float(stat[o["level"]][cr][0]), "z": float(z[cr][o["level"]][0]), "p_level": float((stat[o["level"]][cr] >= stat[o["level"]][cr][0] - 1e-12).mean())} for cr in CRITERIA}
+    by = {}
+    for cr in CRITERIA:                                             # recommendation per criterion; ties go to fewer clusters
+        best = max(out, key=lambda o: (round(o["criteria"][cr]["z"], 6), -o["k"]))
+        by[cr] = {"level": best["level"], "k": best["k"], "z": best["criteria"][cr]["z"], "p_fw": float((gz[cr] >= gz[cr][0] - 1e-9).mean())}
+    best = next(o for o in out if o["level"] == by[criterion]["level"])
+    rec = {**by[criterion], "criterion": criterion, "score": best["score"], "p_level": best["criteria"][criterion]["p_level"],
            "significant": [c for c, q in zip(best["ids"], best["p_adj"]) if q < 0.05],
            "exploratory": [c for c, q, r in zip(best["ids"], best["p_adj"], best["p_raw"]) if q >= 0.05 and r < 0.05]}
-    return {"levels": out, "recommended": rec, "groups": names[:2], "n": [na, n - na], "splits": len(sp), "exact": exact, "global_thr95": thr_global,
-            "min_possible_p": 1 / len(sp) if exact else None,
-            "method": f"max-T over {len(out)} levels x clusters; {'exact' if exact else 'Monte Carlo'} {len(sp)} splits of {n} animals into {na}+{n - na}"}
+    return {"levels": out, "recommended": rec, "by_criterion": by, "criteria": CRITERIA, "groups": names[:2], "n": [na, n - na], "splits": S, "exact": exact,
+            "global_thr95": float(np.quantile(gmax, 0.95)), "min_possible_p": 1 / S if exact else None,
+            "method": f"{CRITERIA[criterion]}; z against its own null, best level vs the null of the best level; {'exact' if exact else 'Monte Carlo'} {S} splits of {n} animals into {na}+{n - na}"}
 
 
-def project_sweep(root: Path, proj: dict) -> dict:
+def project_sweep(root: Path, proj: dict, criterion: str = "omnibus") -> dict:
     gn = [g for g, s in proj.get("groups", {}).items() if s]
     if len(gn) < 2:
         raise ValueError("need two non-empty groups")
@@ -96,6 +122,6 @@ def project_sweep(root: Path, proj: dict) -> dict:
     idx, i = [], 0
     for g in gn[:2]:
         idx.append(list(range(i, i + len(proj["groups"][g])))); i += len(proj["groups"][g])
-    res = sweep_levels(levels, idx, gn[:2])
+    res = sweep_levels(levels, idx, gn[:2], criterion)
     res.update({"fit_id": S[0]["fit_id"], "paths": paths, "frames": nl})
     return res

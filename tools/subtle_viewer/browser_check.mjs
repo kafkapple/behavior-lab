@@ -81,6 +81,8 @@ if (mode === 'keys') {
   // level sweep: recommendation, flagged marks, isolate, and the saved result folder
   await js(`${$('swgo')}.click()`); check('Sweep n shows the level table', await until(`document.querySelectorAll('#sweepres table tr').length >= 4`, 30000));
   const rec = await js(`(document.querySelector('#sweepres .ok, #sweepres .bad') || {}).textContent || ''`); check('recommendation text states significance honestly', /recommended n = \d/.test(rec), `(${rec.slice(0, 90)})`);
+  await js(`${$('swcrit')}.value = 'meanp'; ${$('swgo')}.click()`); check('another criterion re-ranks the levels', await until(`document.querySelector('#sweepres table th') && document.querySelector('#sweepres').textContent.includes('Recommended n per criterion')`, 30000));
+  await js(`${$('swcrit')}.value = 'omnibus'; ${$('swgo')}.click()`); await sleep(1500);
   await js(`${$('swuse')}.click()`); const kk = await js(`+document.getElementById('swuse').textContent.replace(/\\D/g, '')`);
   check('Use n sets the level (legend rows = n)', await until(`document.querySelectorAll('.lrow').length === ${kk}`, 5000), `(n=${kk})`);
   await js(`${$('swexp')}.click()`); check('Export results saves a folder', await until(`!!document.getElementById('swdirtxt')`, 120000), await js(`(document.getElementById('swdirtxt') || {}).textContent`));
