@@ -49,6 +49,10 @@ function drawMap() {
     cache = {key, o}; }
   x.drawImage(cache.o, 0, 0);
   const [u, v] = xy(S.emb[Math.min(st.fr, S.emb.length - 1)], c); x.strokeStyle = fg(); x.lineWidth = 2; x.beginPath(); x.arc(u, v, 8, 0, 7); x.stroke();
+  const N = +$('trace').value;                                          // trace: current frame plus the next N-1, each a dot, linked by a line
+  if (N > 1) { const P = []; for (let k = 0; k < N && st.fr + k < S.emb.length; k++) P.push(xy(S.emb[st.fr + k], c));
+    x.strokeStyle = fg(); x.globalAlpha = .5; x.lineWidth = 1; x.beginPath(); P.forEach((p, k) => k ? x.lineTo(...p) : x.moveTo(...p)); x.stroke(); x.globalAlpha = 1;
+    P.forEach((p, k) => { x.fillStyle = `hsl(${k * 360 / N} 80% 55%)`; x.beginPath(); x.arc(p[0], p[1], 4, 0, 7); x.fill(); }); }
   x.fillStyle = fg(); x.font = '11px sans-serif'; x.fillText(`zoom ${M.zoom.toFixed(2)}x · ${S.emb.length} frames`, 8, H - 8);
 }
 const mp = $('mp'); let md = null, moved = false;
@@ -89,4 +93,5 @@ on('session', () => { B = bodySize(); V = home(); M = {zoom: 1, px: 0, py: 0}; e
 on('frame', () => { drawSkel(); drawMap(); drawTl(); });
 on('labels', () => { cache = null; drawSkel(); drawMap(); drawTl(); });
 on('filter', () => { cache = null; drawMap(); drawTl(); });
+$('trace').onchange = drawMap;
 window.addEventListener('resize', () => { cache = null; drawSkel(); drawMap(); drawTl(); });

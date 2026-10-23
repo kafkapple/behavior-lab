@@ -1,6 +1,7 @@
 // Project: groups, save and load, the SUBTLE fit job, and the frequency table with its sum check.
 import {$, st, on, emit, api, toast, nkey, cname} from './state.js';
 import {color} from './colors.js';
+import {statsPng, dekPng} from './export.js';
 
 export async function refreshProjects() { $('pl').innerHTML = (await api('projects')).map(n => `<option>${n}</option>`).join(''); }
 // meta (PRD R6): st.proj.meta = {description, group_notes: {group: text}, sessions: {path: {animal, condition, date}}}; the server cleans it on save
@@ -105,3 +106,5 @@ $('dkcsv').onclick = () => { if (!lastDek) return toast('run Compute DEK first')
   const rows = [['group_a', 'group_b', 'cluster', 'feature', 't', 'p', 'p_adj', 'hedges_g']];
   for (const P of lastDek.pairs) P.clusters.forEach((c, r) => lastDek.columns.forEach((f, j) => P.t[r][j] != null && rows.push([P.groups[0], P.groups[1], c, f, P.t[r][j], P.p[r][j], P.p_adj[r][j], P.g[r][j]])));
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r => r.join(',')).join('\n')], {type: 'text/csv'})); a.download = 'dek.csv'; a.click(); };
+$('stpng').onclick = () => lastStats ? statsPng(lastStats) : toast('run Compare groups first');
+$('dkpng').onclick = () => lastDek ? dekPng(lastDek, lastDek.pairs[+$('dkpair').value || 0], $('dktype').value, $('dkn').value) : toast('run Compute DEK first');

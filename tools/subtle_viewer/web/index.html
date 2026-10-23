@@ -21,7 +21,7 @@
       <select id="camsel"></select><span id="vwarn" class="bad"></span></header>
       <div id="vnone">no per-camera video for this session</div><div id="vtiles" data-n="1"></div></div>
     <div class="pane" id="pskel"><header>3D skeleton · wheel zoom · drag rotate · shift/right-drag pan · double-click reset</header><canvas id="cv"></canvas></div>
-    <div class="pane" id="pmap"><header>cluster map · wheel zoom · drag pan · click = jump</header><canvas id="mp"></canvas></div>
+    <div class="pane" id="pmap"><header>cluster map · wheel zoom · drag pan · click = jump<label class="mut" style="margin-left:auto" title="as in the Justin app: the current frame and the next N-1 frames as linked dots">trace <select id="trace"><option>1</option><option>2</option><option>4</option><option>10</option></select></label></header><canvas id="mp"></canvas></div>
   </section>
   <aside id="right">
     <div id="tabs"><button data-t="clu" class="on">Clusters</button><button data-t="proj">Project</button><button data-t="freq">Frequency</button><button data-t="stat">Stats</button><button data-t="dek">DEK</button><button data-t="log">Log</button></div>
@@ -35,11 +35,11 @@
       <h3 style="margin-top:10px">Model</h3><div style="display:flex;gap:6px;margin-bottom:6px"><input id="mn" placeholder="model name" style="flex:1;min-width:0"><button id="mt" title="train on all project sessions and save">Train</button></div>
       <div style="display:flex;gap:6px;margin-bottom:6px"><select id="ml" style="flex:1;min-width:0"></select><button id="mm" title="label every frame of all project sessions with this model">Map</button></div><div id="job" class="mut" style="margin-top:8px"></div><progress id="pg" value="0" max="100" style="display:none"></progress></div>
     <div class="tabpage" id="t_freq"><div>Σ check <span id="sumbadge"></span></div><div id="freq" class="mut">save a project with groups first</div></div>
-    <div class="tabpage" id="t_stat"><div style="display:flex;gap:6px;margin-bottom:6px"><button id="stgo">Compare groups</button><label class="mut"><input type="checkbox" id="stbh" checked style="width:auto"> BH correction</label><button id="stcsv">CSV</button></div><div id="stat" class="mut">save a project with two or more groups, then press Compare groups</div></div>
+    <div class="tabpage" id="t_stat"><div style="display:flex;gap:6px;margin-bottom:6px"><button id="stgo">Compare groups</button><label class="mut"><input type="checkbox" id="stbh" checked style="width:auto"> BH correction</label><button id="stcsv">CSV</button><button id="stpng">PNG</button></div><div id="stat" class="mut">save a project with two or more groups, then press Compare groups</div></div>
     <div class="tabpage" id="t_dek"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><button id="dkgo" title="kinematic features per animal and cluster, group A vs B">Compute DEK</button>
       <select id="dktype"><option value="V">vertex speed</option><option value="E">edge</option><option value="A">angle</option></select>
       <select id="dkn"><option value="0">n=0 value</option><option value="1" selected>n=1 1st derivative</option><option value="2">n=2 2nd derivative</option></select>
-      <select id="dkpair"></select><button id="dkcsv">CSV</button></div><div id="dek" class="mut">save a project with two or more groups, then press Compute DEK</div></div>
+      <select id="dkpair"></select><button id="dkcsv">CSV</button><button id="dkpng">PNG</button></div><div id="dek" class="mut">save a project with two or more groups, then press Compute DEK</div></div>
     <div class="tabpage" id="t_log"><pre id="log"></pre></div>
   </aside>
 </div>

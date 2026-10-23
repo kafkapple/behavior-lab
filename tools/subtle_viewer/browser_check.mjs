@@ -69,6 +69,21 @@ if (mode === 'keys') {
   const saved = await until(`fetch('/api/names').then(r => r.json()).then(d => Object.values(d).includes('rearing_test'))`);
   check('typed cluster name saved on the server', saved);
   await js(`(async () => { const d = await fetch('/api/names').then(r => r.json()); for (const k of Object.keys(d)) if (d[k] === 'rearing_test') await fetch('/api/set_name', {method: 'POST', body: JSON.stringify({key: k, name: ''})}); })()`);
+  // the embedding exists for the fitted frames only (first 3,000): seek inside them before looking at the map
+  await mouse('mousePressed', r[0] + r[2] * .1, y); await mouse('mouseReleased', r[0] + r[2] * .1, y);
+  check('seek into the embedded frames', await frame() < 3000, `(frame ${await frame()})`);
+  // trace: 10 linked dots change the map drawing; back to 1 restores it
+  const hash = () => js(`(() => { const d = ${$('mp')}.getContext('2d').getImageData(0, 0, ${$('mp')}.width, ${$('mp')}.height).data; let h = 0; for (let i = 0; i < d.length; i += 1) h = (h * 31 + d[i]) | 0; return h; })()`);
+  await js(`${$('trace')}.value = '1'; ${$('trace')}.dispatchEvent(new Event('change'))`); const h1 = await hash();
+  await js(`${$('trace')}.value = '10'; ${$('trace')}.dispatchEvent(new Event('change'))`); const h10 = await hash();
+  await js(`${$('trace')}.value = '1'; ${$('trace')}.dispatchEvent(new Event('change'))`);
+  check('trace 10 changes the cluster map, trace 1 restores it', h1 !== h10 && h1 === await hash());
+  // PNG exports: capture the download and check the PNG signature
+  await js(`window.__dl = []; HTMLAnchorElement.prototype.click = function () { fetch(this.href).then(r => r.blob()).then(async b => window.__dl.push({name: this.download, size: b.size, magic: [...new Uint8Array(await b.slice(0, 4).arrayBuffer())].join()})); }`);
+  await js(`${$('stgo')}.click()`); await until(`!!document.querySelector('#stat table')`, 30000); await js(`${$('stpng')}.click()`);
+  check('Stats PNG downloaded', await until(`window.__dl.some(d => d.name === 'group_stats.png' && d.magic === '137,80,78,71' && d.size > 4000)`, 8000));
+  await js(`${$('dkgo')}.click()`); await until(`!!document.querySelector('#dek table')`, 60000); await js(`${$('dkpng')}.click()`);
+  check('DEK PNG downloaded', await until(`window.__dl.some(d => d.name === 'dek.png' && d.magic === '137,80,78,71' && d.size > 4000)`, 8000), JSON.stringify(await js('window.__dl')));
 } else if (mode === 'train') {
   check('session opened', await until(`+${$('fr')}.max > 0`, 30000));
   await js(`${$('gn')}.value = 'g1'; ${$('ga')}.click()`);
