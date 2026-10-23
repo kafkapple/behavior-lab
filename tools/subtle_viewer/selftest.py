@@ -141,8 +141,31 @@ def stability_checks() -> None:
     print("stability checks OK")
 
 
+def sweep_checks() -> None:
+    """Hand-known p, a planted effect, and the null: no split of real-like noise may pass more often than 5 percent."""
+    import numpy as np
+    import sweep
+    rng = np.random.default_rng(3)
+    def labs(frac0):  # one animal: 300 frames, share frac0 in cluster 0 (+ small noise), rest cluster 1
+        n0 = int(np.clip(frac0 + rng.normal(0, 0.01), 0, 1) * 300)
+        return np.array([0] * n0 + [1] * (300 - n0))
+    A = [labs(0.8) for _ in range(4)]; B = [labs(0.2) for _ in range(4)]
+    r = sweep.sweep_levels({0: A + B}, [[0, 1, 2, 3], [4, 5, 6, 7]], ["a", "b"])
+    assert r["exact"] and r["splits"] == 70 and abs(r["levels"][0]["p_level"] - 2 / 70) < 1e-9, r["levels"][0]["p_level"]   # observed split and its mirror
+    assert r["recommended"]["significant"] == [0, 1], r["recommended"]                                                      # both clusters carry the planted difference
+    N = [labs(0.5) for _ in range(8)]
+    hits = 0
+    for s in range(30):                                                         # null: same shares everywhere, random group assignment
+        perm = np.random.default_rng(s).permutation(8)
+        rr = sweep.sweep_levels({0: [N[i] for i in perm], 1: [N[i] for i in perm]}, [[0, 1, 2, 3], [4, 5, 6, 7]], ["a", "b"])
+        hits += bool(rr["recommended"]["significant"])
+    assert hits / 30 <= 0.15, hits
+    print("sweep checks OK")
+
+
 if __name__ == "__main__":
     main()
     stats_checks()
     dek_checks()
     stability_checks()
+    sweep_checks()

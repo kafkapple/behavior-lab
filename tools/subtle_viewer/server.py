@@ -19,7 +19,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 import core  # noqa: E402
 import dek  # noqa: E402
 import model  # noqa: E402
+import results  # noqa: E402
 import stability  # noqa: E402
+import sweep  # noqa: E402
 import stats  # noqa: E402
 
 HERE = Path(__file__).parent
@@ -73,6 +75,9 @@ def _routes(root: Path):
         "set_name": lambda q, b: stats.names_set(root, b["key"], b["name"]),
         "stability": lambda q, b: {"job": stability.start(root, b["name"], int(b.get("max_frames", 3000)), [int(x) for x in b.get("seeds", [0, 1, 2])])},
         "stability_result": lambda q, b: json.loads(stability.result_path(root, q["name"][0]).read_text()),
+        "sweep": lambda q, b: sweep.project_sweep(root, proj_of(q)),
+        "export": lambda q, b: {"job": results.start(root, b["name"])},
+        "export_latest": lambda q, b: {"dir": (root / ".subtle_results" / q["name"][0] / "latest.txt").read_text()},
         "models": lambda q, b: model.list_models(root),
         "train": lambda q, b: {"job": model.start_train(root, b["name"], b["paths"], int(b.get("max_frames", 0)), b.get("seed"))},
         "map": lambda q, b: {"job": model.start_map(root, b["name"], b["paths"])},

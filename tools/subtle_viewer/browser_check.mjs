@@ -78,6 +78,12 @@ if (mode === 'keys') {
   await js(`${$('trace')}.value = '10'; ${$('trace')}.dispatchEvent(new Event('change'))`); const h10 = await hash();
   await js(`${$('trace')}.value = '1'; ${$('trace')}.dispatchEvent(new Event('change'))`);
   check('trace 10 changes the cluster map, trace 1 restores it', h1 !== h10 && h1 === await hash());
+  // level sweep: recommendation, flagged marks, isolate, and the saved result folder
+  await js(`${$('swgo')}.click()`); check('Sweep n shows the level table', await until(`document.querySelectorAll('#sweepres table tr').length >= 4`, 30000));
+  const rec = await js(`(document.querySelector('#sweepres .ok, #sweepres .bad') || {}).textContent || ''`); check('recommendation text states significance honestly', /recommended n = \d/.test(rec), `(${rec.slice(0, 90)})`);
+  await js(`${$('swuse')}.click()`); const kk = await js(`+document.getElementById('swuse').textContent.replace(/\\D/g, '')`);
+  check('Use n sets the level (legend rows = n)', await until(`document.querySelectorAll('.lrow').length === ${kk}`, 5000), `(n=${kk})`);
+  await js(`${$('swexp')}.click()`); check('Export results saves a folder', await until(`!!document.getElementById('swdirtxt')`, 120000), await js(`(document.getElementById('swdirtxt') || {}).textContent`));
   // PNG exports: capture the download and check the PNG signature
   await js(`window.__dl = []; HTMLAnchorElement.prototype.click = function () { fetch(this.href).then(r => r.blob()).then(async b => window.__dl.push({name: this.download, size: b.size, magic: [...new Uint8Array(await b.slice(0, 4).arrayBuffer())].join()})); }`);
   await js(`${$('stgo')}.click()`); await until(`!!document.querySelector('#stat table')`, 30000); await js(`${$('stpng')}.click()`);

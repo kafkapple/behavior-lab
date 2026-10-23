@@ -121,6 +121,7 @@ Details, checks and residual risks: `subtle_stats_plan.md`.
 | P11 | cluster frequency statistics and plots with stars | ✅ table, dots, stars, CSV; PNG export not built |
 | P12 | seed stability across seeds, all levels shown | ✅ ARI and per-level group test; demo ARI 0.40 to 0.60 |
 | P13 | manuals readable in the page | ✅ |
+| P14 | level sweep with selection correction, flagged clusters, saved csv, figure and clips | ✅ exact max-T, 56-assignment null 3.6 percent; export folder checked |
 
 ## 10. UX basis and module structure (261023)
 Sources read: BS scene-flow viewer (`src/behaviorsplatter/web/`, `docs/code/viewer_controls_audit.md`) and the HTML report rule (`html-report-pages.md`).

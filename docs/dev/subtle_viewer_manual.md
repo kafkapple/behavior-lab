@@ -50,6 +50,16 @@
   - Demo (cort 3 vs veh 5, level L4, 420 cells): smallest adjusted p 0.38, no star. Shuffling the 8 animals over all 56 splits gave 4.6 percent raw p below 0.05, as expected for no effect.
   - Not excluded: frames whose 3D points were copied from earlier frames (the viewer's loader reads no per-frame flag). Speed terms of such frames are zero, so read speed differences with care.
 
+## Level sweep and saved results
+- Question it answers: which number of superclusters (level) shows a group difference, without fooling ourselves by trying many.
+- Stats tab, `Sweep n`: for every level with at least 2 clusters, the |Welch t| of each cluster's per-animal share. The null is every split of the animals into groups of the observed sizes (exact up to 20,000 splits).
+- Selection correction (max-T): each p is the share of null splits whose maximum over all levels and clusters reaches the observed value. The recommended n is the level whose best |t| is largest relative to its own null 95 percent line; the headline p_fw covers the choice of level too.
+- Reading it: if no cluster is below .05 after this correction, the page says so in red and recommends nothing to report. With 3 vs 5 animals the smallest possible p is 0.0179 (1 of 56 splits).
+- `Use n=k` switches the level; the legend marks significant clusters with ★ and exploratory ones (raw p below .05, not significant) with ☆. `Show flagged only` filters the map, timeline and replay to them.
+- `Export results` writes `<root>/.subtle_results/<project>/<time>_n<k>/`: `sweep_levels.csv`, `clusters.csv`, `summary.json`, `sweep.png` (level sweep, shares per animal, embedding with the flagged clusters), and `cluster_<id>_<tag>.mp4`, up to 3 bouts per group from the proxy video with 2D keypoints and a caption. If nothing is significant, the 2 clusters with the largest |t| are clipped and tagged `exploratory_not_significant`. A group without a per-camera video is skipped and the log says so.
+- Checks: planted effect found, hand-known p (2 of 70), 30 null assignments below 15 percent, and all 56 assignments of the real 8 animals gave 2 false positives (3.6 percent).
+- Demo (cort 3 vs veh 5, first 3,000 frames): recommended n = 4, p_fw = 0.57, no significant cluster; no clip for veh because only cort1 has video locally.
+
 ## Seed stability
 - Stats tab, `Seed stability`: refits the project sessions with seeds 0, 1, 2 (isolated, sidecars untouched; about 80 s per seed for 8 animals at 3,000 frames) and saves `<name>.stability.json`.
 - Shows the adjusted Rand index (ARI) between seeds for subclusters and for the default supercluster level, and the group test at every level (min adjusted p, number of clusters below .05), so no level is chosen after seeing the stars.

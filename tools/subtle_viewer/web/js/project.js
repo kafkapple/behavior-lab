@@ -120,3 +120,23 @@ async function showStability() {
 }
 $('stab').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
   const {job} = await api('stability', {name: st.proj.name, max_frames: +$('mf').value, seeds: [0, 1, 2]}); $('stabres').innerHTML = '<span class="mut">running 3 fits: progress is in the Project tab and the log</span>'; poll(job, showStability); };
+
+// ---- level sweep: recommended n with the selection corrected (max-T), flagged clusters marked in the legend, results saved to a folder
+let lastSweep = null;
+const pf = v => v < .001 ? '<.001' : v.toFixed(3);
+function renderSweep() {
+  const R = lastSweep, r = R.recommended, ok = r.significant.length > 0;
+  $('sweepres').innerHTML = `<h3 style="margin-top:8px">Level sweep: ${R.groups.join(' vs ')}</h3><div class="mut">${R.method}. Smallest possible p ${R.min_possible_p == null ? 'n/a' : R.min_possible_p.toFixed(4)}. Groups provisional.</div>` +
+    `<div class="${ok ? 'ok' : 'bad'}">${ok ? `recommended n = ${r.k} (L${r.level}): clusters ${r.significant.join(', ')} significant, selection-corrected p_fw = ${pf(r.p_fw)}` : `recommended n = ${r.k} (L${r.level}) has the highest score, but no cluster is significant after correcting for the sweep (p_fw = ${pf(r.p_fw)}); do not report a difference`}</div>` +
+    '<table><tr><th>n</th><th>max |t|</th><th>null 95%</th><th>score</th><th>p level</th></tr>' + R.levels.map(o => `<tr><td>${o.k}${o.level === r.level ? ' ★' : ''}</td><td>${o.max_abs_t.toFixed(2)}</td><td>${o.thr95.toFixed(2)}</td><td>${o.score.toFixed(2)}</td><td>${pf(o.p_level)}</td></tr>`).join('') + '</table>' +
+    `<div class="mut">score = max |t| / that level's null 95% line; above 1 passes. p level = best cluster of that level only; the headline p_fw covers every level and cluster.</div>` +
+    `<button id="swuse">Use n=${r.k}</button> <button id="swonly">Show flagged only</button> <span id="swdir" class="mut"></span>`;
+  $('swuse').onclick = () => { $('lvl').value = 'super'; $('lvl').dispatchEvent(new Event('change')); $('sl').value = r.level; $('sl').dispatchEvent(new Event('change'));
+    st.flag = {level: r.level, sig: r.significant, expl: r.exploratory}; emit('labels'); toast(`level L${r.level}: ${r.k} clusters`); };
+  $('swonly').onclick = () => { $('swuse').click(); const f = [...r.significant, ...r.exploratory]; if (!f.length) return toast('no flagged cluster: nothing to isolate'); st.F = new Set(f); emit('filter'); };
+}
+$('swgo').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
+  try { lastSweep = await api(`sweep?name=${encodeURIComponent(st.proj.name)}`); } catch (e) { $('sweepres').innerHTML = `<span class="bad">${e.message}</span>`; return; } renderSweep(); };
+$('swexp').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
+  const {job} = await api('export', {name: st.proj.name}); $('sweepres').insertAdjacentHTML('beforeend', '<div class="mut">exporting: progress is in the Project tab and the log</div>');
+  poll(job, async () => { const d = (await api(`export_latest?name=${encodeURIComponent(st.proj.name)}`)).dir; $('sweepres').insertAdjacentHTML('beforeend', `<div class="ok">saved: <code id="swdirtxt">${d}</code></div>`); }); };
