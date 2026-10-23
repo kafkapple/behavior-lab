@@ -32,7 +32,7 @@
 - P1 Server and viewer: `GET /api/sessions` lists the sample; skeleton renders. Check: `selftest` passes.
 - P2 Groups, projects, frequency: save then load returns the same project; frequency sums to 100. Check: assert in selftest.
 - P3 SUBTLE job: sidecar written; progress reaches 100. Check: run on a 3,000-frame slice of `cort1`.
-- P3b Joint fit (done 261023): one fit over all project sessions, shared `fit_id`; frequency refuses to compare labels from different fits. Open: optional `avatar_preprocess` to match the Justin app (see `subtle_pipeline_io.md` section 4).
+- P3b Joint fit (done 261023): one fit over all project sessions, shared `fit_id`; frequency refuses to compare labels from different fits. Preprocessing already matches the app (same centering, verified 261023). Open: Mapper parameter values of the app form (see `subtle_pipeline_io.md` section 4).
 - P4 Alias (done 261023): shell function `subtle [dir] [--port N] [--no-open]` in `~/.zshrc`; the name `subtle` was free.
 - P5 Overlay check (planned, reuse first): 2D keypoints over the 5-camera video, to judge stage-3 quality before reading clusters.
   - P5.1 Split composite into camera cells: reuse `behavior_lab.rig.avatar` (layout, `split`). Check: cell sizes equal the rig yaml.
@@ -50,3 +50,20 @@
 - 🟡 SUBTLE needs `umap` and `phenograph`; macOS can SIGSEGV, so the job runs isolated (`isolate=True`).
 - 🟡 Full `cort1` (12,000 frames) runtime is unmeasured.
 - 🟡 `skeleton3d` quality in AVATAR has known hindleg and tail defects (see vault AVATAR 3D defects note).
+
+## 7. Status and difference from the Justin app (261023)
+Legend: ✅ done and checked, 🟡 done, not checked in a browser, ⬜ not started, ➖ not planned.
+
+| Function | Justin app (`SUBTLE_homepage` + storage + gpu) | SUBTLE Lite Viewer |
+|---|---|---|
+| Login, upload, file database | oauth, MinIO, file ids | ➖ local folder scan |
+| Video to keypoints (stages 1-3) | GPU server (RT-DETR, SLEAP, `recon3D`) | ➖ out of scope; input is a finished `.json.gz` |
+| SUBTLE train and analysis | two tasks; model saved as `.pkl` | ✅ one joint fit (train + analysis), sidecar per session |
+| Cluster levels | subcluster and supercluster mode | 🟡 both, switch in the page |
+| 3D skeleton playback | modal with frame slider, speed, grid | 🟡 canvas, frame slider, drag rotate |
+| Video next to skeleton | by file id | 🟡 by file stem; never tested with a real video |
+| Group comparison with saved groups | not found in the app | ✅ projects, groups, metadata, saved as json |
+| Frequency table with sum check | not found in the app | ✅ sum = 100 and one-fit check, asserted in selftest |
+| Cluster id to color | per page | ✅ one function for all views |
+| Overlay on video (2D points on 5 cameras) | not found | ⬜ PRD P5 |
+| Progress and debug log | task status polling | 🟡 job stage and percent, log tail panel |

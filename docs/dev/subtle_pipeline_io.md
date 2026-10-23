@@ -31,7 +31,9 @@ Line numbers are for the clone of 261023; re-check after a `git pull` there.
 ## 4. Stage 4-5 details
 - Input loader: `utils/subtle_utils.py:load_skeleton_data_from_json_gz` reads only `skeleton3d`, flattens 11 x 3 to 33 features, then runs `avatar_preprocess`.
 - The official app fits one Mapper on all selected files, then runs it on each file; one model, one cluster id space.
-- Our wrapper (`behavior_lab.models.discovery.subtle_wrapper`) only centers by the mean pose. It does NOT call `avatar_preprocess`. Results are therefore not identical to the app.
+- `avatar_preprocess` (`engine/subtle/utils.py:12`, same code in public `subtle/utils.py:12`) reshapes to (T, joints, 3) and subtracts the mean over frames and joints for each coordinate.
+- Our wrapper (`behavior_lab.models.discovery.subtle_wrapper`, `_preprocess`) does the same centering (with `nanmean`). 261023 correction: an earlier version of this note said the wrapper skipped it; that was wrong.
+- What can still differ: Mapper parameters (`fs`, `embedding_method`, `n_train_frames`). The app takes them from its form; the viewer uses the wrapper defaults (20 fps, 120,000 frames, umap). The app's default values were not found yet.
 
 ## 5. File names
 - The app finds the video of a result through database file ids (`resize_file_id`); the fallback strips `_det.json.gz` from the name.
@@ -39,5 +41,5 @@ Line numbers are for the clone of 261023; re-check after a `git pull` there.
 - The app inflates `.json.gz` in the browser (`pako`); no manual unzip.
 
 ## 6. Open items
-- Whether to call `avatar_preprocess` in the viewer job (needed to match the app).
+- Mapper parameter values used by the app form (`SUBTLE_homepage`); then set the viewer defaults equal.
 - Quality of stage-3 output per animal: use the overlay check (PRD P5) before reading cluster differences.
