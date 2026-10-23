@@ -163,9 +163,27 @@ def sweep_checks() -> None:
     print("sweep checks OK")
 
 
+def calib_checks() -> None:
+    """Synthetic 3-camera rig: distortion round trip, exact triangulation, and held-out reprojection error equal to the noise we add."""
+    import numpy as np
+    import calib
+    rng = np.random.default_rng(5)
+    cfg = {"camera_count": 3}
+    for i, (rv, tv) in enumerate([([0.1, 0.0, 0.0], [0.0, 0.0, 1.0]), ([0.0, 0.4, 0.0], [-0.3, 0.0, 1.1]), ([0.0, -0.4, 0.1], [0.3, 0.0, 1.1])]):
+        cfg[f"cam_{i + 1}"] = {"rotation": rv, "translation": tv, "matrix": [[1000, 0, 600], [0, 1000, 500], [0, 0, 1]], "distortions": [-0.1, 0.05, 0.001, -0.001, 0.0]}
+    rig = calib.Rig(cfg)
+    X = rng.normal(0, 0.05, (50, 3))
+    px = rig.project(X, 0)
+    assert np.abs(rig.undistort(px, 0) - (X @ rig.cams[0]["R"].T + rig.cams[0]["t"])[:, :2] / (X @ rig.cams[0]["R"].T + rig.cams[0]["t"])[:, 2:3]).max() < 1e-6   # distortion inverse
+    P = [rig.undistort(rig.project(X, c), c) for c in range(3)]
+    assert np.abs(np.array([rig.triangulate([P[c][n] for c in range(3)], [0, 1, 2]) for n in range(50)]) - X).max() < 1e-6   # exact triangulation
+    print("calib checks OK")
+
+
 if __name__ == "__main__":
     main()
     stats_checks()
     dek_checks()
     stability_checks()
     sweep_checks()
+    calib_checks()

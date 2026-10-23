@@ -1,6 +1,6 @@
 # 3D keypoint quality: metrics, gaps and priority plan (261024)
 
-Status: P1 built, P2 partly built, P3 to P8 planned. Code: `tools/subtle_viewer/quality.py`.
+Status: P1, P2, P3 clips and P5 built; P4 and P6 to P8 planned. Code: `tools/subtle_viewer/quality.py`, `tools/subtle_viewer/calib.py`.
 
 ## 1. Problem
 - The 3D skeleton comes from `recon3D` (top 2 cameras by confidence, triangulation, fill and smoothing; see `subtle_pipeline_io.md`).
@@ -14,6 +14,14 @@ Status: P1 built, P2 partly built, P3 to P8 planned. Code: `tools/subtle_viewer/
 - Weak-perspective residual of 3D against 2D per camera: about 16 to 35 px of a 1,200 px cell. It is not a calibrated reprojection error.
 - Reading: the data is jittery and has group-unequal copy rates. Whether it is accurate is unknown.
 
+## 2b. Calibration found and used (261024)
+- File: Olaf `~/data/avatar_gslrm/config.toml` (md5 `d97807ae...`, created 2024-12-24, 5 cameras, board error 0.95 to 1.99 px). Local copy: `data/avatar/calibration/config_20241224.toml` (gitignored). Earlier analysis: `261002_AVATAR_calib_residual_by_date` and `config_cam3rot90_until_20230523.toml` for older recordings.
+- Consistency with the 2D keypoints (cort1, every 10th frame): median epipolar distance 9.2 to 12.5 px with no crop offset; a 1000 px offset gives 600 to 870 px.
+- Held-out reprojection error (triangulate without one camera, project into it; all 8 sessions, node-frames seen by 3+ cameras): median 12.6 to 15.8 px per session, no group imbalance (cort 12.6 to 15.8, veh 13.4 to 15.4).
+- Per node (cort1): nose 8.3, head and trunk 10 to 15, hind legs 19 to 21, tail 30.8, tailend 32.3 px. Tail nodes are inconsistent across cameras at the 2D level, in every session (tail 25 to 40, tailend 19 to 43 px).
+- Same 2D points re-triangulated from all cameras above confidence 0.5: median reprojection 7.5 px; the stored 3D mapped by a global similarity fit: 32.2 px. The mapping is an assumption, so this is a bound on disagreement, not proof of an error.
+- Provenance gap: `recon3d.py` applies a fixed rotation and shift and a `square_size` factor from its own config. Replaying it with this calibration does not reproduce the stored 3D (median residual 14.6 in stored units; the fitted square size comes out negative). The stored 3D was therefore built with another configuration, still unknown. Ask the previous maintainer which `cfg["camera"]["calibration"]` and `square_size_overide_mm` produced `skeleton3d`.
+
 ## 3. Standard metrics (checked by web search and a grounded model call)
 - MPJPE: mean 3D joint error in mm against ground truth from motion capture, multi-view manual annotation or a calibrated rig (Rat7M for DANNCE).
 - PCK: share of keypoints within a distance threshold.
@@ -25,9 +33,9 @@ Status: P1 built, P2 partly built, P3 to P8 planned. Code: `tools/subtle_viewer/
 - P1 per-session label-free metrics in the page. Check: table for all sessions matches `quality.py` output; copy test agrees with the 2D support count where both apply.
 - P2 group balance gate: warn when the groups differ in copy rate or jump rate; sensitivity runs that exclude copied frames or named animals. Check: run `Sweep n` with the switches; result differences are shown next to the baseline.
 - P3 worst-frame review: clips of the worst 30 frames (copy, jump) with 2D overlay on video, rated good or bad by a person in about 30 minutes. Check: precision of each flag.
-- P4 small ground truth: annotate about 50 frames in 5 cameras for 3 animals, triangulate with the rig calibration. Needs the calibration files (open question with the previous maintainer). Check: MPJPE and PCK of the current pipeline in mm.
-- P5 calibrated reprojection error per camera and node. Needs P4 calibration. Check: error map by node and camera.
-- P6 better reconstruction: confidence-weighted use of all cameras, outlier rejection, bone-length and smoothness constraints. Check: P4 metrics before and after on the same frames.
+- P4 small ground truth: annotate about 50 frames in 5 cameras for 3 animals, triangulate with the rig calibration (found, section 2b). Needs the annotation work and the label tool. Check: MPJPE and PCK of the current pipeline in mm.
+- P5 calibrated reprojection error per camera and node (built: `calib.held_out_reprojection`). Check: synthetic rig recovers exact triangulation; real sessions give 12.6 to 15.8 px.
+- P6 better reconstruction: confidence-weighted use of all cameras (we already re-triangulate at 7.5 px), outlier rejection, bone-length and smoothness constraints; the tail also needs a better 2D detector because its held-out error is 30 px. Check: P4 metrics before and after on the same frames.
 - P7 left-right swap check of limb nodes. Check: precision on P3 review frames.
 - P8 rerun clusters and the group tests on the improved 3D with a new `fit_id`. Check: seed stability and sensitivity table.
 
