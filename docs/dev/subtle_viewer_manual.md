@@ -63,7 +63,7 @@
 - `Use n=k` switches the level; the legend marks significant clusters with ★ and exploratory ones (raw p below .05, not significant) with ☆. `Show flagged only` filters the map, timeline and replay to them.
 - `Export results` writes `outputs/subtle/<project>/<time>_n<k>_<criterion>/` (server option `--results-dir`; `summary.json` records the code commit): `sweep_levels.csv` (all criteria, plus the recommended n per criterion), `clusters.csv`, `summary.json`, `sweep.png`, and `cluster_<id>_<tag>.mp4` (up to 3 bouts per group from the proxy video, 2D keypoints and a caption). If nothing is significant, the 2 clusters with the largest |t| are clipped and tagged `exploratory_not_significant`. A group without per-camera video is skipped and the log says so.
 - Checks: planted effect found, hand-known p (2 of 70), and all 56 assignments of the real 8 animals gave 2 false positives (3.6 percent) for each of the four criteria.
-- Demo (cort 3 vs veh 5, first 3,000 frames): omnibus n = 4 (p_fw 0.39), maxt n = 4 (0.50), nsig n = 2 (1.0), meanp n = 2 (0.57). No criterion is significant.
+- Demo (cort 3 vs veh 5, first 3,000 frames): omnibus n = 3 (p_fw 0.55), maxt n = 3 (0.77), nsig n = 2 (1.0), meanp n = 3 (0.61); joint fit 63f43998 after the CWT fix. No criterion is significant.
 
 ## Proxy videos for all sessions
 - `python tools/subtle_viewer/fetch_cams.py <root> --project <name>` makes five camera proxies per session next to the session file. The 5-camera composite (about 10 GB) is copied from the server one session at a time, cut into the five cells in one decoding pass (cells from `core.CELLS`), written half size (H.264 CRF 28, keyframe every 20 frames), checked against the session's frame count, and then deleted.
