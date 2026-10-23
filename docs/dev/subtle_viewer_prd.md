@@ -61,11 +61,11 @@ Legend: ✅ done and checked, 🟡 done, not checked in a browser, ⬜ not start
 | SUBTLE train and analysis | two tasks; model saved as `.pkl` | ✅ one joint fit (train + analysis), sidecar per session |
 | Cluster levels | subcluster and supercluster mode | 🟡 both, switch in the page |
 | 3D skeleton playback | modal with frame slider, speed, grid | 🟡 canvas, frame slider, drag rotate |
-| Video next to skeleton | by file id | 🟡 by file stem; never tested with a real video |
-| Group comparison | DEK tab: group A vs B, per cluster and kinematic feature, Welch t-test, heatmap (`calculateDekStatistics`) | 🟡 saved groups and cluster frequency only; no kinematic comparison yet (P10) |
+| Video next to skeleton | by file id | ✅ by file stem; cam_2 proxy checked with a real video |
+| Group comparison | DEK tab: group A vs B, per cluster and kinematic feature, Welch t-test, heatmap (`calculateDekStatistics`) | 🟡 saved groups, cluster-share permutation test with stars (P11); kinematic DEK not yet (P10) |
 | Frequency table with sum check | not found in the app | ✅ sum = 100 and one-fit check, asserted in selftest |
 | Cluster id to color | per page | ✅ one function for all views |
-| Overlay on video (2D points on 5 cameras) | not found | ⬜ PRD P5 |
+| Overlay on video (2D points on 5 cameras) | not found | ✅ 2D keypoints on the camera video, dim for low confidence; all-camera tiles built, only checked for cam_2 |
 | Progress and debug log | task status polling | 🟡 job stage and percent, log tail panel |
 
 ## 8. Plan for generalization (261023, design only; nothing below is built)
