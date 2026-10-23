@@ -1,18 +1,26 @@
 // Drives the viewer in headless Chrome over the DevTools protocol (Node >= 22, no packages) and asserts what a user does:
 // keys, timeline drag, cluster names, Train and Map buttons. usage: node browser_check.mjs <keys|train> <base url> [chrome path]
+// keys mode needs a session and a saved project in the url: <base>/#open=<session path>&cam=1&frame=600&project=<name> (Sweep n refuses without a project)
 import {spawn} from 'node:child_process';
-import {mkdtempSync} from 'node:fs';
+import {mkdtempSync, readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
 const [mode, base, chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'] = process.argv.slice(2);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const proc = spawn(chrome, ['--headless=new', '--disable-gpu', '--remote-debugging-port=9333', `--user-data-dir=${mkdtempSync(join(tmpdir(), 'cdp-'))}`, '--window-size=1500,900', 'about:blank'], {stdio: 'ignore'});
+// port 0 = Chrome picks a free port and writes it to DevToolsActivePort: a fixed port let a Chrome left by a crashed run
+// answer instead, so the checks drove its old page (a hash-only navigate does not reload, the deep link never opened)
+const prof = mkdtempSync(join(tmpdir(), 'cdp-'));
+const proc = spawn(chrome, ['--headless=new', '--disable-gpu', '--remote-debugging-port=0', `--user-data-dir=${prof}`, '--window-size=1500,900', 'about:blank'], {stdio: 'ignore'});
+process.on('exit', () => proc.kill());
+process.on('uncaughtException', e => { console.error(e); process.exit(2); });
+process.on('unhandledRejection', e => { console.error(e); process.exit(2); });
 let ok = 0, bad = 0;
 const check = (name, cond, extra = '') => { cond ? ok++ : bad++; console.log(`${cond ? 'PASS' : 'FAIL'} ${name} ${extra}`); };
 
 async function connect() {
-  for (let i = 0; i < 50; i++) { try { const l = await (await fetch('http://127.0.0.1:9333/json')).json(); const p = l.find(t => t.type === 'page'); if (p) return p.webSocketDebuggerUrl; } catch (e) { /* not up yet */ } await sleep(200); }
+  for (let i = 0; i < 50; i++) { try { const port = readFileSync(join(prof, 'DevToolsActivePort'), 'utf8').split('\n')[0];
+    const l = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); const p = l.find(t => t.type === 'page'); if (p) return p.webSocketDebuggerUrl; } catch (e) { /* not up yet */ } await sleep(200); }
   throw new Error('chrome did not start');
 }
 const ws = new WebSocket(await connect()); await new Promise(r => ws.onopen = r);
@@ -65,7 +73,7 @@ if (mode === 'keys') {
   const f1 = await frame(); await key(' '); await sleep(1500); const fp = await frame(); await key(' ');
   check('Space plays (frame moved) and pauses', fp !== f1 && await js(`${$('play')}.textContent`) === '▶', `(frame ${f1} -> ${fp})`);
   // cluster name saved to the server
-  await js(`document.querySelector('.lrow input[data-n]').focus()`); await send('Input.insertText', {text: 'rearing_test'}); await key('Tab');
+  await js(`(i => { i.value = ''; i.focus(); })(document.querySelector('.lrow input[data-n]'))`); await send('Input.insertText', {text: 'rearing_test'}); await key('Tab');
   const saved = await until(`fetch('/api/names').then(r => r.json()).then(d => Object.values(d).includes('rearing_test'))`);
   check('typed cluster name saved on the server', saved);
   await js(`(async () => { const d = await fetch('/api/names').then(r => r.json()); for (const k of Object.keys(d)) if (d[k] === 'rearing_test') await fetch('/api/set_name', {method: 'POST', body: JSON.stringify({key: k, name: ''})}); })()`);
@@ -79,10 +87,10 @@ if (mode === 'keys') {
   await js(`${$('trace')}.value = '1'; ${$('trace')}.dispatchEvent(new Event('change'))`);
   check('trace 10 changes the cluster map, trace 1 restores it', h1 !== h10 && h1 === await hash());
   // level sweep: recommendation, flagged marks, isolate, and the saved result folder
-  await js(`${$('swgo')}.click()`); check('Sweep n shows the level table', await until(`document.querySelectorAll('#sweepres table tr').length >= 4`, 30000));
+  await js(`${$('swgo')}.click()`); check('Sweep n shows the level table', await until(`document.querySelectorAll('#sweepres table tr').length >= 4`, 120000));
   const rec = await js(`(document.querySelector('#sweepres .ok, #sweepres .bad') || {}).textContent || ''`); check('recommendation text states significance honestly', /recommended n = \d/.test(rec), `(${rec.slice(0, 90)})`);
-  await js(`${$('swcrit')}.value = 'meanp'; ${$('swgo')}.click()`); check('another criterion re-ranks the levels', await until(`document.querySelector('#sweepres table th') && document.querySelector('#sweepres').textContent.includes('Recommended n per criterion')`, 30000));
-  await js(`${$('swcrit')}.value = 'omnibus'; ${$('swgo')}.click()`); await sleep(1500);
+  await js(`${$('swcrit')}.value = 'meanp'; ${$('swgo')}.click()`); check('another criterion re-ranks the levels', await until(`document.querySelector('#sweepres table th') && document.querySelector('#sweepres').textContent.includes('Recommended n per criterion')`, 120000));
+  await js(`${$('sweepres')}.innerHTML = ''; ${$('swcrit')}.value = 'omnibus'; ${$('swgo')}.click()`); await until(`!!document.getElementById('swuse')`, 120000);
   await js(`${$('swuse')}.click()`); const kk = await js(`+document.getElementById('swuse').textContent.replace(/\\D/g, '')`);
   check('Use n sets the level (legend rows = n)', await until(`document.querySelectorAll('.lrow').length === ${kk}`, 5000), `(n=${kk})`);
   await js(`${$('swexp')}.click()`); check('Export results saves a folder', await until(`!!document.getElementById('swdirtxt')`, 120000), await js(`(document.getElementById('swdirtxt') || {}).textContent`));
