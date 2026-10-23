@@ -17,6 +17,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
 import core  # noqa: E402
+import model  # noqa: E402
+import stats  # noqa: E402
 
 HERE = Path(__file__).parent
 LOGBUF: collections.deque = collections.deque(maxlen=300)  # debug panel reads this; bounded, no leak
@@ -51,7 +53,24 @@ def _routes(root: Path):
             raise ValueError(f"unknown doc {name}")
         return {"name": name, "text": (docs / name).read_text(encoding="utf-8")}
 
+    def camview(q):
+        s = core.load(root, q["path"][0])
+        if s["kp"] is None:
+            raise ValueError("no 2D keypoints in this file")
+        return core.cam_view(s, int(q["cam"][0]))
+
+    def proj_of(q):
+        return core.load_project(root, q["name"][0])
+
+    sl = lambda q: int(q["sl"][0]) if "sl" in q else None  # noqa: E731
     return {
+        "camview": lambda q, b: camview(q),
+        "stats": lambda q, b: stats.group_stats(root, proj_of(q), q.get("level", ["super"])[0], sl(q), q.get("correct", ["1"])[0] == "1"),
+        "names": lambda q, b: stats.names_all(root),
+        "set_name": lambda q, b: stats.names_set(root, b["key"], b["name"]),
+        "models": lambda q, b: model.list_models(root),
+        "train": lambda q, b: {"job": model.start_train(root, b["name"], b["paths"], int(b.get("max_frames", 0)), b.get("seed"))},
+        "map": lambda q, b: {"job": model.start_map(root, b["name"], b["paths"])},
         "docs": lambda q, b: sorted(p.name for p in docs.glob("subtle_*.md")),
         "doc": lambda q, b: doc(q),
         "kp2d": lambda q, b: kp2d(q),

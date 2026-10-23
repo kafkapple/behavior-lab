@@ -1,21 +1,28 @@
 // The three drawing views: 3D skeleton, cluster map, timeline. They redraw on bus events and never call each other.
-import {$, st, on, emit, fit, lid, inF} from './state.js';
+import {$, st, on, emit, fit, lid, inF, api} from './state.js';
 import {color} from './colors.js';
 
 const cen = f => [0, 1, 2].map(i => f.reduce((s, j) => s + j[i], 0) / f.length);
 const fg = () => getComputedStyle(document.body).color;
 
 // ---- 3D skeleton: follows the animal; zoom, rotate, pan
-let V = {yaw: .6, pitch: -.4, zoom: 1, px: 0, py: 0}, B = 1;
+// R0 = rotation that shows the skeleton as the selected camera sees it (server: core.cam_view); yaw/pitch are offsets from it.
+let R0 = null, B = 1;
+const home = () => R0 ? {yaw: 0, pitch: 0, zoom: 1, px: 0, py: 0} : {yaw: .6, pitch: -.4, zoom: 1, px: 0, py: 0};
+let V = home();
+export const resetView = () => { V = home(); drawSkel(); };
+export const zoomSkel = f => { V.zoom = Math.min(20, Math.max(.2, V.zoom * f)); drawSkel(); };
 function drawSkel() {
   const S = st.S, c = $('cv'), x = fit(c), W = c.width, H = c.height; x.clearRect(0, 0, W, H);
   if (!S || !S.xyz.length) return;
   const f = S.xyz[st.fr], cy = Math.cos(V.yaw), sy = Math.sin(V.yaw), cp = Math.cos(V.pitch), sp = Math.sin(V.pitch), k = H * .42 / B * V.zoom, c0 = cen(f);
-  const P = j => { const a = j[0] - c0[0], b = j[1] - c0[1], d = j[2] - c0[2], X = a * cy - d * sy, Z = a * sy + d * cy, Y = b * cp - Z * sp; return [W / 2 + V.px + X * k, H / 2 + V.py - Y * k]; };
+  const P = j => { let a = j[0] - c0[0], b = j[1] - c0[1], d = j[2] - c0[2];
+    if (R0) { const u = R0[0][0] * a + R0[0][1] * b + R0[0][2] * d, w = R0[1][0] * a + R0[1][1] * b + R0[1][2] * d, z = R0[2][0] * a + R0[2][1] * b + R0[2][2] * d; a = u; b = w; d = z; }
+    const X = a * cy - d * sy, Z = a * sy + d * cy, Y = b * cp - Z * sp; return [W / 2 + V.px + X * k, H / 2 + V.py - Y * k]; };
   const col = color(lid(st.fr)); x.lineWidth = 3; x.strokeStyle = col; x.fillStyle = col;
   for (const [a, b] of S.edges) { const p = P(f[a]), q = P(f[b]); x.beginPath(); x.moveTo(...p); x.lineTo(...q); x.stroke(); }
   f.forEach(j => { const p = P(j); x.beginPath(); x.arc(p[0], p[1], 3.5, 0, 7); x.fill(); });
-  x.fillStyle = fg(); x.font = '11px sans-serif'; x.fillText(`zoom ${V.zoom.toFixed(2)}x`, 8, H - 8);
+  x.fillStyle = fg(); x.font = '11px sans-serif'; x.fillText(`zoom ${V.zoom.toFixed(2)}x${R0 ? ` · aligned to cam_${st.camNow + 1} (double-click = back to it)` : ' · free view (no camera alignment)'}`, 8, H - 8);
 }
 function bodySize() {                                                  // median max joint distance from the centroid
   const S = st.S, r = [];
@@ -26,7 +33,7 @@ const cv = $('cv'); let drag = null;
 cv.addEventListener('wheel', e => { e.preventDefault(); V.zoom = Math.min(20, Math.max(.2, V.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12))); drawSkel(); }, {passive: false});
 cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.onmousedown = e => { drag = {x: e.clientX, y: e.clientY, v: {...V}, pan: e.shiftKey || e.button === 2}; };
-cv.ondblclick = () => { V = {yaw: .6, pitch: -.4, zoom: 1, px: 0, py: 0}; drawSkel(); };
+cv.ondblclick = resetView;
 
 // ---- cluster map: embedding scatter, current frame ringed, non-filtered points dimmed
 let M = {zoom: 1, px: 0, py: 0}, cache = null, eb = null;
@@ -58,15 +65,27 @@ window.onmousemove = e => {
   if (md) { const r = mp.getBoundingClientRect(), s = mp.width / r.width; if (Math.abs(e.clientX - md.x) + Math.abs(e.clientY - md.y) > 3) moved = true; M.px = md.px + (e.clientX - md.x) * s; M.py = md.py + (e.clientY - md.y) * s; drawMap(); }
 };
 
-// ---- timeline: one color per frame, dimmed outside the filter
+// ---- timeline: one color per frame, dimmed outside the filter, hatched where no label exists, drag to scrub
 function drawTl() {
-  const c = $('tl'), x = fit(c); x.clearRect(0, 0, c.width, c.height); if (!st.S || !st.S.L) return;
-  const n = st.S.xyz.length; for (let i = 0; i < n; i++) { x.globalAlpha = inF(i) ? 1 : .12; x.fillStyle = color(lid(i)); x.fillRect(i / n * c.width, 0, Math.max(1, c.width / n), c.height); }
-  x.globalAlpha = 1; x.fillStyle = fg(); x.fillRect(st.fr / n * c.width - 1, 0, 2, c.height);
+  const c = $('tl'), x = fit(c); x.clearRect(0, 0, c.width, c.height); if (!st.S) return;
+  const n = st.S.xyz.length, L = st.S.L, nl = L ? L.length : 0;
+  for (let i = 0; i < nl; i++) { x.globalAlpha = inF(i) ? 1 : .12; x.fillStyle = color(lid(i)); x.fillRect(i / n * c.width, 0, Math.max(1, c.width / n), c.height); }
+  x.globalAlpha = 1;
+  if (nl < n) { const x0 = nl / n * c.width; x.fillStyle = '#8884'; x.fillRect(x0, 0, c.width - x0, c.height); x.strokeStyle = '#888'; x.lineWidth = 1;
+    for (let u = x0; u < c.width + c.height; u += 8) { x.beginPath(); x.moveTo(u, 0); x.lineTo(u - c.height, c.height); x.stroke(); }
+    x.fillStyle = fg(); x.font = `${Math.round(c.height * .55)}px sans-serif`; x.fillText(nl ? `no labels after frame ${nl * st.S.stride}: map all frames` : 'no labels: run SUBTLE', x0 + 6, c.height * .72); }
+  x.fillStyle = fg(); x.fillRect(st.fr / n * c.width - 1, 0, 2, c.height);
 }
-$('tl').onclick = e => { if (!st.S) return; st.fr = Math.floor(e.offsetX / e.target.clientWidth * st.S.xyz.length); emit('frame'); };
+const tl = $('tl'); let scrub = false;
+const tlSeek = e => { if (!st.S) return; const r = tl.getBoundingClientRect(); st.fr = Math.max(0, Math.min(st.S.xyz.length - 1, Math.floor((e.clientX - r.left) / r.width * st.S.xyz.length))); emit('frame'); };
+tl.onpointerdown = e => { scrub = true; tl.setPointerCapture(e.pointerId); tlSeek(e); };
+tl.onpointermove = e => { if (scrub) tlSeek(e); };
+tl.onpointerup = tl.onpointercancel = () => { scrub = false; };
 
-on('session', () => { B = bodySize(); V = {yaw: .6, pitch: -.4, zoom: 1, px: 0, py: 0}; M = {zoom: 1, px: 0, py: 0}; eb = null; cache = null; drawSkel(); drawMap(); drawTl(); });
+on('cam', async () => { R0 = null;
+  if (st.S && st.S.has_kp !== false && st.camNow != null) { try { R0 = (await api(`camview?path=${encodeURIComponent(st.cur.path)}&cam=${st.camNow}`)).R; } catch (e) { R0 = null; } }
+  V = home(); drawSkel(); });
+on('session', () => { B = bodySize(); V = home(); M = {zoom: 1, px: 0, py: 0}; eb = null; cache = null; drawSkel(); drawMap(); drawTl(); });
 on('frame', () => { drawSkel(); drawMap(); drawTl(); });
 on('labels', () => { cache = null; drawSkel(); drawMap(); drawTl(); });
 on('filter', () => { cache = null; drawMap(); drawTl(); });

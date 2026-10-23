@@ -1,8 +1,8 @@
 // Entry: session list, open a session, playback, right-panel tabs, manuals.
 import {$, st, on, emit, api, toast, FPS, fillLevels, relabel, inF, nextIn} from './state.js';
-import './views.js';
+import {resetView, zoomSkel} from './views.js';
 import './legend.js';
-import {setCam, videoOn} from './video.js';
+import {setCam, setAll, vids, videoOn, toggleKp, isAll} from './video.js';
 import {refreshProjects} from './project.js';
 
 async function init() {
@@ -22,11 +22,11 @@ async function open_(p, meta, cam, frame) {
   if (cam != null && cams[cam]) sel.value = cam;
   fillLevels(); relabel();
   document.querySelectorAll('.sess').forEach(e => e.classList.toggle('on', e.dataset.p === p));
-  $('vtitle').textContent = `${p} — ${st.S.n} frames`;
+  $('vtitle').textContent = `${p.split('/').pop()} — ${st.S.n} frames`;
   await setCam(); emit('session'); emit('frame');
 }
 on('reload', () => st.cur && open_(st.cur.path, st.cur, $('camsel').value || null, st.fr));
-$('camsel').onchange = setCam;
+$('camsel').onchange = () => setCam();
 $('lvl').onchange = () => { fillLevels(); relabel(); emit('labels'); };
 $('sl').onchange = () => { relabel(); emit('labels'); };
 
@@ -35,19 +35,38 @@ on('frame', () => { const S = st.S; if (!S) return; $('fr').value = st.fr; $('fi
   const id = S.L && S.L[st.fr]; $('cur').textContent = id == null ? 'no cluster labels (run SUBTLE)' : `cluster ${id}`; });
 $('fr').oninput = e => { st.fr = +e.target.value; emit('frame'); };
 
-// ---- playback: the video is the clock when shown, else a timer; a filter makes replay skip other clusters
+// ---- playback: the first video is the clock when shown, else a timer; a filter makes replay skip other clusters.
+// Seeking while playing (slider, timeline, map click) is picked up by video.js draw(), which re-syncs every video.
 let timer = null, raf = null;
-$('play').onclick = () => {
-  const v = $('vid');
-  if (timer || raf) { clearInterval(timer); cancelAnimationFrame(raf); timer = raf = null; v.pause(); $('play').textContent = '▶'; return; }
+const playing = () => timer || raf;
+function stop() { clearInterval(timer); cancelAnimationFrame(raf); timer = raf = null; vids().forEach(v => v.pause()); $('play').textContent = '▶'; }
+function toggle() {
+  if (playing()) return stop();
   if (!st.S) return; $('play').textContent = '⏸';
-  if (videoOn()) { v.currentTime = st.fr * st.S.stride / FPS(); v.play();
-    const tick = () => { st.fr = Math.min(st.S.xyz.length - 1, Math.round(v.currentTime * FPS() / st.S.stride));
-      if (st.F.size && !inF(st.fr)) { st.fr = nextIn(st.fr); v.currentTime = st.fr * st.S.stride / FPS(); }
+  if (videoOn()) { const V = vids(), v = V[0]; V.forEach(x => { x.currentTime = st.fr * st.S.stride / FPS(); x.play(); });
+    const tick = () => { if (!v.paused) st.fr = Math.min(st.S.xyz.length - 1, Math.round(v.currentTime * FPS() / st.S.stride));
+      if (st.F.size && !inF(st.fr)) st.fr = nextIn(st.fr);
       emit('frame'); raf = requestAnimationFrame(tick); };
     raf = requestAnimationFrame(tick);
   } else timer = setInterval(() => { st.fr = nextIn((st.fr + 1) % st.S.xyz.length); emit('frame'); }, 1000 / FPS());
-};
+}
+$('play').onclick = toggle;
+on('cam', () => { if (playing()) stop(); });
+
+// ---- keyboard, same keys as the BS viewer: Space play, arrows step, +/- zoom, Enter reset view, h panels, ? manuals
+const step = d => { if (!st.S) return; st.fr = Math.max(0, Math.min(st.S.xyz.length - 1, st.fr + d)); emit('frame'); };
+const tab = t => document.querySelector(`#tabs button[data-t="${t}"]`).click();
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'range') return;
+  const k = e.key, cams = Object.keys((st.cur && st.cur.cams) || {});
+  const A = {' ': toggle, ArrowLeft: () => step(-1), ArrowRight: () => step(1), ArrowUp: () => step(10), ArrowDown: () => step(-10), ',': () => step(-1), '.': () => step(1),
+    '+': () => zoomSkel(1.15), '=': () => zoomSkel(1.15), '-': () => zoomSkel(1 / 1.15), Enter: resetView, h: () => document.body.classList.toggle('hide'),
+    k: () => toast('keypoints ' + (toggleKp() ? 'on' : 'off')), l: () => tab('clu'), '?': () => document.querySelector('[data-d]') && document.querySelector('[data-d]').click(),
+    Escape: () => { st.F = new Set(); emit('filter'); }, 0: () => cams.length ? setAll() : toast('no camera video'),
+    1: () => pick(cams, 0), 2: () => pick(cams, 1), 3: () => pick(cams, 2), 4: () => pick(cams, 3), 5: () => pick(cams, 4)};
+  if (A[k]) { e.preventDefault(); A[k](); }
+});
+function pick(cams, c) { if (cams.includes(String(c))) { $('camsel').value = c; setCam(String(c)); } else toast(`cam_${c + 1} has no video here (only ${cams.map(x => 'cam_' + (+x + 1)).join(', ') || 'none'})`); }
 
 // ---- right panel tabs
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {

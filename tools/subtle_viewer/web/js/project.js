@@ -1,9 +1,9 @@
 // Project: groups, save and load, the SUBTLE fit job, and the frequency table with its sum check.
-import {$, st, on, emit, api, toast} from './state.js';
+import {$, st, on, emit, api, toast, nkey, cname} from './state.js';
 import {color} from './colors.js';
 
 export async function refreshProjects() { $('pl').innerHTML = (await api('projects')).map(n => `<option>${n}</option>`).join(''); }
-function renderGroups() {
+export function renderGroups() {
   const g = st.proj.groups;
   $('groups').innerHTML = Object.entries(g).map(([n, l]) => `<div><b>${n}</b> <span class="mut">(${l.length})</span> <button data-del="${n}">×</button><br>` +
     l.map(p => `<span class="mut">${p.split('/').pop()}</span>`).join(', ') + '</div>').join('');
@@ -40,3 +40,35 @@ async function poll(id) {
 }
 setInterval(async () => { try { $('log').textContent = (await api('log')).slice(-60).join('\n'); } catch (e) { /* server restarting */ } }, 2000);
 on('labels', freq);
+
+// ---- models: train once on the project sessions, save, then map any session (all frames) with the saved model
+const projPaths = () => [...new Set(Object.values(st.proj.groups).flat())];
+async function refreshModels() { try { $('ml').innerHTML = (await api('models')).map(m => `<option value="${m.name}">${m.name} · ${m.n_sub} sub · ${m.id}</option>`).join(''); } catch (e) { /* none yet */ } }
+$('mt').onclick = async () => { const name = $('mn').value.trim(), paths = projPaths(); if (!name || !paths.length) return toast('model name + project sessions needed');
+  const sd = $('seed').value; const {job} = await api('train', {name, paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd}); poll(job); };
+$('mm').onclick = async () => { const name = $('ml').value, paths = projPaths(); if (!name || !paths.length) return toast('pick a model + add sessions to groups');
+  const {job} = await api('map', {name, paths}); poll(job); };
+on('reload', refreshModels); refreshModels();
+
+// ---- group statistics: share of each cluster per animal, exact permutation p, Hedges g, BH-adjusted stars
+let lastStats = null;
+$('stgo').onclick = async () => {
+  if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
+  const sl = $('sl').style.display === '' && $('lvl').value === 'super' ? '&sl=' + $('sl').value : '';
+  try { lastStats = await api(`stats?name=${encodeURIComponent(st.proj.name)}&level=${$('lvl').value}${sl}&correct=${$('stbh').checked ? 1 : 0}`); } catch (e) { $('stat').innerHTML = `<span class="bad">${e.message}</span>`; return; }
+  renderStats(); };
+function renderStats() {
+  const R = lastStats; if (!R) return;
+  $('stat').innerHTML = `<div class="${R.one_fit ? 'ok' : 'bad'}">${R.one_fit ? 'all sessions from one fit' : 'sessions are NOT from one fit: ids are not comparable'}</div><div class="mut">unit: ${R.unit}. Groups come from the project (folder names unless you set them): provisional.</div>` +
+    R.pairs.map(P => { const [ga, gb] = P.groups, mx = Math.max(1, ...P.tests.flatMap(t => [...t.values[ga], ...t.values[gb]]));
+      return `<h3 style="margin-top:10px">${ga} (n=${P.n[ga]}) vs ${gb} (n=${P.n[gb]})</h3><div class="mut">${P.method}; smallest possible p = ${P.min_p.toFixed(4)}; ${P.correction}</div>` +
+      (P.min_p >= .05 ? '<div class="bad">smallest possible p ≥ 0.05: no star is reachable with these group sizes</div>' : '') +
+      '<table><tr><th>cluster</th><th>% ' + ga + ' / ' + gb + '</th><th>animals</th><th>g</th><th>p adj</th></tr>' +
+      P.tests.map(t => { const nm = cname(t.cluster), dot = (v, c) => v.map(x => `<i style="left:${100 * x / mx}%;background:${c}"></i>`).join('');
+        return `<tr><td>${t.cluster}${nm ? ' ' + nm : ''}</td><td>${t.mean[ga].toFixed(1)} / ${t.mean[gb].toFixed(1)}</td><td><div class="dots">${dot(t.values[ga], '#5ac8fa')}${dot(t.values[gb], '#ff9f0a')}</div></td>` +
+          `<td>${t.g == null ? '–' : t.g.toFixed(2)}</td><td title="raw p ${t.p.toFixed(4)}">${t.p_adj.toFixed(3)} <b class="${t.stars === 'ns' ? 'mut' : 'ok'}">${t.stars}</b></td></tr>`; }).join('') + '</table><div class="mut">dots: ' + ga + ' blue, ' + gb + ' orange; one dot = one animal</div>'; }).join('');
+}
+$('stcsv').onclick = () => { if (!lastStats) return toast('run Compare groups first');
+  const rows = [['group_a', 'group_b', 'cluster', 'mean_a', 'mean_b', 'diff', 'hedges_g', 'p', 'p_adj', 'stars', 'method']];
+  for (const P of lastStats.pairs) for (const t of P.tests) rows.push([P.groups[0], P.groups[1], t.cluster, t.mean[P.groups[0]], t.mean[P.groups[1]], t.diff, t.g, t.p, t.p_adj, t.stars, P.method]);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r => r.join(',')).join('\n')], {type: 'text/csv'})); a.download = 'group_stats.csv'; a.click(); };

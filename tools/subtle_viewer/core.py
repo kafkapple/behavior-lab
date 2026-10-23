@@ -243,3 +243,22 @@ def _run_job(root: Path, j: dict, max_frames: int, seed: int | None) -> None:
         _job_log(j, "ERROR " + j["error"])
     finally:
         j["done"] = True
+
+
+def cam_view(s: dict, cam: int) -> dict:
+    """Rotation that makes the 3D skeleton look like camera `cam`'s picture: fit 2D = A X + t on confident points,
+    orthonormalize the rows of A. Rows of R: screen right, screen up, toward the viewer. Weak-perspective fit, display only."""
+    k, x3 = kp_cell(s, cam), s["xyz"]
+    cw, ch = CELLS[cam][2:]
+    idx = np.arange(0, len(x3), max(1, len(x3) // 600))
+    m = k[idx, :, 2] > 0.5
+    a = np.c_[x3[idx][m], np.ones(int(m.sum()))]
+    b = np.c_[k[idx][m][:, 0] * cw, k[idx][m][:, 1] * ch]
+    if len(a) < 20:
+        raise ValueError("too few confident points to find the camera view")
+    sol = np.linalg.lstsq(a, b, rcond=None)[0]
+    r1 = sol[:3, 0] / np.linalg.norm(sol[:3, 0])
+    r2 = sol[:3, 1] - (sol[:3, 1] @ r1) * r1
+    up = -r2 / np.linalg.norm(r2)  # image y points down, screen up points up
+    res = float(np.median(np.linalg.norm(a @ sol - b, axis=1)))
+    return {"R": [r1.tolist(), up.tolist(), np.cross(r1, up).tolist()], "resid_px": round(res, 1), "points": int(len(a))}

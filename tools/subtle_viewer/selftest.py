@@ -73,5 +73,30 @@ def main():
     print("selftest OK")
 
 
+def stats_checks() -> None:
+    """Hand-computed cases for stats.py and a known-rotation check for core.cam_view."""
+    import numpy as np
+    import stats
+    a, b = np.array([1., 2, 3]), np.array([4., 5, 6])
+    p, m = stats.perm_p(a, b)
+    assert abs(p - 0.1) < 1e-9 and m == "exact permutation", (p, m)           # 2 of C(6,3)=20 splits are as extreme
+    assert abs(stats.perm_p(np.array([1., 2, 3]), np.array([4., 5, 6, 7, 8]))[0] - 2 / 56) < 1e-9
+    assert stats.hedges_g(a, b) < 0 and stats.hedges_g(a, a) == 0
+    assert stats.bh([0.01, 0.04, 0.03]) == [0.03, 0.04, 0.04]
+    assert [stats.stars(x) for x in (0.0004, 0.004, 0.04, 0.4)] == ["***", "**", "*", "ns"]
+    rng = np.random.default_rng(0)
+    th = 0.7
+    R = np.array([[np.cos(th), 0, np.sin(th)], [0, 1, 0], [-np.sin(th), 0, np.cos(th)]])   # rows: right, up, toward viewer
+    x3 = rng.normal(size=(800, 11, 3))
+    cw, ch = core.CELLS[1][2:]
+    u, v = x3 @ R[0], -(x3 @ R[1])                                               # image y points down
+    kp = np.stack([(u * 100 + 600) / cw, (v * 100 + 600) / ch, np.ones_like(u)], -1)
+    core.kp_cell = lambda s, cam: kp                                              # inject the synthetic 2D track
+    res = core.cam_view({"xyz": x3}, 1)
+    assert np.allclose(np.array(res["R"]), R, atol=1e-6), res["R"]
+    print("stats + cam_view OK")
+
+
 if __name__ == "__main__":
     main()
+    stats_checks()

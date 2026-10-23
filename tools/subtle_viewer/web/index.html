@@ -17,20 +17,24 @@
 <div id="main">
   <aside id="left"><h3>Sessions</h3><div id="list" class="mut">loading…</div></aside>
   <section id="stage">
-    <div class="pane" id="pvideo"><header><span id="vtitle">video + 2D keypoints</span>
+    <div class="pane" id="pvideo"><header><span id="vtitle">video + 2D keypoints</span><span class="mut">keys 1-5 camera · 0 all · k keypoints</span>
       <select id="camsel"></select><span id="vwarn" class="bad"></span></header>
-      <div id="vnone">no per-camera video for this session</div><video id="vid" controls muted preload="auto" style="display:none"></video><canvas id="ov"></canvas></div>
+      <div id="vnone">no per-camera video for this session</div><div id="vtiles" data-n="1"></div></div>
     <div class="pane" id="pskel"><header>3D skeleton · wheel zoom · drag rotate · shift/right-drag pan · double-click reset</header><canvas id="cv"></canvas></div>
     <div class="pane" id="pmap"><header>cluster map · wheel zoom · drag pan · click = jump</header><canvas id="mp"></canvas></div>
   </section>
   <aside id="right">
-    <div id="tabs"><button data-t="proj" class="on">Project</button><button data-t="freq">Frequency</button><button data-t="log">Log</button></div>
-    <div class="tabpage on" id="t_proj">
+    <div id="tabs"><button data-t="clu" class="on">Clusters</button><button data-t="proj">Project</button><button data-t="freq">Frequency</button><button data-t="stat">Stats</button><button data-t="log">Log</button></div>
+    <div class="tabpage on" id="t_clu"><div id="legend"></div></div>
+    <div class="tabpage" id="t_proj">
       <div style="display:flex;gap:6px;margin-bottom:6px"><input id="pn" placeholder="project name" style="flex:1;min-width:0"><button id="ps">Save</button></div>
       <div style="display:flex;gap:6px;margin-bottom:6px"><select id="pl" style="flex:1;min-width:0"></select><button id="pld">Load</button></div>
       <div style="display:flex;gap:6px;margin-bottom:6px"><input id="gn" placeholder="group name" style="flex:1;min-width:0"><button id="ga" title="add the open session to this group">+ add open session</button></div>
-      <div id="groups"></div><div id="job" class="mut" style="margin-top:8px"></div><progress id="pg" value="0" max="100" style="display:none"></progress></div>
+      <div id="groups"></div>
+      <h3 style="margin-top:10px">Model</h3><div style="display:flex;gap:6px;margin-bottom:6px"><input id="mn" placeholder="model name" style="flex:1;min-width:0"><button id="mt" title="train on all project sessions and save">Train</button></div>
+      <div style="display:flex;gap:6px;margin-bottom:6px"><select id="ml" style="flex:1;min-width:0"></select><button id="mm" title="label every frame of all project sessions with this model">Map</button></div><div id="job" class="mut" style="margin-top:8px"></div><progress id="pg" value="0" max="100" style="display:none"></progress></div>
     <div class="tabpage" id="t_freq"><div>Σ check <span id="sumbadge"></span></div><div id="freq" class="mut">save a project with groups first</div></div>
+    <div class="tabpage" id="t_stat"><div style="display:flex;gap:6px;margin-bottom:6px"><button id="stgo">Compare groups</button><label class="mut"><input type="checkbox" id="stbh" checked style="width:auto"> BH correction</label><button id="stcsv">CSV</button></div><div id="stat" class="mut">save a project with two or more groups, then press Compare groups</div></div>
     <div class="tabpage" id="t_log"><pre id="log"></pre></div>
   </aside>
 </div>
@@ -38,7 +42,7 @@
   <div class="row"><button id="play">▶</button><input id="fr" type="range" min="0" max="0" value="0" style="flex:1">
     <span id="fi" class="mut">0/0</span><label class="mut">fps <input id="fps" type="number" value="20" style="width:48px"></label><span id="cur" class="mut"></span></div>
   <canvas id="tl" width="1200" height="22"></canvas>
-  <div id="legend"></div>
+  <div id="keys" class="mut">Space play · ←/→ 1 · ↑/↓ 10 · , . 1 · +/- zoom · Enter reset view · 1-5 camera · 0 all cameras · k keypoints · l clusters · h hide panels · ? manuals · Esc clear filter</div>
 </div>
 </div>
 <div id="docview"><button id="docx" style="float:right">close</button><div id="doctext"></div></div>

@@ -1,7 +1,7 @@
 # SUBTLE viewer: model, kinematics and statistics plan (261023)
 
 Stages P9 to P12 of `subtle_viewer_prd.md`. Each stage is one commit with its own check; the next starts after the check passes.
-Nothing here is built yet. Facts come from the read-only copies in `~/dev/external/subtle_ref/` and from our own fits.
+P9 and P11 are built (261023); P10 and P12 are not. Facts come from the read-only copies in `~/dev/external/subtle_ref/` and from our own fits.
 
 ## 0. Findings that change the design
 - Node layout mismatch (must be solved by node name):

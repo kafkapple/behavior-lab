@@ -442,7 +442,8 @@ print(json.dumps({{'n_clusters': int(cr.n_clusters), 'elapsed': elapsed}}))
     def load(self, path: str):
         """Load pre-trained mapper."""
         _patch_subtle_cwt()
-        import subtle
-        self._mapper = subtle.Mapper()
-        self._mapper.load(path)
+        import pickle
+        import subtle  # noqa: F401  (the pickle references subtle classes)
+        with open(path, "rb") as f:  # Mapper.save pickles the whole object; Mapper has no load()
+            self._mapper = pickle.load(f)
         return self

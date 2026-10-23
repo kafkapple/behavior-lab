@@ -1,6 +1,8 @@
 // Shared state, tiny event bus, cluster labels and filter. Every view reads from here; none talks to another view.
 export const $ = id => document.getElementById(id);
-export const st = {S: null, cur: null, fr: 0, F: new Set(), KP: null, camNow: null, proj: {name: '', groups: {}, meta: {}}};
+export const st = {S: null, cur: null, fr: 0, F: new Set(), KP: null, camNow: null, proj: {name: '', groups: {}, meta: {}}, names: {}};
+export const nkey = id => `${st.S.fit_id}|${$('lvl').value}${$('lvl').value === 'super' && $('sl').style.display === '' ? ':' + $('sl').value : ''}|${id}`;
+export const cname = id => st.S && st.names[nkey(id)] || '';
 const H = {};
 export const on = (e, f) => (H[e] ??= []).push(f);
 export const emit = e => (H[e] || []).forEach(f => f());      // events: session, frame, labels, filter, project

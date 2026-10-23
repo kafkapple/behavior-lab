@@ -11,24 +11,39 @@
 - Sidecar `<name>.subtle.json` next to the result file: cluster labels, embedding, `fit_id`, `seed`. The original file is never changed.
 
 ## Screen
-- One screen, no page scroll. Left: sessions. Center: video with 2D keypoints (tall), 3D skeleton, cluster map. Right: tabs Project, Frequency, Log. Bottom: play, slider, timeline, legend.
+- One screen, no page scroll. Left: sessions. Center: video with 2D keypoints (tall), 3D skeleton, cluster map. Right: tabs Clusters, Project, Frequency, Stats, Log. Bottom: play, slider, timeline, key list.
 - Top toolbar: Clusters (level), Fit (frames, seed, Run), Help (manuals).
 
 ## Views
-- 3D skeleton (follows the animal): wheel = zoom, drag = rotate, shift or right-drag = pan, double-click = reset.
+- 3D skeleton (follows the animal): wheel = zoom, drag = rotate, shift or right-drag = pan, double-click or Enter = back to the selected camera's view.
+- The default 3D pose is the selected camera's view: the server fits a weak-perspective camera from the 2D keypoints to the 3D points (`core.cam_view`) and rotates the skeleton to it. The footer prints the camera; "free view" means no fit was possible.
 - Cluster map: wheel = zoom (around the cursor), drag = pan, click = jump to the nearest frame, double-click = reset.
-- Video: pick the camera in the pane header. Green points are 2D keypoints with conf above 0.25; missing points are hidden; bones take the cluster color.
-- Timeline: one color per frame; click to jump.
+- Video: pick the camera in the pane header or press 1-5; press 0 for all cameras with video at once (click a tile to select it). Only cameras whose video file sits next to the data appear.
+- Keypoints: green filled = conf above 0.25. Hollow green and dashed bones = low confidence, shown dim. Nothing is drawn only when the point is missing (x = y = 0, conf 0). Bones take the cluster color. Key `k` toggles the overlay.
+- Why a bone can disappear: it is drawn only when both end points exist in that camera's 2D track. The 3D view always draws every bone because the 3D track fills missing points from earlier frames.
+- Timeline: one color per frame; click or drag to scrub, also while playing. A hatched region means no label exists there: labels cover only the frames that were fitted (frames/session). Map the session with a saved model to label all frames.
 
 ## Clusters
 - One id has one color in every view (Tableau palette). Ids mean something only inside one fit; the legend shows the `fit_id`.
 - `cluster` select: `sub` or `super`. For `super` the second select lists the levels (`L0: n clusters`); the default is the level with the most clusters. Why levels: `subtle_theory.md`.
-- Legend chips: click = filter, double-click = solo, `all`, `none`. With a filter, playback skips other clusters and `next bout` jumps to the next run.
+- Clusters tab (right): one row per id with color, name field and share. Click = filter, double-click = solo, `all`, `none`. With a filter, playback skips other clusters and `next bout` jumps to the next run.
+- Names: type in the name field; it is saved per fit and level in `<root>/.subtle_projects/cluster_names.json` and shown in the Stats tab.
 
 ## Running SUBTLE
 - Add sessions to groups, then `Run SUBTLE jointly on all project sessions`. One fit covers all sessions, so ids are comparable.
 - Set a seed (default 0) for a repeatable fit; empty = random. What the seed controls: `subtle_theory.md` section 4. Max frames limits the time (3,000 frames for 8 animals took about 100 s).
+- Model: `Train` fits the project sessions once and saves `<root>/.subtle_models/<name>/model.pkl` and `model.json`. `Map` loads a saved model and labels every frame of the project sessions with it; the log prints how many trained frames keep their label (about 85 to 88 percent in a 2-session test, because mapping classifies new points).
 - Frequency table: the sum must be 100 and all sessions must come from one fit; otherwise the badge turns red.
+
+## Statistics
+- Stats tab, `Compare groups`: for each pair of groups, the share of each cluster per animal, exact permutation p of the mean difference, Hedges g, Benjamini-Hochberg adjusted p, and stars (* below .05, ** below .01, *** below .001, on the adjusted p). One dot = one animal.
+- The page prints the smallest possible p for the group sizes; with 3 vs 5 animals it is 0.0357, so ** and *** cannot appear.
+- Demo (8 animals, cort 3 vs veh 5, level L4, first 3,000 frames): adjusted p 0.77 to 1.0, no star. Groups are provisional (folder names).
+- Kinematics and DEK by node name are not built yet (`subtle_stats_plan.md` P10).
+
+## Keys
+- Same keys as the BS viewer: Space play, Left/Right 1 frame, Up/Down 10 frames, `,` `.` 1 frame, `+` `-` zoom skeleton, Enter reset view, `h` hide side panels, `?` manuals, `Esc` clear filter.
+- SUBTLE viewer additions: `1`-`5` camera, `0` all cameras, `k` keypoints, `l` Clusters tab.
 
 ## Limits
 - The unit of a group comparison is the animal, not the frame. With 3 vs 5 animals the smallest possible exact permutation p is 0.0357.

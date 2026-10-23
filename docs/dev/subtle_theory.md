@@ -16,7 +16,7 @@ What each SUBTLE stage does, where randomness enters, and how to read cluster le
 - Problem: compress X into a label T with few distinct values while keeping information about Y.
 - The original information bottleneck minimizes I(X;T) - beta I(T;Y). DIB replaces the compression term by the entropy of T: H(T) - beta I(T;Y).
 - Effect: each X gets exactly one T (a hard assignment, not a probability), which is what a cluster label needs.
-- In SUBTLE, X is the subcluster at time t and Y is the subcluster tau frames later (`tau` is a per-recording time lag averaged over recordings, `mapper.py:333-335`; how tau is computed was not checked).
+- In SUBTLE, X is the subcluster at time t and Y is the subcluster tau frames later (`tau` is a per-recording time lag averaged over recordings, `mapper.py:333-335`; `Mapper.run` computes it as tau = -2 / ln|lambda2| from the second-largest eigenvalue of the subcluster transition matrix, floored at half a frame interval; read in the installed `subtle` source 261023).
 - So a supercluster is a group of subclusters that lead to the same futures: it keeps the predictive structure of behavior.
 - beta sets the trade-off. Large beta keeps more information and gives more superclusters; small beta merges more.
 - The code cites a MATLAB implementation from `bermanlabemory/behavioral-evolution` (`module.py` comment); we did not check that repository.
