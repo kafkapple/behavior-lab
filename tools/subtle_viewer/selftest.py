@@ -77,6 +77,17 @@ def main():
         mm = core.load_project(r2, "p")["meta"]
         assert len(mm["description"]) == 200 and mm["group_notes"] == {"g": "n"} and list(mm["sessions"]) == ["a.json.gz"], mm
         assert mm["sessions"]["a.json.gz"] == {"animal": "m1", "condition": "cort", "date": "2023-12-05"}
+    core.RESULTS_BASE = None  # results folder rules: default under the data root, overridable, commit hash recorded
+    assert core.results_dir(Path("/d"), "p") == Path("/d/.subtle_results/p")
+    core.RESULTS_BASE = Path("/o"); assert core.results_dir(Path("/d"), "p") == Path("/o/p"); core.RESULTS_BASE = None
+    assert core.code_commit() != ""
+    import clean
+    with tempfile.TemporaryDirectory() as d3:  # retention: 5 runs, latest 3 kept, one older run protected by KEEP
+        b = Path(d3)
+        for n in ("260101_000000_a", "260102_000000_a", "260103_000000_a", "260104_000000_a", "260105_000000_a"):
+            (b / "p" / n).mkdir(parents=True)
+        (b / "p" / "260101_000000_a" / "KEEP").write_text("")
+        assert [p.name for p in clean.stale(b)] == ["260102_000000_a"], clean.stale(b)
     print("selftest OK")
 
 

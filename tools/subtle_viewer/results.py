@@ -127,11 +127,11 @@ def start(root: Path, name: str, criterion: str = "omnibus") -> str:
 def _run(root: Path, j: dict, name: str, criterion: str = "omnibus") -> None:
     j.update(stage="sweep", pct=5)
     R = sweep.project_sweep(root, core.load_project(root, name), criterion); rec = R["recommended"]
-    out = root / ".subtle_results" / name / f"{time.strftime('%y%m%d_%H%M%S')}_n{rec['k']}"; out.mkdir(parents=True)
+    out = core.results_dir(root, name) / f"{time.strftime('%y%m%d_%H%M%S')}_n{rec['k']}_{criterion}"; out.mkdir(parents=True)
     tables(R, out); j.update(stage="figure", pct=30); figure(R, root, out)
     lv = next(o for o in R["levels"] if o["level"] == rec["level"])
     flag, tag = (rec["significant"], "significant") if rec["significant"] else (np.array(lv["ids"])[np.argsort(-np.abs(lv["t"]))[:TOP_EXPLORATORY]].tolist(), "exploratory_not_significant")
     j.update(stage=f"clips for clusters {flag}", pct=45); files = clips(R, root, out, [int(c) for c in flag], tag, j)
-    summary = json.loads((out / "summary.json").read_text()); summary["files"] = sorted(p.name for p in out.iterdir()); summary["clips"] = files
-    (out / "summary.json").write_text(json.dumps(summary, indent=1)); (root / ".subtle_results" / name / "latest.txt").write_text(str(out))
+    summary = json.loads((out / "summary.json").read_text()); summary["commit"] = core.code_commit(); summary["project"] = name; summary["files"] = sorted(p.name for p in out.iterdir()); summary["clips"] = files
+    (out / "summary.json").write_text(json.dumps(summary, indent=1)); (core.results_dir(root, name) / "latest.txt").write_text(str(out))
     j.update(stage="done", pct=100); core._job_log(j, f"saved {out}")

@@ -61,7 +61,7 @@
 - Why this is valid here: the clustering never sees the group labels, so permuting labels does not require refitting. Conditions: units exchangeable under the null, criterion chosen beforehand, levels from one fit. `/fact --deep` (Gemini, GPT, web) agreed on these conditions; PERMANOVA also reacts to unequal group spread, and zero shares need Hellinger rather than Aitchison.
 - Reading it: if p_fw is not below .05, the page says in red that no difference should be reported. With 3 vs 5 animals the smallest possible p is 0.0179 (1 of 56 splits).
 - `Use n=k` switches the level; the legend marks significant clusters with ★ and exploratory ones (raw p below .05, not significant) with ☆. `Show flagged only` filters the map, timeline and replay to them.
-- `Export results` writes `<root>/.subtle_results/<project>/<time>_n<k>/`: `sweep_levels.csv` (all criteria, plus the recommended n per criterion), `clusters.csv`, `summary.json`, `sweep.png`, and `cluster_<id>_<tag>.mp4` (up to 3 bouts per group from the proxy video, 2D keypoints and a caption). If nothing is significant, the 2 clusters with the largest |t| are clipped and tagged `exploratory_not_significant`. A group without per-camera video is skipped and the log says so.
+- `Export results` writes `outputs/subtle/<project>/<time>_n<k>_<criterion>/` (server option `--results-dir`; `summary.json` records the code commit): `sweep_levels.csv` (all criteria, plus the recommended n per criterion), `clusters.csv`, `summary.json`, `sweep.png`, and `cluster_<id>_<tag>.mp4` (up to 3 bouts per group from the proxy video, 2D keypoints and a caption). If nothing is significant, the 2 clusters with the largest |t| are clipped and tagged `exploratory_not_significant`. A group without per-camera video is skipped and the log says so.
 - Checks: planted effect found, hand-known p (2 of 70), and all 56 assignments of the real 8 animals gave 2 false positives (3.6 percent) for each of the four criteria.
 - Demo (cort 3 vs veh 5, first 3,000 frames): omnibus n = 4 (p_fw 0.39), maxt n = 4 (0.50), nsig n = 2 (1.0), meanp n = 2 (0.57). No criterion is significant.
 
@@ -69,6 +69,9 @@
 - `python tools/subtle_viewer/fetch_cams.py <root> --project <name>` makes five camera proxies per session next to the session file. The 5-camera composite (about 10 GB) is copied from the server one session at a time, cut into the five cells in one decoding pass (cells from `core.CELLS`), written half size (H.264 CRF 28, keyframe every 20 frames), checked against the session's frame count, and then deleted.
 - Safe to re-run: sessions with all five proxies are skipped. Needs 14 GB free. Overlay viewing only; inference must use the raw video.
 - Defaults point at the CORT 28d composites on the lab server; change `--remote-dir` and `PREFIX` in the module for another dataset. Time: about 25 to 30 minutes per session.
+
+## Result retention
+- `python tools/subtle_viewer/clean.py` lists result folders beyond the latest 3 per project; a file named `KEEP` inside a folder protects it. `--apply` deletes the listed folders.
 
 ## Seed stability
 - Stats tab, `Seed stability`: refits the project sessions with seeds 0, 1, 2 (isolated, sidecars untouched; about 80 s per seed for 8 animals at 3,000 frames) and saves `<name>.stability.json`.

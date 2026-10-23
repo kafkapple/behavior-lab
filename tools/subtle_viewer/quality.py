@@ -87,7 +87,7 @@ def worst_frames(s: dict, n: int) -> list[dict]:
 def worst_clips(root: Path, proj: dict, name: str, per_session: int = 3) -> Path:
     """One clip per session that has a proxy video: the worst frames, 2D keypoints (green) next to the 3D skeleton projected into the same
     camera by the weak-perspective fit (magenta). The flagged node is ringed. A person rates each snippet; the csv has the rating column."""
-    out = root / ".subtle_results" / name / f"{time.strftime('%y%m%d_%H%M%S')}_quality"
+    out = core.results_dir(root, name) / f"{time.strftime('%y%m%d_%H%M%S')}_quality"
     out.mkdir(parents=True)
     cams = {s["path"]: s["cams"] for s in core.scan(root)}
     font = ImageFont.load_default(size=15)

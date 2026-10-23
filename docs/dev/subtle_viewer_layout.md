@@ -1,6 +1,6 @@
 # SUBTLE viewer: where files live (plan, 261023)
 
-Status: proposal. One decision is open (section 4). Applies to `tools/subtle_viewer/`.
+Status: S1 to S3 done 261024 (data root `data/subtle/cort28d/`, results `outputs/subtle/`, retention tool). Applies to `tools/subtle_viewer/`.
 
 ## 1. Problem
 - Results were written to `<root>/.subtle_results/` of a scratch folder. Scratch is wiped on reboot, so a deliverable can vanish.
@@ -17,8 +17,8 @@ Status: proposal. One decision is open (section 4). Applies to `tools/subtle_vie
 - Every result folder carries `summary.json` with project, `fit_id`, seed, criterion, group sizes and the code commit, so it can be rebuilt.
 - Vault notes link to the result folder and quote the headline numbers only; no video or csv is copied into the vault.
 
-## 4. Open decision
-- Where is the durable data root? Default proposal: `data/subtle/cort28d/` inside `behavior-lab`.
+## 4. Decision (261024)
+- The data root is `data/subtle/cort28d/` inside `behavior-lab`; the rig calibration sits in `data/avatar/calibration/`.
 - Result bundles for sharing (the clips and `sweep.png`) can also be copied to the lab Drive folder by hand; nothing syncs automatically.
 
 ## 5. Rules
@@ -28,7 +28,7 @@ Status: proposal. One decision is open (section 4). Applies to `tools/subtle_vie
 - Retention: keep the latest 3 result folders per project and any folder containing a file named `KEEP`; list the rest and ask before deleting.
 
 ## 6. Steps (each one has a check)
-- S1 decide the data root, move the demo data there. Check: `subtle <root>` opens with all 8 sessions and 5-camera proxies.
-- S2 add `--results-dir` (default `outputs/subtle`) and the commit hash to `summary.json`. Check: export writes there; selftest asserts the keys.
-- S3 add `tools/subtle_viewer/clean.py --dry-run` that lists result folders beyond retention. Check: lists the right folders, deletes nothing.
+- S1 done: data moved; the browser check passed 30 of 30 on the new root.
+- S2 done: `--results-dir` (default `outputs/subtle`); `summary.json` carries `commit` and `project`; selftest checks the path rule.
+- S3 done: `clean.py` lists result folders beyond the latest 3 per project (a `KEEP` file protects one); it deletes only with `--apply`.
 - S4 end-of-session sweep in 3 lines: temp files gone, docs name no temp path, newest result folder linked in the status note.

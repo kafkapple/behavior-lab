@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import subprocess
 import logging
 import re
 import threading
@@ -128,6 +129,22 @@ def load(root: Path, rel: str) -> dict:
         _CACHE.popitem(last=False)
     log.info("load %s: %s frames, %.1fs", rel, xyz.shape[0], time.time() - t0)
     return s
+
+
+RESULTS_BASE: Path | None = None   # set by the server (--results-dir); None = <root>/.subtle_results
+
+
+def results_dir(root: Path, name: str) -> Path:
+    """Folder that holds the result folders of one project (docs/dev/subtle_viewer_layout.md section 3)."""
+    return (RESULTS_BASE if RESULTS_BASE else root / ".subtle_results") / name
+
+
+def code_commit() -> str:
+    """Short git hash of this code, written into every summary.json so a result can be rebuilt."""
+    try:
+        return subprocess.run(["git", "-C", str(Path(__file__).parent), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
 
 
 def project_dir(root: Path) -> Path:
