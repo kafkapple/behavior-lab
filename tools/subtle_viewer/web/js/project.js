@@ -15,6 +15,7 @@ export function renderGroups() {
   document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { delete g[b.dataset.del]; delete M().group_notes[b.dataset.del]; renderGroups(); freq(); });
   document.querySelectorAll('.gnote').forEach(i => i.oninput = () => { M().group_notes[i.dataset.g] = i.value; });
   document.querySelectorAll('input.sm').forEach(i => i.oninput = () => { ((M().sessions[i.dataset.s] ??= {})[i.dataset.k] = i.value); });
+  if (st.proj.name) showStability().catch(() => { $('stabres').innerHTML = ''; });      // last saved seed-stability result, if any
 }
 $('pdesc').oninput = () => { M().description = $('pdesc').value; };
 $('ga').onclick = () => { const n = $('gn').value.trim(); if (!n || !st.cur) return toast('group name + open session needed');
@@ -40,11 +41,11 @@ $('an').onclick = async () => {
   if (!paths.length) return toast('add sessions to groups first (the fit covers all project sessions)');
   const sd = $('seed').value; const {job} = await api('analyze', {paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd}); poll(job);
 };
-async function poll(id) {
+async function poll(id, done) {
   const j = await api('job?id=' + id); $('pg').style.display = 'block'; $('pg').value = j.pct;
   $('job').innerHTML = `${j.stage} — ${j.pct}% — ${j.elapsed}s${j.error ? ` <span class="bad">${j.error}</span>` : ''}`;
-  if (!j.done) return setTimeout(() => poll(id), 1000);
-  if (!j.error) { toast('SUBTLE done'); emit('reload'); freq(); }
+  if (!j.done) return setTimeout(() => poll(id, done), 1000);
+  if (!j.error) { if (done) return done(); toast('SUBTLE done'); emit('reload'); freq(); }
 }
 setInterval(async () => { try { $('log').textContent = (await api('log')).slice(-60).join('\n'); } catch (e) { /* server restarting */ } }, 2000);
 on('labels', freq);
@@ -108,3 +109,14 @@ $('dkcsv').onclick = () => { if (!lastDek) return toast('run Compute DEK first')
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r => r.join(',')).join('\n')], {type: 'text/csv'})); a.download = 'dek.csv'; a.click(); };
 $('stpng').onclick = () => lastStats ? statsPng(lastStats) : toast('run Compare groups first');
 $('dkpng').onclick = () => lastDek ? dekPng(lastDek, lastDek.pairs[+$('dkpair').value || 0], $('dktype').value, $('dkn').value) : toast('run Compute DEK first');
+
+// ---- seed stability: refit with 3 seeds, show ARI and the group result per level so no level is picked after seeing the stars
+async function showStability() {
+  const R = await api(`stability_result?name=${encodeURIComponent(st.proj.name)}`), s = Object.keys(R.per_seed);
+  const row = (o, k) => `<tr><td>${k}</td><td>${Object.entries(o).map(([a, v]) => `${a}: ${v.toFixed(3)}`).join('<br>')}</td></tr>`;
+  $('stabres').innerHTML = `<h3 style="margin-top:8px">Seed stability (${R.created})</h3><div class="${R.star_pattern === 'stable' ? 'ok' : 'bad'}">star pattern across seeds: ${R.star_pattern} (any cluster below .05 at the default level: ${Object.entries(R.star_flags).map(([a, v]) => `seed ${a} ${v ? 'yes' : 'no'}`).join(', ')})</div>` +
+    `<div class="mut">first ${R.max_frames} frames per animal; groups ${R.groups.join(' vs ')} (provisional); ARI 1 = same partition, 0 = chance</div><table><tr><th>ARI</th><th>seed pairs</th></tr>${row(R.ari_sub, 'subclusters')}${row(R.ari_super_default, 'super, default level')}</table>` +
+    '<table><tr><th>seed</th><th>level</th><th>clusters</th><th>min p adj</th><th>n &lt; .05</th></tr>' + s.flatMap(sd => [['sub', R.per_seed[sd].sub], ...R.per_seed[sd].levels.map(l => ['L' + l.level + (l.level === R.per_seed[sd].default_level ? ' ★' : ''), l])].map(([n, l]) => `<tr><td>${sd}</td><td>${n}</td><td>${l.k}</td><td>${l.min_p_adj.toFixed(3)}</td><td>${l.n_sig}</td></tr>`)).join('') + '</table><div class="mut">★ = default level (most clusters)</div>';
+}
+$('stab').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
+  const {job} = await api('stability', {name: st.proj.name, max_frames: +$('mf').value, seeds: [0, 1, 2]}); $('stabres').innerHTML = '<span class="mut">running 3 fits: progress is in the Project tab and the log</span>'; poll(job, showStability); };

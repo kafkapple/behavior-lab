@@ -119,7 +119,7 @@ Details, checks and residual risks: `subtle_stats_plan.md`.
 | P9 | train, save, load, map new files | ✅ checked on 2 sessions (51 s train, all 11,998 frames mapped, 85 and 88 percent of trained frames keep their label) |
 | P10 | kinematics by node name, DEK group test | ✅ 84 features, Welch t + BH + g, heatmap; hand-computed t, planted-effect and shuffle checks pass |
 | P11 | cluster frequency statistics and plots with stars | ✅ table, dots, stars, CSV; PNG export not built |
-| P12 | seed stability across seeds, all levels shown | ⬜ |
+| P12 | seed stability across seeds, all levels shown | ✅ ARI and per-level group test; demo ARI 0.40 to 0.60 |
 | P13 | manuals readable in the page | ✅ |
 
 ## 10. UX basis and module structure (261023)

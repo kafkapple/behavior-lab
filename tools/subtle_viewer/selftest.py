@@ -131,7 +131,18 @@ def dek_checks() -> None:
     print("dek checks OK")
 
 
+def stability_checks() -> None:
+    """level_result on labels with a hand-known answer: 3 vs 3 animals perfectly separated -> exact p 2/20 for each cluster."""
+    import numpy as np
+    import stability
+    lab = np.concatenate([np.array([0] * 8 + [1] * 2)] * 3 + [np.array([0] * 2 + [1] * 8)] * 3)
+    r = stability.level_result(lab, [10] * 6, [[0, 1, 2], [3, 4, 5]], ["a", "b"])
+    assert r["k"] == 2 and abs(r["min_p_adj"] - 0.1) < 1e-9 and r["n_sig"] == 0, r
+    print("stability checks OK")
+
+
 if __name__ == "__main__":
     main()
     stats_checks()
     dek_checks()
+    stability_checks()

@@ -50,6 +50,12 @@
   - Demo (cort 3 vs veh 5, level L4, 420 cells): smallest adjusted p 0.38, no star. Shuffling the 8 animals over all 56 splits gave 4.6 percent raw p below 0.05, as expected for no effect.
   - Not excluded: frames whose 3D points were copied from earlier frames (the viewer's loader reads no per-frame flag). Speed terms of such frames are zero, so read speed differences with care.
 
+## Seed stability
+- Stats tab, `Seed stability`: refits the project sessions with seeds 0, 1, 2 (isolated, sidecars untouched; about 80 s per seed for 8 animals at 3,000 frames) and saves `<name>.stability.json`.
+- Shows the adjusted Rand index (ARI) between seeds for subclusters and for the default supercluster level, and the group test at every level (min adjusted p, number of clusters below .05), so no level is chosen after seeing the stars.
+- `stable` means every seed agrees on whether any cluster passes .05 at its default level; it can also mean a stable null. `seed-dependent` means they disagree.
+- Demo (8 animals, first 3,000 frames): ARI 0.41 to 0.45 for subclusters (61 to 66 clusters) and 0.40 to 0.60 for the default supercluster level. No seed gave a cluster below .05. The partition itself is only partly reproducible across seeds, so keep the seed fixed and say which seed a figure used.
+
 ## Keys
 - Same keys as the BS viewer: Space play, Left/Right 1 frame, Up/Down 10 frames, `,` `.` 1 frame, `+` `-` zoom skeleton, Enter reset view, `h` hide side panels, `?` manuals, `Esc` clear filter.
 - SUBTLE viewer additions: `1`-`5` camera, `0` all cameras, `k` keypoints, `l` Clusters tab.
