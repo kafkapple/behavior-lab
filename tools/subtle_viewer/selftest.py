@@ -1,0 +1,77 @@
+"""Backend self-check with SYNTHETIC data in a temp dir (logic only, never a result).  run: python selftest.py"""
+import gzip
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).parent))
+import core  # noqa: E402
+
+
+def mk(d: Path, name: str, T: int, labels=None, fit_id="f1"):
+    sk = {str(i): np.random.rand(11, 3).tolist() for i in range(T)}
+    body = {"node": {"id": [f"n{i}" for i in range(11)], "line": [[i, i + 1] for i in range(10)]}, "skeleton3d": sk}
+    p = d / f"{name}_sleap_1423.json.gz"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(p, "wt") as f:
+        json.dump(body, f)
+    if labels is not None:
+        (d / f"{name}_sleap_1423.subtle.json").write_text(
+            json.dumps({"subcluster": labels, "supercluster": labels, "fit_id": fit_id}))
+    return p
+
+
+def main():
+    with tempfile.TemporaryDirectory() as t:
+        root = Path(t)
+        mk(root / "a" / "deep", "A1", 30, [0, 1, 2] * 10)
+        mk(root / "b", "B1", 7, [0, 0, 1, 1, 1, 2, 2])
+        mk(root, "C1", 5)  # no labels
+        (root / "b" / "B1.mp4").write_bytes(b"x")
+        s = {x["stem"]: x for x in core.scan(root)}
+        assert set(s) == {"A1", "B1", "C1"}, s  # subfolders found
+        assert s["B1"]["video"] == "b/B1.mp4" and s["A1"]["video"] is None  # stem pairing, `_sleap_1423` stripped
+        assert s["A1"]["subtle"] and not s["C1"]["subtle"]
+        ses = core.load(root, s["A1"]["path"])
+        assert ses["xyz"].shape == (30, 11, 3) and len(ses["edges"]) == 10
+        try:
+            core.safe(root, "../etc/passwd")
+            raise SystemExit("path traversal not blocked")
+        except ValueError:
+            pass
+        proj = {"name": "p1", "groups": {"ctl": [s["A1"]["path"]], "drug": [s["B1"]["path"], s["A1"]["path"]]},
+                "meta": {"note": "t"}}
+        core.save_project(root, proj)
+        assert core.load_project(root, "p1") == proj and core.list_projects(root) == ["p1"]  # save/load round trip
+        try:
+            core.save_project(root, {"name": "../x", "groups": {}})
+            raise SystemExit("bad project name accepted")
+        except ValueError:
+            pass
+        f = core.frequency(root, proj)
+        for g, r in f.items():
+            assert r["ok"] and abs(sum(r["pct"].values()) - 100) < 1e-9, (g, r)  # every group sums to 100
+        assert f["drug"]["n"] == 37
+        assert all(r["same_fit"] for r in f.values())
+        mk(root / "b", "B2", 4, [0, 1, 1, 2], fit_id="OTHER")  # labels from a different fit must not be compared
+        mixed = core.frequency(root, {"groups": {"x": [s["A1"]["path"]], "y": ["b/B2_sleap_1423.json.gz"]}})
+        assert not any(r["ok"] for r in mixed.values()), mixed
+        assert [len(p) for p in core.split_by_lengths(list(range(9)), [3, 4, 2])] == [3, 4, 2]
+        try:
+            core.split_by_lengths(list(range(8)), [3, 4, 2])
+            raise SystemExit("length mismatch not caught")
+        except AssertionError:
+            pass
+        bad = core.frequency(root, {"groups": {"x": [s["C1"]["path"]]}})  # unlabeled session must flag, not pass
+        assert not bad["x"]["ok"] and bad["x"]["missing"]
+        for i in range(5):  # LRU cap holds
+            core.load(root, s["A1"]["path"]), core.load(root, s["B1"]["path"]), core.load(root, s["C1"]["path"])
+        assert len(core._CACHE) <= core.CACHE_MAX
+    print("selftest OK")
+
+
+if __name__ == "__main__":
+    main()

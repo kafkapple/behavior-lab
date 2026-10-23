@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBTLE Lite Viewer</title>
+<style>
+:root{--bg:#fff;--fg:#1d1d1f;--mut:#6e6e73;--line:#d2d2d7;--card:#f5f5f7;--ok:#1a7f37;--bad:#cf222e;--acc:#0a66c2}
+@media(prefers-color-scheme:dark){:root{--bg:#161618;--fg:#f5f5f7;--mut:#a1a1a6;--line:#3a3a3c;--card:#232326;--ok:#3fb950;--bad:#ff7b72;--acc:#58a6ff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.45 -apple-system,system-ui,sans-serif}
+header{padding:8px 16px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center}
+header b{font-size:15px}main{display:grid;grid-template-columns:240px 1fr 340px;gap:12px;padding:12px 16px}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0}
+h3{margin:0 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+button,select,input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+button{cursor:pointer}button:hover{border-color:var(--acc)}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0}
+.sess{padding:4px 6px;border-radius:6px;cursor:pointer;word-break:break-all}.sess:hover,.sess.on{background:var(--bg);outline:1px solid var(--acc)}
+.mut{color:var(--mut)}canvas{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;display:block}
+video{width:100%;max-height:240px;background:#000;border-radius:6px}
+.bar{height:8px;border-radius:4px;display:inline-block;vertical-align:middle}
+.ok{color:var(--ok)}.bad{color:var(--bad)}pre{margin:0;max-height:180px;overflow:auto;font:11px/1.4 ui-monospace,monospace;white-space:pre-wrap}
+progress{width:100%;height:10px}table{border-collapse:collapse;width:100%}td,th{padding:2px 4px;text-align:left;border-bottom:1px solid var(--line)}
+</style></head><body>
+<header><b>SUBTLE Lite Viewer</b><span class="mut" id="root"></span><span id="toast" class="mut"></span></header>
+<main>
+<section><h3>Sessions</h3><div id="list" class="mut">loading…</div></section>
+<section>
+  <h3>View</h3><div id="title" class="mut">select a session</div>
+  <canvas id="cv" width="640" height="360"></canvas>
+  <div class="row"><button id="play">▶</button><input id="fr" type="range" min="0" max="0" value="0" style="flex:1">
+    <span id="fi" class="mut">0/0</span>
+    <label class="mut">fps <input id="fps" type="number" value="20" style="width:52px"></label>
+    <label class="mut">cluster <select id="lvl"><option value="super">super</option><option value="sub">sub</option></select></label></div>
+  <canvas id="tl" width="640" height="26" style="height:26px"></canvas>
+  <div id="cur" class="mut"></div>
+  <video id="vid" controls muted style="display:none"></video>
+  <div class="row"><button id="an">Run SUBTLE jointly on all project sessions</button>
+    <label class="mut">max frames (0=all) <input id="mf" type="number" value="3000" style="width:70px"></label></div>
+  <div id="job" class="mut"></div><progress id="pg" value="0" max="100" style="display:none"></progress>
+</section>
+<section>
+  <h3>Project &amp; groups</h3>
+  <div class="row"><input id="pn" placeholder="project name" style="flex:1"><button id="ps">Save</button>
+    <select id="pl"></select><button id="pld">Load</button></div>
+  <div class="row"><input id="gn" placeholder="group name" style="flex:1"><button id="ga">+ add current</button></div>
+  <div id="groups"></div>
+  <h3 style="margin-top:10px">Frequency <span id="sumbadge"></span></h3><div id="freq" class="mut">—</div>
+  <h3 style="margin-top:10px">Debug log</h3><pre id="log"></pre>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const api=(p,b)=>fetch('/api/'+p,b?{method:'POST',body:JSON.stringify(b)}:{}).then(r=>r.json()).then(j=>{if(j&&j.error)throw new Error(j.error);return j});
+const color=id=>id==null||id<0?'#888':`hsl(${(id*137.508)%360} 65% 50%)`;  // one id -> one color, everywhere
+let S=null,cur=null,fr=0,timer=null,yaw=.6,pitch=-.4,proj={name:'',groups:{},meta:{}};
+const toast=m=>{$('toast').textContent=m;setTimeout(()=>$('toast').textContent='',4000)};
+const lab=()=>S&&S[$('lvl').value];                       // per-frame label (may be [T] or [T][levels])
+const lid=i=>{const l=lab();if(!l||l[i]==null)return null;return Array.isArray(l[i])?l[i][l[i].length-1]:l[i]};
+
+async function init(){
+  const L=await api('sessions');$('root').textContent=L.length+' sessions';
+  $('list').innerHTML=L.map(s=>`<div class="sess" data-p="${s.path}"><b>${s.stem}</b> <span class="mut">${s.mb} MB${s.video?' · video':''}${s.subtle?' · SUBTLE':''}</span><br><span class="mut">${s.path}</span></div>`).join('')||'no *.json.gz under root';
+  document.querySelectorAll('.sess').forEach(e=>e.onclick=()=>open_(e.dataset.p,L.find(x=>x.path==e.dataset.p)));
+  refreshProjects();
+}
+async function open_(p,meta){
+  toast('loading '+p);cur={path:p,...meta};S=await api('session?path='+encodeURIComponent(p));fr=0;
+  $('fr').max=S.xyz.length-1;$('title').textContent=p+` — ${S.n} frames`;
+  const v=$('vid');if(meta.video){v.src='/video?path='+encodeURIComponent(meta.video);v.style.display='block'}else{v.removeAttribute('src');v.style.display='none'}
+  document.querySelectorAll('.sess').forEach(e=>e.classList.toggle('on',e.dataset.p==p));draw();timeline();
+}
+function bounds(){let m=1;for(const f of S.xyz)for(const j of f)for(const v of j)m=Math.max(m,Math.abs(v));return m}
+let B=1;
+function draw(){
+  const c=$('cv'),x=c.getContext('2d'),W=c.width,H=c.height;x.clearRect(0,0,W,H);if(!S||!S.xyz.length)return;
+  if(fr==0)B=bounds();const f=S.xyz[fr],cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+  const P=j=>{const X=j[0]*cy-j[2]*sy,Z=j[0]*sy+j[2]*cy,Y=j[1]*cp-Z*sp;return[W/2+X/B*H*.42,H/2-Y/B*H*.42]};
+  const id=lid(fr),col=color(id);x.lineWidth=3;x.strokeStyle=col;x.fillStyle=col;
+  for(const[a,b]of S.edges){const p=P(f[a]),q=P(f[b]);x.beginPath();x.moveTo(...p);x.lineTo(...q);x.stroke()}
+  f.forEach(j=>{const p=P(j);x.beginPath();x.arc(p[0],p[1],3.5,0,7);x.fill()});
+  $('fi').textContent=`${fr*S.stride}/${S.n-1}`;$('fr').value=fr;
+  $('cur').innerHTML=id==null?'no cluster labels (run SUBTLE)':`cluster <span style="color:${col}">■</span> ${id}`;
+  const v=$('vid');if(v.src&&v.paused)v.currentTime=fr*S.stride/($('fps').value||20);
+}
+function timeline(){
+  const c=$('tl'),x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);if(!S||!lab())return;
+  const n=S.xyz.length;for(let i=0;i<n;i++){x.fillStyle=color(lid(i));x.fillRect(i/n*c.width,0,Math.max(1,c.width/n),c.height)}
+}
+$('lvl').onchange=()=>{draw();timeline();freq()};
+$('fr').oninput=e=>{fr=+e.target.value;draw()};
+$('play').onclick=()=>{if(timer){clearInterval(timer);timer=null;$('play').textContent='▶';return}
+  $('play').textContent='⏸';timer=setInterval(()=>{if(!S)return;fr=(fr+1)%S.xyz.length;draw()},1000/($('fps').value||20))};
+let drag=null;const cv=$('cv');
+cv.onmousedown=e=>drag=[e.clientX,e.clientY,yaw,pitch];window.onmouseup=()=>drag=null;
+window.onmousemove=e=>{if(drag){yaw=drag[2]+(e.clientX-drag[0])/120;pitch=drag[3]+(e.clientY-drag[1])/120;draw()}};
+$('tl').onclick=e=>{if(!S)return;fr=Math.floor(e.offsetX/e.target.clientWidth*S.xyz.length);draw()};
+
+$('an').onclick=async()=>{
+  const paths=[...new Set(Object.values(proj.groups).flat())];
+  if(!paths.length)return toast('add sessions to groups first (joint fit needs all project sessions)');
+  const{job}=await api('analyze',{paths,max_frames:+$('mf').value});poll(job);
+};
+async function poll(id){
+  const j=await api('job?id='+id);$('pg').style.display='block';$('pg').value=j.pct;
+  $('job').innerHTML=`${j.stage} — ${j.pct}% — ${j.elapsed}s${j.error?` <span class="bad">${j.error}</span>`:''}`;
+  if(!j.done)return setTimeout(()=>poll(id),1000);
+  if(!j.error){toast('SUBTLE done');if(cur)open_(cur.path,cur);freq()}
+}
+async function refreshProjects(){$('pl').innerHTML=(await api('projects')).map(n=>`<option>${n}</option>`).join('')}
+function renderGroups(){
+  $('groups').innerHTML=Object.entries(proj.groups).map(([g,l])=>`<div><b>${g}</b> <span class="mut">(${l.length})</span>
+    <button data-del="${g}">×</button><br>${l.map(p=>`<span class="mut">${p.split('/').pop()}</span>`).join(', ')}</div>`).join('');
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{delete proj.groups[b.dataset.del];renderGroups();freq()});
+}
+$('ga').onclick=()=>{const g=$('gn').value.trim();if(!g||!cur)return toast('group name + session needed');
+  (proj.groups[g]??=[]).includes(cur.path)||proj.groups[g].push(cur.path);renderGroups();freq()};
+$('ps').onclick=async()=>{proj.name=$('pn').value.trim();try{await api('save_project',proj);toast('saved '+proj.name);refreshProjects()}catch(e){toast(e.message)}};
+$('pld').onclick=async()=>{proj=await api('project?name='+encodeURIComponent($('pl').value));$('pn').value=proj.name;renderGroups();freq()};
+async function freq(){
+  if(!proj.name&&!Object.keys(proj.groups).length)return;
+  if(!proj.name){$('freq').textContent='save the project first (needs a name)';return}
+  await api('save_project',proj);
+  const F=await api(`frequency?name=${encodeURIComponent(proj.name)}&level=${$('lvl').value}`);
+  const ids=[...new Set(Object.values(F).flatMap(r=>Object.keys(r.pct)))].sort((a,b)=>a-b);
+  const allok=Object.values(F).every(r=>r.ok);
+  $('sumbadge').innerHTML=allok?'<span class="ok">Σ=100% ✓</span>':'<span class="bad">Σ≠100%, labels missing, or sessions not from one joint fit ✗</span>';
+  $('freq').innerHTML='<table><tr><th>cluster</th>'+Object.keys(F).map(g=>`<th>${g}</th>`).join('')+'</tr>'+
+    ids.map(i=>`<tr><td><span style="color:${color(+i)}">■</span> ${i}</td>`+Object.values(F).map(r=>`<td>${(r.pct[i]??0).toFixed(1)}%</td>`).join('')+'</tr>').join('')+
+    '<tr><td>Σ</td>'+Object.values(F).map(r=>`<td class="${r.ok?'ok':'bad'}">${r.sum.toFixed(2)}%${r.missing.length?' ⚠'+r.missing.length+' unlabeled':''}</td>`).join('')+'</tr></table>';
+}
+setInterval(async()=>{try{const L=await api('log');$('log').textContent=L.slice(-40).join('\n')}catch(e){}},2000);
+init().catch(e=>toast(e.message));
+</script></body></html>
