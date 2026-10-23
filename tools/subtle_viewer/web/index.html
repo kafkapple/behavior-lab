@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBTLE Lite Viewer</title><link rel="stylesheet" href="/web/style.css"></head><body>
+<div id="wrap">
+<div id="top">
+  <div class="grp"><b>SUBTLE Lite</b><span class="mut" id="root"></span></div>
+  <div class="grp"><span class="glabel">Clusters</span>
+    <select id="lvl" title="cluster level"><option value="super">super</option><option value="sub">sub</option></select>
+    <select id="sl" title="supercluster level = number of clusters (DIB solution), see subtle_theory"></select></div>
+  <div class="grp"><span class="glabel">Fit</span>
+    <label class="mut">frames/session <input id="mf" type="number" value="3000" style="width:64px" title="0 = all"></label>
+    <label class="mut">seed <input id="seed" type="number" value="0" style="width:50px" title="empty = random"></label>
+    <button id="an" title="one SUBTLE fit on every session of the project, so cluster ids are comparable">Run SUBTLE on project</button></div>
+  <div class="grp"><span class="glabel">Help</span><span id="docs"></span></div>
+  <span id="toast" class="mut"></span>
+</div>
+<div id="main">
+  <aside id="left"><h3>Sessions</h3><div id="list" class="mut">loading…</div></aside>
+  <section id="stage">
+    <div class="pane" id="pvideo"><header><span id="vtitle">video + 2D keypoints</span>
+      <select id="camsel"></select><span id="vwarn" class="bad"></span></header>
+      <div id="vnone">no per-camera video for this session</div><video id="vid" controls muted preload="auto" style="display:none"></video><canvas id="ov"></canvas></div>
+    <div class="pane" id="pskel"><header>3D skeleton · wheel zoom · drag rotate · shift/right-drag pan · double-click reset</header><canvas id="cv"></canvas></div>
+    <div class="pane" id="pmap"><header>cluster map · wheel zoom · drag pan · click = jump</header><canvas id="mp"></canvas></div>
+  </section>
+  <aside id="right">
+    <div id="tabs"><button data-t="proj" class="on">Project</button><button data-t="freq">Frequency</button><button data-t="log">Log</button></div>
+    <div class="tabpage on" id="t_proj">
+      <div style="display:flex;gap:6px;margin-bottom:6px"><input id="pn" placeholder="project name" style="flex:1;min-width:0"><button id="ps">Save</button></div>
+      <div style="display:flex;gap:6px;margin-bottom:6px"><select id="pl" style="flex:1;min-width:0"></select><button id="pld">Load</button></div>
+      <div style="display:flex;gap:6px;margin-bottom:6px"><input id="gn" placeholder="group name" style="flex:1;min-width:0"><button id="ga" title="add the open session to this group">+ add open session</button></div>
+      <div id="groups"></div><div id="job" class="mut" style="margin-top:8px"></div><progress id="pg" value="0" max="100" style="display:none"></progress></div>
+    <div class="tabpage" id="t_freq"><div>Σ check <span id="sumbadge"></span></div><div id="freq" class="mut">save a project with groups first</div></div>
+    <div class="tabpage" id="t_log"><pre id="log"></pre></div>
+  </aside>
+</div>
+<div id="dock">
+  <div class="row"><button id="play">▶</button><input id="fr" type="range" min="0" max="0" value="0" style="flex:1">
+    <span id="fi" class="mut">0/0</span><label class="mut">fps <input id="fps" type="number" value="20" style="width:48px"></label><span id="cur" class="mut"></span></div>
+  <canvas id="tl" width="1200" height="22"></canvas>
+  <div id="legend"></div>
+</div>
+</div>
+<div id="docview"><button id="docx" style="float:right">close</button><div id="doctext"></div></div>
+<script type="module" src="/web/js/main.js"></script>
+</body></html>

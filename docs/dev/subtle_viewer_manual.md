@@ -10,23 +10,30 @@
 - Large originals: make a small copy for display with `tools/subtle_viewer/make_proxy.sh raw.mp4 out.mp4`. The script checks that the frame count is equal.
 - Sidecar `<name>.subtle.json` next to the result file: cluster labels, embedding, `fit_id`, `seed`. The original file is never changed.
 
+## Screen
+- One screen, no page scroll. Left: sessions. Center: video with 2D keypoints (tall), 3D skeleton, cluster map. Right: tabs Project, Frequency, Log. Bottom: play, slider, timeline, legend.
+- Top toolbar: Clusters (level), Fit (frames, seed, Run), Help (manuals).
+
 ## Views
-- 3D skeleton: wheel = zoom, drag = rotate, shift or right-drag = pan, double-click = reset. The view follows the animal.
-- Cluster map: wheel = zoom (around the cursor), drag = pan, click = jump to the nearest frame.
-- Video: choose the camera; green points are 2D keypoints with conf above 0.25, missing points are hidden, bones take the cluster color.
+- 3D skeleton (follows the animal): wheel = zoom, drag = rotate, shift or right-drag = pan, double-click = reset.
+- Cluster map: wheel = zoom (around the cursor), drag = pan, click = jump to the nearest frame, double-click = reset.
+- Video: pick the camera in the pane header. Green points are 2D keypoints with conf above 0.25; missing points are hidden; bones take the cluster color.
 - Timeline: one color per frame; click to jump.
 
 ## Clusters
-- One cluster id has one color in every view.
-- `cluster` select: `sub` or `super`. For `super`, the second select lists the levels (`L0: n clusters`); the default is the level with the most clusters.
-- Legend chips: click = filter, double-click = solo, `all`, `none`; with a filter, playback skips other clusters; `next bout` jumps to the next run of the selected clusters.
+- One id has one color in every view (Tableau palette). Ids mean something only inside one fit; the legend shows the `fit_id`.
+- `cluster` select: `sub` or `super`. For `super` the second select lists the levels (`L0: n clusters`); the default is the level with the most clusters. Why levels: `subtle_theory.md`.
+- Legend chips: click = filter, double-click = solo, `all`, `none`. With a filter, playback skips other clusters and `next bout` jumps to the next run.
 
 ## Running SUBTLE
 - Add sessions to groups, then `Run SUBTLE jointly on all project sessions`. One fit covers all sessions, so ids are comparable.
-- Set a seed (default 0) for a repeatable fit; empty = random. Max frames limits the time (3,000 frames for 8 animals took about 100 s).
+- Set a seed (default 0) for a repeatable fit; empty = random. What the seed controls: `subtle_theory.md` section 4. Max frames limits the time (3,000 frames for 8 animals took about 100 s).
 - Frequency table: the sum must be 100 and all sessions must come from one fit; otherwise the badge turns red.
 
 ## Limits
 - The unit of a group comparison is the animal, not the frame. With 3 vs 5 animals the smallest possible exact permutation p is 0.0357.
 - Group names come from folder names; there is no dosing record for the AVATAR `CORT28d` animals.
 - 3D points can be copied from the previous frame when fewer than 2 cameras saw them, and no NaN is shown (see `subtle_pipeline_io.md`).
+
+## More
+- Theory (DIB, levels, randomness): `subtle_theory.md`. Stage input and output: `subtle_pipeline_io.md`. Planned model, DEK and statistics: `subtle_stats_plan.md`. Plan and design basis: `subtle_viewer_prd.md`.

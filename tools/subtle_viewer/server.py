@@ -35,7 +35,7 @@ def _routes(root: Path):
         pick = lambda k: None if s[k] is None else s[k][::stride]  # noqa: E731
         return {"nodes": s["nodes"], "edges": s["edges"], "stride": stride, "n": int(len(s["xyz"])),
                 "xyz": [[[round(float(v), 1) for v in j] for j in f] for f in xyz.tolist()],
-                "sub": pick("sub"), "super": pick("super"), "emb": pick("emb")}
+                "sub": pick("sub"), "super": pick("super"), "emb": pick("emb"), "fit_id": s["fit_id"]}
 
     def kp2d(q):
         s, cam = core.load(root, q["path"][0]), int(q["cam"][0])
@@ -112,11 +112,16 @@ def make_handler(root: Path):
             u = urlparse(self.path)
             q = parse_qs(u.query)
             try:
-                if u.path in ("/", "/index.html"):
-                    data = (HERE / "index.html").read_bytes()
+                if u.path == "/" or u.path.startswith("/web/"):  # static page: web/index.html, web/style.css, web/js/*.js
+                    rel = "index.html" if u.path == "/" else u.path[5:]
+                    f = (HERE / "web" / rel).resolve()
+                    if (HERE / "web").resolve() not in f.parents or f.suffix not in (".html", ".css", ".js") or not f.is_file():
+                        return self._json({"error": "not found"}, 404)
+                    data = f.read_bytes()
                     self.send_response(200)
-                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Type", {".html": "text/html", ".css": "text/css", ".js": "text/javascript"}[f.suffix] + "; charset=utf-8")
                     self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "no-cache")
                     self.end_headers()
                     self.wfile.write(data)
                 elif u.path == "/video":

@@ -111,18 +111,39 @@ Goal: the viewer must not stay tied to SUBTLE or to the AVATAR 5-camera rig.
 | Video next to skeleton | `View switch` button shows video or skeleton, an `_resize.mp4` copy is used | 🟡 video with 2D keypoint overlay (the desktop `SUBTLE_tools/label_editor.py` has a Skeleton overlay on video) |
 | Manuals | none in the app | 🟡 Manuals list in the page |
 
-## 9. Stages requested 261023 (plan; each stage = own commit and own check)
-- P9 Train, save, load, map.
-  - Job types `train` (fit on chosen sessions, save `model.pkl` and `model.json` with config, seed, training sessions, frames, cluster counts per level, model id) and `map` (load model, `predict_raw`, write sidecars whose `fit_id` is the model id).
-  - Check: map the training sessions with the saved model; report the label agreement with the training labels; frequency refuses sessions with different model ids (already true for `fit_id`).
-  - Needs only keypoints (`.json.gz` with `skeleton3d`); a video is optional.
-- P10 Kinematics and DEK.
-  - Reuse `engine/subtle/kinematics.py` (101 lines) or the public `subtle.Kinematics` and `avatar_configs`; the viewer's own copy only if the import is not possible.
-  - Per animal, per cluster mean of each feature; group A vs B with `scipy.stats.ttest_ind(equal_var=False)`; optional permutation test for small n; Benjamini-Hochberg correction as an option; heatmap of t with stars.
-- P11 Cluster statistics and plots.
-  - Unit = animal. Per cluster: pct per animal, group test (exact permutation by default), bar or box plot with one dot per animal, stars ( * p<0.05, ** p<0.01, *** p<0.001 ) after the chosen correction, n shown.
-- P12 Reproducibility.
-  - SUBTLE randomness: UMAP has no `random_state`; Phenograph uses Leiden; DIB draws random beta and cluster count (`module.py:269-270`); frame sampling uses `np.random`.
-  - The wrapper now takes `seed` (numpy, random, UMAP). Leiden is not seeded by it: check by repeating the fit.
-  - Show the agreement between two seeds (adjusted Rand index) on the page.
-- P13 Manuals in the viewer: the Manuals list reads `docs/dev/subtle_*.md`; this PRD, the pipeline note and the viewer manual are listed.
+## 9. Stages requested 261023
+Details, checks and residual risks: `subtle_stats_plan.md`.
+
+| Stage | What | State |
+|---|---|---|
+| P9 | train, save, load, map new files | ⬜ |
+| P10 | kinematics by node name, DEK group test | ⬜ |
+| P11 | cluster frequency statistics and plots with stars | ⬜ |
+| P12 | seed stability across seeds, all levels shown | ⬜ |
+| P13 | manuals readable in the page | ✅ |
+
+## 10. UX basis and module structure (261023)
+Sources read: BS scene-flow viewer (`src/behaviorsplatter/web/`, `docs/code/viewer_controls_audit.md`) and the HTML report rule (`html-report-pages.md`).
+
+### What the BS viewer does that the first Lite page did not
+- One viewport, no page scroll: top toolbar, side panels, bottom dock; panels collapse on narrow screens.
+- Toolbar in labelled groups; one home per control; no value copied into a second place.
+- Modules by question: data (what is open), view (what is drawn), measurement (how numbers arose), output (what leaves).
+- A small token set (colors, type scale) in one stylesheet; JS split by role.
+- Progressive disclosure: rare settings behind one extra step.
+
+### Adopted in `tools/subtle_viewer/web/`
+| File | Role |
+|---|---|
+| `index.html`, `style.css` | shell and tokens (BS palette and type scale) |
+| `js/state.js` | shared state, event bus, label level and filter, canvas fit |
+| `js/colors.js` | one id to one color, for every view |
+| `js/views.js` | 3D skeleton, cluster map, timeline |
+| `js/video.js` | per-camera video and 2D keypoint overlay (letterbox aware) |
+| `js/legend.js` | cluster chips, filter, replay, next bout |
+| `js/project.js` | groups, save and load, fit job, frequency table |
+| `js/main.js` | session list, playback, tabs, manuals |
+
+- Layout: video (tall) left, skeleton and cluster map right, sessions left rail, project panel right, dock below with slider, timeline and legend.
+- Cluster ids: Tableau 10 then Tableau 20 colors, golden-angle hue beyond 20; the legend shows the `fit_id` because an id means something only inside one fit.
+- Not adopted yet: keyboard shortcuts, long-press sub-menus, collapsible panels on wide screens.
