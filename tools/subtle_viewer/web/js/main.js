@@ -15,6 +15,7 @@ async function init() {
   if (m) await open_(m.path, m, h.get('cam'), +h.get('frame') || 0);
   if (m && h.get('all')) await setAll();                              // #all=1: every camera tile
   if (h.get('project')) { st.proj = await api('project?name=' + encodeURIComponent(h.get('project'))); $('pn').value = st.proj.name; renderGroups(); }   // #project=<name>
+  if (h.get('run')) $({stat: 'stgo', dek: 'dkgo'}[h.get('run')]).click();                   // #run=stat|dek: compute right away (checks)
   if (h.get('tab')) document.querySelector(`#tabs button[data-t="${h.get('tab')}"]`)?.click();   // #tab=proj|freq|stat|log
 }
 async function open_(p, meta, cam, frame) {

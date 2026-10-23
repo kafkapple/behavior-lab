@@ -43,7 +43,12 @@
 - Stats tab, `Compare groups`: for each pair of groups, the share of each cluster per animal, exact permutation p of the mean difference, Hedges g, Benjamini-Hochberg adjusted p, and stars (* below .05, ** below .01, *** below .001, on the adjusted p). One dot = one animal.
 - The page prints the smallest possible p for the group sizes; with 3 vs 5 animals it is 0.0357, so ** and *** cannot appear.
 - Demo (8 animals, cort 3 vs veh 5, level L4, first 3,000 frames): adjusted p 0.77 to 1.0, no star. Groups are provisional (folder names).
-- Kinematics and DEK by node name are not built yet (`subtle_stats_plan.md` P10).
+- DEK tab, `Compute DEK`: same steps as the Justin app, with our 11-node layout by node name.
+  - Frames are centered like `avatar_preprocess`, then the public `subtle.Kinematics` gives 84 features: speed, edge and angle terms, each as value (n=0), first (n=1) and second (n=2) time derivative.
+  - Per animal and cluster the features are averaged; an animal needs at least 30 frames in a cluster. Welch t per cell (scipy `ttest_ind`, same call as the app), Benjamini-Hochberg over all cells of a pair, Hedges g.
+  - Heatmap: rows = clusters, cell = signed t (orange = first group higher, blue = second), `*` on adjusted p; hover shows p, adjusted p, g. Pick type (vertex, edge, angle), derivative and pair above the table.
+  - Demo (cort 3 vs veh 5, level L4, 420 cells): smallest adjusted p 0.38, no star. Shuffling the 8 animals over all 56 splits gave 4.6 percent raw p below 0.05, as expected for no effect.
+  - Not excluded: frames whose 3D points were copied from earlier frames (the viewer's loader reads no per-frame flag). Speed terms of such frames are zero, so read speed differences with care.
 
 ## Keys
 - Same keys as the BS viewer: Space play, Left/Right 1 frame, Up/Down 10 frames, `,` `.` 1 frame, `+` `-` zoom skeleton, Enter reset view, `h` hide side panels, `?` manuals, `Esc` clear filter.

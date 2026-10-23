@@ -17,6 +17,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
 import core  # noqa: E402
+import dek  # noqa: E402
 import model  # noqa: E402
 import stats  # noqa: E402
 
@@ -66,6 +67,7 @@ def _routes(root: Path):
     return {
         "camview": lambda q, b: camview(q),
         "stats": lambda q, b: stats.group_stats(root, proj_of(q), q.get("level", ["super"])[0], sl(q), q.get("correct", ["1"])[0] == "1"),
+        "dek": lambda q, b: dek.group_dek(root, proj_of(q), q.get("level", ["super"])[0], sl(q), q.get("correct", ["1"])[0] == "1"),
         "names": lambda q, b: stats.names_all(root),
         "set_name": lambda q, b: stats.names_set(root, b["key"], b["name"]),
         "models": lambda q, b: model.list_models(root),

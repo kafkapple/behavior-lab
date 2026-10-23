@@ -104,6 +104,34 @@ def stats_checks() -> None:
     print("stats + cam_view OK")
 
 
+def dek_checks() -> None:
+    """Welch t by hand, feature layout vs Kinematics output, and a planted speed effect that DEK must find (and must not invent)."""
+    import numpy as np
+    import dek
+    t, p = dek.welch(np.array([[1.], [2.], [3.]]), np.array([[2.], [4.], [6.], [8.]]))
+    assert abs(t[0] + 3 / 2 ** 0.5) < 1e-9, t                                   # (2 - 5) / sqrt(1/3 + (20/3)/4)
+    nodes = ["nose1", "neck1", "earL1", "earR1", "forelegL1", "forelegR1", "tailstart1", "hindlegL1", "hindlegR1", "tail1", "tailend1"]
+    edges = [[1, 4], [1, 5], [1, 0], [1, 3], [1, 2], [6, 8], [6, 7], [6, 9], [6, 1], [9, 10]]
+    nd, ed, an, cols = dek.layout(nodes, edges)
+    assert (len(nd), len(ed), len(an), len(cols)) == (11, 10, 7, 84) and cols[0] == "V0:nose" and cols[11] == "E0:neck-forelegL"
+    rng = np.random.default_rng(1)
+
+    def animal(speed: float) -> dict:
+        x = np.cumsum(rng.normal(size=(600, 11, 3)) * 0.01 * speed, 0) + rng.normal(size=(1, 11, 3))  # random walk per node
+        return {"xyz": x, "nodes": nodes, "edges": edges, "sub": None, "super": np.array([0, 1] * 300)}
+    def table(speed): return dek.animal_table(animal(speed), "super", None)
+    ids, M, n, c2 = table(1.0)
+    assert list(ids) == [0, 1] and M.shape == (2, 84) and list(n) == [300, 300] and c2 == cols
+    v1 = cols.index("V1:nose")
+    fast = np.array([table(3.0)[1][0] for _ in range(4)]); slow = np.array([table(1.0)[1][0] for _ in range(4)])
+    tt, pp = dek.welch(fast, slow)
+    assert pp[v1] < 0.001 and tt[v1] > 0, (pp[v1], tt[v1])                       # planted effect found
+    same_a = np.array([table(1.0)[1][0] for _ in range(4)]); same_b = np.array([table(1.0)[1][0] for _ in range(4)])
+    assert dek.welch(same_a, same_b)[1][v1] > 0.01                               # no effect planted -> none claimed
+    print("dek checks OK")
+
+
 if __name__ == "__main__":
     main()
     stats_checks()
+    dek_checks()

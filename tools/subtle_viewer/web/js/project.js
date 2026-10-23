@@ -79,3 +79,29 @@ $('stcsv').onclick = () => { if (!lastStats) return toast('run Compare groups fi
   const rows = [['group_a', 'group_b', 'cluster', 'mean_a', 'mean_b', 'diff', 'hedges_g', 'p', 'p_adj', 'stars', 'method']];
   for (const P of lastStats.pairs) for (const t of P.tests) rows.push([P.groups[0], P.groups[1], t.cluster, t.mean[P.groups[0]], t.mean[P.groups[1]], t.diff, t.g, t.p, t.p_adj, t.stars, P.method]);
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r => r.join(',')).join('\n')], {type: 'text/csv'})); a.download = 'group_stats.csv'; a.click(); };
+
+// ---- DEK: per animal and cluster mean of kinematic features, Welch t per cell. Heatmap = signed t, stars on BH-adjusted p.
+let lastDek = null;
+$('dkgo').onclick = async () => {
+  if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
+  const sl = $('sl').style.display === '' && $('lvl').value === 'super' ? '&sl=' + $('sl').value : '';
+  $('dek').textContent = 'computing…';
+  try { lastDek = await api(`dek?name=${encodeURIComponent(st.proj.name)}&level=${$('lvl').value}${sl}&correct=${$('stbh').checked ? 1 : 0}`); } catch (e) { $('dek').innerHTML = `<span class="bad">${e.message}</span>`; return; }
+  $('dkpair').innerHTML = lastDek.pairs.map((P, i) => `<option value="${i}">${P.groups.join(' vs ')}</option>`).join(''); renderDek(); };
+['dktype', 'dkn', 'dkpair'].forEach(i => $(i).onchange = renderDek);
+const sig = q => q == null ? '' : q < .001 ? '***' : q < .01 ? '**' : q < .05 ? '*' : '';
+function renderDek() {
+  const R = lastDek; if (!R) return; const P = R.pairs[+$('dkpair').value || 0], ty = $('dktype').value, n = $('dkn').value;
+  const idx = R.columns.map((c, i) => [c, i]).filter(([c]) => c[0] === ty && c[1] === n), T = P.t.flat().filter(v => v != null), mx = Math.max(2, ...T.map(Math.abs));
+  const cell = (r, [c, j]) => { const t = P.t[r][j], q = P.p_adj[r][j]; if (t == null) return '<td class="mut">–</td>';
+    const a = Math.min(1, Math.abs(t) / mx), col = t > 0 ? `rgba(255,159,10,${a})` : `rgba(90,200,250,${a})`;
+    return `<td style="background:${col};text-align:center" title="${c} cluster ${P.clusters[r]}: t=${t.toFixed(2)}, p=${P.p[r][j].toExponential(2)}, p_adj=${q.toExponential(2)}, g=${P.g[r][j] == null ? '–' : P.g[r][j].toFixed(2)}">${t.toFixed(1)}<b>${sig(q)}</b></td>`; };
+  $('dek').innerHTML = `<div class="mut">${P.groups[0]} (orange, t>0) vs ${P.groups[1]} (blue); ${P.tests} cells; ${P.correction}; animals need ≥${R.min_frames} frames in a cluster; ${R.unit}. Groups are provisional.</div>` +
+    (P.skipped.length ? `<div class="bad">clusters skipped (fewer than 2 animals in a group): ${P.skipped.map(s => s.cluster + ' (' + s.n.join('/') + ')').join(', ')}</div>` : '') +
+    '<table><tr><th>cluster (nA/nB)</th>' + idx.map(([c]) => `<th style="font-size:9px;writing-mode:vertical-rl">${c.split(':')[1]}</th>`).join('') + '</tr>' +
+    P.clusters.map((c, r) => `<tr><td><span style="color:${color(c)}">■</span> ${c} <span class="mut">${P.n[r].join('/')}</span></td>${idx.map(x => cell(r, x)).join('')}</tr>`).join('') + '</table>';
+}
+$('dkcsv').onclick = () => { if (!lastDek) return toast('run Compute DEK first');
+  const rows = [['group_a', 'group_b', 'cluster', 'feature', 't', 'p', 'p_adj', 'hedges_g']];
+  for (const P of lastDek.pairs) P.clusters.forEach((c, r) => lastDek.columns.forEach((f, j) => P.t[r][j] != null && rows.push([P.groups[0], P.groups[1], c, f, P.t[r][j], P.p[r][j], P.p_adj[r][j], P.g[r][j]])));
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r => r.join(',')).join('\n')], {type: 'text/csv'})); a.download = 'dek.csv'; a.click(); };
