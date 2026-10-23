@@ -274,4 +274,4 @@ def cam_view(s: dict, cam: int) -> dict:
     r2 = sol[:3, 1] - (sol[:3, 1] @ r1) * r1
     up = -r2 / np.linalg.norm(r2)  # image y points down, screen up points up
     res = float(np.median(np.linalg.norm(a @ sol - b, axis=1)))
-    return {"R": [r1.tolist(), up.tolist(), np.cross(r1, up).tolist()], "resid_px": round(res, 1), "points": int(len(a))}
+    return {"R": [r1.tolist(), up.tolist(), np.cross(r1, up).tolist()], "resid_px": round(res, 1), "points": int(len(a)), "P": sol.tolist()}   # P: [X,1] @ P = pixel in the camera cell

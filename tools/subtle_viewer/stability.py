@@ -73,3 +73,31 @@ def _run(root: Path, j: dict, name: str, max_frames: int, seeds: list[int]) -> N
     result_path(root, name).write_text(json.dumps(out, indent=1))
     j.update(stage="done", pct=100)
     core._job_log(j, f"stability {name}: {out['star_pattern']}, ARI sub {out['ari_sub']}")
+
+
+def node_sensitivity(root: Path, name: str, drop: list[str], max_frames: int = 3000, seed: int = 0) -> dict:
+    """Refit SUBTLE without the named nodes (isolated, sidecars untouched) and rerun the level sweep on the new labels: does the group result
+    depend on a node that the quality checks flag? Same seed and frames as the baseline fit."""
+    proj = core.load_project(root, name)
+    gn = [g for g, s in proj["groups"].items() if s][:2]
+    paths = [r for g in gn for r in proj["groups"][g]]
+    sess = [core.load(root, r) for r in paths]
+    keep = [i for i, n in enumerate(sess[0]["nodes"]) if n.removesuffix("1") not in drop]
+    seqs = [np.nan_to_num(s["xyz"][:max_frames][:, keep]) for s in sess]
+    lengths = [len(x) for x in seqs]
+    with tempfile.TemporaryDirectory() as t:
+        np.savez(Path(t) / "in.npz", keypoints=np.concatenate(seqs), lengths=np.array(lengths))
+        model._run(["train", f"{t}/in.npz", f"{t}/o.npz", f"{t}/m.pkl", str(seed)])
+        sup = np.load(Path(t) / "o.npz")["superclusters"]
+    sup = np.atleast_2d(sup.T).T
+    per = [core.split_by_lengths(sup[:, k], lengths) for k in range(sup.shape[1])]
+    levels = {k: [np.asarray(a) for a in per[k]] for k in range(sup.shape[1])}
+    idx, i = [], 0
+    for g in gn:
+        idx.append(list(range(i, i + len(proj["groups"][g])))); i += len(proj["groups"][g])
+    import sweep
+    out = {"dropped": drop, "nodes_kept": [sess[0]["nodes"][i] for i in keep], "seed": seed, "frames": max_frames, "levels": sup.shape[1], "by_criterion": {}}
+    for cr in sweep.CRITERIA:
+        R = sweep.sweep_levels(levels, idx, gn, cr)
+        out["by_criterion"][cr] = {**R["by_criterion"][cr], "significant": R["recommended"]["significant"]}
+    return out

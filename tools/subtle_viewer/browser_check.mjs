@@ -86,6 +86,12 @@ if (mode === 'keys') {
   await js(`${$('swuse')}.click()`); const kk = await js(`+document.getElementById('swuse').textContent.replace(/\\D/g, '')`);
   check('Use n sets the level (legend rows = n)', await until(`document.querySelectorAll('.lrow').length === ${kk}`, 5000), `(n=${kk})`);
   await js(`${$('swexp')}.click()`); check('Export results saves a folder', await until(`!!document.getElementById('swdirtxt')`, 120000), await js(`(document.getElementById('swdirtxt') || {}).textContent`));
+  // quality tab and the sensitivity switches
+  await js(`document.querySelector('#tabs button[data-t="qual"]').click(); ${$('qgo')}.click()`);
+  check('Quality tab lists every session', await until(`document.querySelectorAll('#qual table tr').length === 9`, 60000), `(rows=${await js("document.querySelectorAll('#qual table tr').length")})`);
+  await js(`document.querySelector('#tabs button[data-t="stat"]').click(); ${$('swdrop')}.value = 'veh4,veh5'; ${$('swexcl')}.checked = true; ${$('swgo')}.click()`);
+  check('drop + exclude-copied sweep runs on 3 vs 3', await until(`document.querySelector('#sweepres').textContent.includes('3+3')`, 90000));
+  await js(`${$('swdrop')}.value = ''; ${$('swexcl')}.checked = false; ${$('swgo')}.click()`); await sleep(2500);
   // PNG exports: capture the download and check the PNG signature
   await js(`window.__dl = []; HTMLAnchorElement.prototype.click = function () { fetch(this.href).then(r => r.blob()).then(async b => window.__dl.push({name: this.download, size: b.size, magic: [...new Uint8Array(await b.slice(0, 4).arrayBuffer())].join()})); }`);
   await js(`${$('stgo')}.click()`); await until(`!!document.querySelector('#stat table')`, 30000); await js(`${$('stpng')}.click()`);
