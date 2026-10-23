@@ -3,7 +3,7 @@ import {$, st, on, emit, api, toast, FPS, fillLevels, relabel, inF, nextIn} from
 import {resetView, zoomSkel} from './views.js';
 import './legend.js';
 import {setCam, setAll, vids, videoOn, toggleKp, isAll} from './video.js';
-import {refreshProjects} from './project.js';
+import {refreshProjects, renderGroups} from './project.js';
 
 async function init() {
   const L = await api('sessions'); $('root').textContent = L.length + ' sessions';
@@ -13,6 +13,9 @@ async function init() {
   const h = new URLSearchParams(location.hash.slice(1));              // deep link: #open=<path>&cam=1&frame=600
   const m = h.get('open') && L.find(x => x.path === h.get('open'));
   if (m) await open_(m.path, m, h.get('cam'), +h.get('frame') || 0);
+  if (m && h.get('all')) await setAll();                              // #all=1: every camera tile
+  if (h.get('project')) { st.proj = await api('project?name=' + encodeURIComponent(h.get('project'))); $('pn').value = st.proj.name; renderGroups(); }   // #project=<name>
+  if (h.get('tab')) document.querySelector(`#tabs button[data-t="${h.get('tab')}"]`)?.click();   // #tab=proj|freq|stat|log
 }
 async function open_(p, meta, cam, frame) {
   toast('loading ' + p); st.cur = {path: p, ...meta}; st.S = await api('session?path=' + encodeURIComponent(p));

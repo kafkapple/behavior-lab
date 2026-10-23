@@ -3,12 +3,19 @@ import {$, st, on, emit, api, toast, nkey, cname} from './state.js';
 import {color} from './colors.js';
 
 export async function refreshProjects() { $('pl').innerHTML = (await api('projects')).map(n => `<option>${n}</option>`).join(''); }
+// meta (PRD R6): st.proj.meta = {description, group_notes: {group: text}, sessions: {path: {animal, condition, date}}}; the server cleans it on save
+const M = () => (st.proj.meta = Object.assign({description: '', group_notes: {}, sessions: {}}, st.proj.meta));
 export function renderGroups() {
-  const g = st.proj.groups;
-  $('groups').innerHTML = Object.entries(g).map(([n, l]) => `<div><b>${n}</b> <span class="mut">(${l.length})</span> <button data-del="${n}">×</button><br>` +
-    l.map(p => `<span class="mut">${p.split('/').pop()}</span>`).join(', ') + '</div>').join('');
-  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { delete g[b.dataset.del]; renderGroups(); freq(); });
+  const g = st.proj.groups, m = M(); $('pdesc').value = m.description || '';
+  $('groups').innerHTML = Object.entries(g).map(([n, l]) => `<div class="grpbox"><b>${n}</b> <span class="mut">(${l.length})</span> <button data-del="${n}">×</button>` +
+    `<input class="gnote" data-g="${n}" placeholder="group note" value="${(m.group_notes[n] || '').replace(/"/g, '&quot;')}">` +
+    l.map(p => { const s = m.sessions[p] || {}, f = k => `<input class="sm" data-s="${p}" data-k="${k}" placeholder="${k === 'condition' ? 'cond.' : k}" title="${k}" value="${(s[k] || '').replace(/"/g, '&quot;')}">`;
+      return `<div class="srow"><span class="mut">${p.split('/').pop()}</span>${f('animal')}${f('condition')}${f('date')}</div>`; }).join('') + '</div>').join('');
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { delete g[b.dataset.del]; delete M().group_notes[b.dataset.del]; renderGroups(); freq(); });
+  document.querySelectorAll('.gnote').forEach(i => i.oninput = () => { M().group_notes[i.dataset.g] = i.value; });
+  document.querySelectorAll('input.sm').forEach(i => i.oninput = () => { ((M().sessions[i.dataset.s] ??= {})[i.dataset.k] = i.value); });
 }
+$('pdesc').oninput = () => { M().description = $('pdesc').value; };
 $('ga').onclick = () => { const n = $('gn').value.trim(); if (!n || !st.cur) return toast('group name + open session needed');
   const g = (st.proj.groups[n] ??= []); if (!g.includes(st.cur.path)) g.push(st.cur.path); renderGroups(); freq(); };
 $('ps').onclick = async () => { st.proj.name = $('pn').value.trim(); try { await api('save_project', st.proj); toast('saved ' + st.proj.name); refreshProjects(); } catch (e) { toast(e.message); } };

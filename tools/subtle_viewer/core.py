@@ -136,10 +136,23 @@ def project_dir(root: Path) -> Path:
     return d
 
 
+META_FIELDS = ("animal", "condition", "date")
+
+
+def clean_meta(proj: dict) -> dict:
+    """R6 metadata: description, a note per group, animal/condition/date per session. Strings only, <=200 chars; sessions must be in a group."""
+    m, member = proj.get("meta") or {}, {r for s in proj.get("groups", {}).values() for r in s}
+    txt = lambda v: str(v or "").strip()[:200]  # noqa: E731
+    return {"description": txt(m.get("description")),
+            "group_notes": {g: txt(n) for g, n in (m.get("group_notes") or {}).items() if g in proj.get("groups", {}) and txt(n)},
+            "sessions": {r: {k: txt(v.get(k)) for k in META_FIELDS} for r, v in (m.get("sessions") or {}).items() if r in member}}
+
+
 def save_project(root: Path, proj: dict) -> str:
     name = proj.get("name", "")
     if not NAME_OK.match(name):
         raise ValueError("name: 1-64 chars of letters, digits, space, - _ .")
+    proj = {**proj, "meta": clean_meta(proj)}
     (project_dir(root) / f"{name}.project.json").write_text(json.dumps(proj, ensure_ascii=False, indent=1))
     log.info("save project %s (%d groups)", name, len(proj.get("groups", {})))
     return name

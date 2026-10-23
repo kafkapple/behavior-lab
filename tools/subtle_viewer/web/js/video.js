@@ -45,7 +45,7 @@ export function draw() {
     if (!v.paused && Math.abs(v.currentTime - tt / FPS()) > .3) v.currentTime = tt / FPS();   // scrub or filter jump while playing
     if (!showKp || !t.KP || !t.KP[tt]) continue;
     const W = o.width, H = o.height, sc = Math.min(W / v.videoWidth, H / v.videoHeight), vw = v.videoWidth * sc, vh = v.videoHeight * sc, ox = (W - vw) / 2, oy = (H - vh) / 2;
-    const a = t.KP[tt], hi = p => p[2] > .25, seen = p => p[0] > 0 || p[1] > 0;      // missing points are (0,0) with conf 0
+    const a = t.KP[tt], hi = p => p[2] > .25, seen = p => p[2] > .05;                       // missing points are (0,0) with conf 0; conf below .05 is noise (a stray corner point drew a long bone)
     const pt = p => [ox + p[0] * vw, oy + p[1] * vh];
     x.lineWidth = 2 * d; x.strokeStyle = color(lid(st.fr));
     for (const [i, j] of S.edges) { if (!seen(a[i]) || !seen(a[j])) continue;

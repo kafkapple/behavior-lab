@@ -30,6 +30,7 @@
       <div style="display:flex;gap:6px;margin-bottom:6px"><input id="pn" placeholder="project name" style="flex:1;min-width:0"><button id="ps">Save</button></div>
       <div style="display:flex;gap:6px;margin-bottom:6px"><select id="pl" style="flex:1;min-width:0"></select><button id="pld">Load</button></div>
       <div style="display:flex;gap:6px;margin-bottom:6px"><input id="gn" placeholder="group name" style="flex:1;min-width:0"><button id="ga" title="add the open session to this group">+ add open session</button></div>
+      <textarea id="pdesc" rows="2" placeholder="project description (design, cohort, dosing)" style="width:100%;margin-bottom:6px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px"></textarea>
       <div id="groups"></div>
       <h3 style="margin-top:10px">Model</h3><div style="display:flex;gap:6px;margin-bottom:6px"><input id="mn" placeholder="model name" style="flex:1;min-width:0"><button id="mt" title="train on all project sessions and save">Train</button></div>
       <div style="display:flex;gap:6px;margin-bottom:6px"><select id="ml" style="flex:1;min-width:0"></select><button id="mm" title="label every frame of all project sessions with this model">Map</button></div><div id="job" class="mut" style="margin-top:8px"></div><progress id="pg" value="0" max="100" style="display:none"></progress></div>

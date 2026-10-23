@@ -29,6 +29,10 @@
 - Clusters tab (right): one row per id with color, name field and share. Click = filter, double-click = solo, `all`, `none`. With a filter, playback skips other clusters and `next bout` jumps to the next run.
 - Names: type in the name field; it is saved per fit and level in `<root>/.subtle_projects/cluster_names.json` and shown in the Stats tab.
 
+## Project metadata
+- Project tab: a description box, a note per group, and animal, cond.(ition), date per session. `Save` writes them into `<name>.project.json` under `meta`; the server keeps only these fields, 200 characters each.
+- Deep links for checks: `#open=<path>&cam=1&frame=600&all=1&project=<name>&tab=proj` (all = every camera tile; tab = clu, proj, freq, stat, log).
+
 ## Running SUBTLE
 - Add sessions to groups, then `Run SUBTLE jointly on all project sessions`. One fit covers all sessions, so ids are comparable.
 - Set a seed (default 0) for a repeatable fit; empty = random. What the seed controls: `subtle_theory.md` section 4. Max frames limits the time (3,000 frames for 8 animals took about 100 s).

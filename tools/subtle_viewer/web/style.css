@@ -56,3 +56,6 @@ progress{width:100%;height:8px}
 #docview{display:none;position:fixed;inset:5% 10%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto;z-index:10;box-shadow:0 8px 40px #0008}
 #doctext h1,#doctext h2,#doctext h3{margin:.8em 0 .3em;text-transform:none;color:var(--fg);font-size:var(--fs-xl)}
 #doctext code{background:var(--panel);padding:0 4px;border-radius:4px}#doctext pre{background:var(--panel);padding:8px;border-radius:6px}
+
+.grpbox{border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin-bottom:6px}.gnote{width:100%;margin:3px 0}
+.srow{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:3px;align-items:center;margin:2px 0}.srow .sm{padding:0 4px;min-width:0;width:100%;font-size:var(--fs-s)}

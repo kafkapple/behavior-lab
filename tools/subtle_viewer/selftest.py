@@ -45,7 +45,7 @@ def main():
         proj = {"name": "p1", "groups": {"ctl": [s["A1"]["path"]], "drug": [s["B1"]["path"], s["A1"]["path"]]},
                 "meta": {"note": "t"}}
         core.save_project(root, proj)
-        assert core.load_project(root, "p1") == proj and core.list_projects(root) == ["p1"]  # save/load round trip
+        assert core.load_project(root, "p1") == {**proj, "meta": core.clean_meta(proj)} and core.list_projects(root) == ["p1"]  # save/load round trip
         try:
             core.save_project(root, {"name": "../x", "groups": {}})
             raise SystemExit("bad project name accepted")
@@ -70,6 +70,13 @@ def main():
         for i in range(5):  # LRU cap holds
             core.load(root, s["A1"]["path"]), core.load(root, s["B1"]["path"]), core.load(root, s["C1"]["path"])
         assert len(core._CACHE) <= core.CACHE_MAX
+    with tempfile.TemporaryDirectory() as d2:  # R6: metadata survives a save/load round trip; strangers and long text are cleaned
+        r2 = Path(d2)
+        core.save_project(r2, {"name": "p", "groups": {"g": ["a.json.gz"]}, "meta": {"description": "x" * 300, "group_notes": {"g": "n", "zz": "gone"},
+                              "sessions": {"a.json.gz": {"animal": "m1", "condition": "cort", "date": "2023-12-05", "bad": 1}, "other": {"animal": "q"}}}})
+        mm = core.load_project(r2, "p")["meta"]
+        assert len(mm["description"]) == 200 and mm["group_notes"] == {"g": "n"} and list(mm["sessions"]) == ["a.json.gz"], mm
+        assert mm["sessions"]["a.json.gz"] == {"animal": "m1", "condition": "cort", "date": "2023-12-05"}
     print("selftest OK")
 
 
