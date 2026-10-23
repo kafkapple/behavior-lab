@@ -6,17 +6,18 @@
 @media(prefers-color-scheme:dark){:root{--bg:#161618;--fg:#f5f5f7;--mut:#a1a1a6;--line:#3a3a3c;--card:#232326;--ok:#3fb950;--bad:#ff7b72;--acc:#58a6ff}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.45 -apple-system,system-ui,sans-serif}
 header{padding:8px 16px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center}
-header b{font-size:15px}main{display:grid;grid-template-columns:240px 1fr 340px;gap:12px;padding:12px 16px}
-@media(max-width:900px){main{grid-template-columns:1fr}}
+header b{font-size:15px}main{display:grid;grid-template-columns:230px 1fr 330px;gap:12px;padding:12px 16px}
+@media(max-width:1000px){main{grid-template-columns:1fr}}
 section{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0}
 h3{margin:0 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
 button,select,input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
 button{cursor:pointer}button:hover{border-color:var(--acc)}
 .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:4px 0}
 .sess{padding:4px 6px;border-radius:6px;cursor:pointer;word-break:break-all}.sess:hover,.sess.on{background:var(--bg);outline:1px solid var(--acc)}
-.mut{color:var(--mut)}canvas{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;display:block}
-video{width:100%;max-height:240px;background:#000;border-radius:6px}
-.bar{height:8px;border-radius:4px;display:inline-block;vertical-align:middle}
+.mut{color:var(--mut)}.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:700px){.two{grid-template-columns:1fr}}
+canvas{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;display:block;touch-action:none}
+#vwrap{position:relative;display:none}#vwrap video{width:100%;height:auto;display:block;background:#000;border-radius:6px}
+#ov{position:absolute;left:0;top:0;width:100%;height:100%;border:0;pointer-events:none}
 .ok{color:var(--ok)}.bad{color:var(--bad)}pre{margin:0;max-height:180px;overflow:auto;font:11px/1.4 ui-monospace,monospace;white-space:pre-wrap}
 progress{width:100%;height:10px}table{border-collapse:collapse;width:100%}td,th{padding:2px 4px;text-align:left;border-bottom:1px solid var(--line)}
 </style></head><body>
@@ -25,16 +26,23 @@ progress{width:100%;height:10px}table{border-collapse:collapse;width:100%}td,th{
 <section><h3>Sessions</h3><div id="list" class="mut">loading…</div></section>
 <section>
   <h3>View</h3><div id="title" class="mut">select a session</div>
-  <canvas id="cv" width="640" height="360"></canvas>
+  <div class="two">
+    <div><div class="mut">3D skeleton (follows the animal) · wheel = zoom · drag = rotate · shift/right-drag = pan · double-click = reset</div>
+      <canvas id="cv" width="520" height="360"></canvas></div>
+    <div><div class="mut">Cluster map (embedding) · wheel = zoom · drag = pan · click = jump to frame</div>
+      <canvas id="mp" width="520" height="360"></canvas></div>
+  </div>
   <div class="row"><button id="play">▶</button><input id="fr" type="range" min="0" max="0" value="0" style="flex:1">
     <span id="fi" class="mut">0/0</span>
     <label class="mut">fps <input id="fps" type="number" value="20" style="width:52px"></label>
     <label class="mut">cluster <select id="lvl"><option value="super">super</option><option value="sub">sub</option></select></label></div>
-  <canvas id="tl" width="640" height="26" style="height:26px"></canvas>
+  <canvas id="tl" width="1040" height="26" style="height:26px"></canvas>
   <div id="cur" class="mut"></div>
-  <video id="vid" controls muted style="display:none"></video>
+  <div class="row"><label class="mut">video camera <select id="camsel"></select></label>
+    <span id="vwarn" class="bad"></span><span class="mut">overlay: 2D keypoints (green = conf &gt; 0.25; missing points hidden), bones colored by cluster</span></div>
+  <div id="vwrap"><video id="vid" controls muted preload="auto"></video><canvas id="ov"></canvas></div>
   <div class="row"><button id="an">Run SUBTLE jointly on all project sessions</button>
-    <label class="mut">max frames (0=all) <input id="mf" type="number" value="3000" style="width:70px"></label></div>
+    <label class="mut">max frames per session (0=all) <input id="mf" type="number" value="3000" style="width:70px"></label></div>
   <div id="job" class="mut"></div><progress id="pg" value="0" max="100" style="display:none"></progress>
 </section>
 <section>
@@ -50,50 +58,120 @@ progress{width:100%;height:10px}table{border-collapse:collapse;width:100%}td,th{
 <script>
 const $=id=>document.getElementById(id);
 const api=(p,b)=>fetch('/api/'+p,b?{method:'POST',body:JSON.stringify(b)}:{}).then(r=>r.json()).then(j=>{if(j&&j.error)throw new Error(j.error);return j});
-const color=id=>id==null||id<0?'#888':`hsl(${(id*137.508)%360} 65% 50%)`;  // one id -> one color, everywhere
-let S=null,cur=null,fr=0,timer=null,yaw=.6,pitch=-.4,proj={name:'',groups:{},meta:{}};
+const color=id=>id==null||id<0?'#888':`hsl(${(id*137.508)%360} 65% 50%)`;  // one id -> one color, in every view
+const CELL_ASPECT={0:1.2,1:1.2,2:1.0,3:1.2,4:1.2};                          // cell w/h from the rig (core.CELLS)
+let S=null,cur=null,fr=0,timer=null,raf=null,KP=null,camNow=null,proj={name:'',groups:{},meta:{}};
+let V={yaw:.6,pitch:-.4,zoom:1,px:0,py:0},M={zoom:1,px:0,py:0},B=1,mapCache=null;
 const toast=m=>{$('toast').textContent=m;setTimeout(()=>$('toast').textContent='',4000)};
-const lab=()=>S&&S[$('lvl').value];                       // per-frame label (may be [T] or [T][levels])
+const lab=()=>S&&S[$('lvl').value];
 const lid=i=>{const l=lab();if(!l||l[i]==null)return null;return Array.isArray(l[i])?l[i][l[i].length-1]:l[i]};
+const FPS=()=>+$('fps').value||20;
+const cen=f=>[0,1,2].map(i=>f.reduce((s,j)=>s+j[i],0)/f.length);
 
 async function init(){
   const L=await api('sessions');$('root').textContent=L.length+' sessions';
-  $('list').innerHTML=L.map(s=>`<div class="sess" data-p="${s.path}"><b>${s.stem}</b> <span class="mut">${s.mb} MB${s.video?' · video':''}${s.subtle?' · SUBTLE':''}</span><br><span class="mut">${s.path}</span></div>`).join('')||'no *.json.gz under root';
+  $('list').innerHTML=L.map(s=>`<div class="sess" data-p="${s.path}"><b>${s.stem}</b> <span class="mut">${s.mb} MB${Object.keys(s.cams).length?' · '+Object.keys(s.cams).length+' cam video':''}${s.video?' · video':''}${s.subtle?' · SUBTLE':''}</span><br><span class="mut">${s.path}</span></div>`).join('')||'no *.json.gz under root';
   document.querySelectorAll('.sess').forEach(e=>e.onclick=()=>open_(e.dataset.p,L.find(x=>x.path==e.dataset.p)));
   refreshProjects();
+  const h=new URLSearchParams(location.hash.slice(1));                       // deep link: #open=<path>&cam=1&frame=600
+  if(h.get('open')){const m=L.find(x=>x.path==h.get('open'));if(m)await open_(m.path,m,h.get('cam'),+h.get('frame')||0)}
 }
-async function open_(p,meta){
-  toast('loading '+p);cur={path:p,...meta};S=await api('session?path='+encodeURIComponent(p));fr=0;
-  $('fr').max=S.xyz.length-1;$('title').textContent=p+` — ${S.n} frames`;
-  const v=$('vid');if(meta.video){v.src='/video?path='+encodeURIComponent(meta.video);v.style.display='block'}else{v.removeAttribute('src');v.style.display='none'}
-  document.querySelectorAll('.sess').forEach(e=>e.classList.toggle('on',e.dataset.p==p));draw();timeline();
+async function open_(p,meta,cam,frame){
+  toast('loading '+p);cur={path:p,...meta};S=await api('session?path='+encodeURIComponent(p));fr=Math.min(frame||0,S.xyz.length-1);KP=null;camNow=null;
+  $('fr').max=S.xyz.length-1;$('title').textContent=p+` — ${S.n} frames`+(S.emb?'':' — no cluster map yet (run SUBTLE)');
+  {const r=[];for(let i=0;i<S.xyz.length;i+=Math.max(1,Math.floor(S.xyz.length/500))){const f=S.xyz[i],c=cen(f);r.push(Math.max(...f.map(j=>Math.hypot(j[0]-c[0],j[1]-c[1],j[2]-c[2]))))}
+   r.sort((a,b)=>a-b);B=Math.max(1e-6,r[r.length>>1]*1.6)}                                    // body size: median max joint distance from centroid
+  V={yaw:.6,pitch:-.4,zoom:1,px:0,py:0};M={zoom:1,px:0,py:0};mapCache=null;
+  const cams=meta.cams||{},sel=$('camsel');sel.innerHTML=Object.keys(cams).map(c=>`<option value="${c}">cam_${+c+1}</option>`).join('')||'<option value="">no per-camera video</option>';
+  if(cam!=null&&cams[cam])sel.value=cam;
+  document.querySelectorAll('.sess').forEach(e=>e.classList.toggle('on',e.dataset.p==p));
+  await setCam();draw();timeline();
 }
-function bounds(){let m=1;for(const f of S.xyz)for(const j of f)for(const v of j)m=Math.max(m,Math.abs(v));return m}
-let B=1;
+async function setCam(){
+  const sel=$('camsel').value,wrap=$('vwrap'),v=$('vid');$('vwarn').textContent='';KP=null;
+  if(sel===''||!cur.cams||!cur.cams[sel]){wrap.style.display='none';v.removeAttribute('src');return}
+  camNow=+sel;wrap.style.display='block';v.src='/video?path='+encodeURIComponent(cur.cams[sel]);
+  v.onseeked=v.onloadeddata=()=>drawOv();
+  v.onloadedmetadata=()=>{const a=v.videoWidth/v.videoHeight;if(Math.abs(a-CELL_ASPECT[camNow])>.02)$('vwarn').textContent=`aspect ${a.toFixed(2)} ≠ rig cell ${CELL_ASPECT[camNow]}: overlay may be off. `;drawOv()};
+  try{KP=(await api(`kp2d?path=${encodeURIComponent(cur.path)}&cam=${camNow}`)).kp}catch(e){toast(e.message)}
+  drawOv();
+}
+$('camsel').onchange=setCam;
+
+// ---- 3D skeleton with zoom / pan / rotate
 function draw(){
   const c=$('cv'),x=c.getContext('2d'),W=c.width,H=c.height;x.clearRect(0,0,W,H);if(!S||!S.xyz.length)return;
-  if(fr==0)B=bounds();const f=S.xyz[fr],cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
-  const P=j=>{const X=j[0]*cy-j[2]*sy,Z=j[0]*sy+j[2]*cy,Y=j[1]*cp-Z*sp;return[W/2+X/B*H*.42,H/2-Y/B*H*.42]};
+  const f=S.xyz[fr],cy=Math.cos(V.yaw),sy=Math.sin(V.yaw),cp=Math.cos(V.pitch),sp=Math.sin(V.pitch),k=H*.42/B*V.zoom;
+  const c0=cen(f);                                                                          // follow the animal: centroid of this frame at the center
+  const P=j=>{const a=j[0]-c0[0],b=j[1]-c0[1],d=j[2]-c0[2],X=a*cy-d*sy,Z=a*sy+d*cy,Y=b*cp-Z*sp;return[W/2+V.px+X*k,H/2+V.py-Y*k]};
   const id=lid(fr),col=color(id);x.lineWidth=3;x.strokeStyle=col;x.fillStyle=col;
   for(const[a,b]of S.edges){const p=P(f[a]),q=P(f[b]);x.beginPath();x.moveTo(...p);x.lineTo(...q);x.stroke()}
   f.forEach(j=>{const p=P(j);x.beginPath();x.arc(p[0],p[1],3.5,0,7);x.fill()});
+  x.fillStyle=getComputedStyle(document.body).color;x.font='11px sans-serif';x.fillText(`zoom ${V.zoom.toFixed(2)}x`,6,14);
   $('fi').textContent=`${fr*S.stride}/${S.n-1}`;$('fr').value=fr;
   $('cur').innerHTML=id==null?'no cluster labels (run SUBTLE)':`cluster <span style="color:${col}">■</span> ${id}`;
-  const v=$('vid');if(v.src&&v.paused)v.currentTime=fr*S.stride/($('fps').value||20);
+  drawMap();drawOv();
 }
+const cv=$('cv');let drag=null;
+cv.addEventListener('wheel',e=>{e.preventDefault();V.zoom=Math.min(20,Math.max(.2,V.zoom*(e.deltaY<0?1.12:1/1.12)));draw()},{passive:false});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.onmousedown=e=>{drag={x:e.clientX,y:e.clientY,v:{...V},pan:e.shiftKey||e.button==2}};
+cv.ondblclick=()=>{V={yaw:.6,pitch:-.4,zoom:1,px:0,py:0};draw()};
+
+// ---- cluster map: embedding scatter colored by cluster id, current frame marked
+function mapXY(p,c){const W=c.width,H=c.height,e=S._eb,s=Math.min(W,H)*.45*M.zoom/Math.max(e.rx,e.ry);
+  return[W/2+M.px+(p[0]-e.cx)*s,H/2+M.py-(p[1]-e.cy)*s]}
+function mapBounds(){const E=S.emb;let a=1e9,b=-1e9,c=1e9,d=-1e9;for(const p of E){a=Math.min(a,p[0]);b=Math.max(b,p[0]);c=Math.min(c,p[1]);d=Math.max(d,p[1])}
+  S._eb={cx:(a+b)/2,cy:(c+d)/2,rx:Math.max(1e-9,(b-a)/2),ry:Math.max(1e-9,(d-c)/2)}}
+function drawMap(){
+  const c=$('mp'),x=c.getContext('2d'),W=c.width,H=c.height;x.clearRect(0,0,W,H);
+  if(!S||!S.emb){x.fillStyle='#888';x.font='12px sans-serif';x.fillText('no embedding: run SUBTLE on this session',10,20);return}
+  if(!S._eb)mapBounds();
+  const key=[M.zoom,M.px,M.py,$('lvl').value,S.emb.length].join();
+  if(!mapCache||mapCache.key!==key){const o=document.createElement('canvas');o.width=W;o.height=H;const q=o.getContext('2d');
+    for(let i=0;i<S.emb.length;i++){const[u,v]=mapXY(S.emb[i],c);q.fillStyle=color(lid(i));q.fillRect(u-1,v-1,2,2)}mapCache={key,o}}
+  x.drawImage(mapCache.o,0,0);
+  const[u,v]=mapXY(S.emb[Math.min(fr,S.emb.length-1)],c);x.strokeStyle=getComputedStyle(document.body).color;x.lineWidth=2;x.beginPath();x.arc(u,v,7,0,7);x.stroke();
+  x.fillStyle=x.strokeStyle;x.font='11px sans-serif';x.fillText(`zoom ${M.zoom.toFixed(2)}x · ${S.emb.length} frames`,6,14);
+}
+const mp=$('mp');let mdrag=null,moved=false;
+mp.addEventListener('wheel',e=>{e.preventDefault();const r=mp.getBoundingClientRect(),sx=mp.width/r.width,mx=(e.clientX-r.left)*sx-mp.width/2,my=(e.clientY-r.top)*sx-mp.height/2;
+  const z=Math.min(50,Math.max(.3,M.zoom*(e.deltaY<0?1.15:1/1.15))),k=z/M.zoom;M.px=mx-(mx-M.px)*k;M.py=my-(my-M.py)*k;M.zoom=z;drawMap()},{passive:false});
+mp.onmousedown=e=>{mdrag={x:e.clientX,y:e.clientY,px:M.px,py:M.py};moved=false};
+mp.onclick=e=>{if(moved||!S||!S.emb)return;const r=mp.getBoundingClientRect(),sx=mp.width/r.width,mx=(e.clientX-r.left)*sx,my=(e.clientY-r.top)*sx;
+  let best=-1,bd=1e18;for(let i=0;i<S.emb.length;i++){const[u,v]=mapXY(S.emb[i],mp),d=(u-mx)**2+(v-my)**2;if(d<bd){bd=d;best=i}}
+  if(best>=0){fr=best;draw()}};
+mp.ondblclick=()=>{M={zoom:1,px:0,py:0};drawMap()};
+window.onmouseup=()=>{drag=null;mdrag=null};
+window.onmousemove=e=>{
+  if(drag){if(drag.pan){V.px=drag.v.px+(e.clientX-drag.x);V.py=drag.v.py+(e.clientY-drag.y)}else{V.yaw=drag.v.yaw+(e.clientX-drag.x)/120;V.pitch=drag.v.pitch+(e.clientY-drag.y)/120}draw()}
+  if(mdrag){const r=mp.getBoundingClientRect(),sx=mp.width/r.width;if(Math.abs(e.clientX-mdrag.x)+Math.abs(e.clientY-mdrag.y)>3)moved=true;M.px=mdrag.px+(e.clientX-mdrag.x)*sx;M.py=mdrag.py+(e.clientY-mdrag.y)*sx;drawMap()}};
+
+// ---- timeline, video overlay, playback
 function timeline(){
   const c=$('tl'),x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);if(!S||!lab())return;
   const n=S.xyz.length;for(let i=0;i<n;i++){x.fillStyle=color(lid(i));x.fillRect(i/n*c.width,0,Math.max(1,c.width/n),c.height)}
 }
-$('lvl').onchange=()=>{draw();timeline();freq()};
+function drawOv(){
+  const v=$('vid'),o=$('ov');if(!v||$('vwrap').style.display==='none'||!S)return;
+  const W=o.width=v.clientWidth,H=o.height=v.clientHeight,x=o.getContext('2d');x.clearRect(0,0,W,H);
+  const t=fr*S.stride;if(v.paused&&v.readyState>0&&Math.abs(v.currentTime-t/FPS())>.5/FPS())v.currentTime=t/FPS();
+  if(!KP||!KP[t])return;const a=KP[t],col=color(lid(fr)),ok=p=>p[2]>.25;
+  x.lineWidth=2;x.strokeStyle=col;for(const[i,j]of S.edges){if(ok(a[i])&&ok(a[j])){x.beginPath();x.moveTo(a[i][0]*W,a[i][1]*H);x.lineTo(a[j][0]*W,a[j][1]*H);x.stroke()}}
+  for(const p of a){if(ok(p)){x.fillStyle='#2ecc71';x.beginPath();x.arc(p[0]*W,p[1]*H,4,0,7);x.fill()}}
+}
+$('lvl').onchange=()=>{mapCache=null;draw();timeline();freq()};
 $('fr').oninput=e=>{fr=+e.target.value;draw()};
-$('play').onclick=()=>{if(timer){clearInterval(timer);timer=null;$('play').textContent='▶';return}
-  $('play').textContent='⏸';timer=setInterval(()=>{if(!S)return;fr=(fr+1)%S.xyz.length;draw()},1000/($('fps').value||20))};
-let drag=null;const cv=$('cv');
-cv.onmousedown=e=>drag=[e.clientX,e.clientY,yaw,pitch];window.onmouseup=()=>drag=null;
-window.onmousemove=e=>{if(drag){yaw=drag[2]+(e.clientX-drag[0])/120;pitch=drag[3]+(e.clientY-drag[1])/120;draw()}};
+$('play').onclick=()=>{
+  if(timer||raf){clearInterval(timer);cancelAnimationFrame(raf);timer=raf=null;$('vid').pause();$('play').textContent='▶';return}
+  $('play').textContent='⏸';const v=$('vid');
+  if($('vwrap').style.display!=='none'){v.currentTime=fr*S.stride/FPS();v.play();                 // video is the clock when present
+    const tick=()=>{fr=Math.min(S.xyz.length-1,Math.round(v.currentTime*FPS()/S.stride));draw();raf=requestAnimationFrame(tick)};raf=requestAnimationFrame(tick)}
+  else timer=setInterval(()=>{if(S){fr=(fr+1)%S.xyz.length;draw()}},1000/FPS());
+};
 $('tl').onclick=e=>{if(!S)return;fr=Math.floor(e.offsetX/e.target.clientWidth*S.xyz.length);draw()};
 
+// ---- SUBTLE job, projects, frequency
 $('an').onclick=async()=>{
   const paths=[...new Set(Object.values(proj.groups).flat())];
   if(!paths.length)return toast('add sessions to groups first (joint fit needs all project sessions)');
@@ -128,5 +206,6 @@ async function freq(){
     '<tr><td>Σ</td>'+Object.values(F).map(r=>`<td class="${r.ok?'ok':'bad'}">${r.sum.toFixed(2)}%${r.missing.length?' ⚠'+r.missing.length+' unlabeled':''}</td>`).join('')+'</tr></table>';
 }
 setInterval(async()=>{try{const L=await api('log');$('log').textContent=L.slice(-40).join('\n')}catch(e){}},2000);
+window.onresize=()=>{drawOv()};
 init().catch(e=>toast(e.message));
 </script></body></html>

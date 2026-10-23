@@ -12,6 +12,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).parent))
 import core  # noqa: E402
 
@@ -32,9 +34,16 @@ def _routes(root: Path):
         pick = lambda k: None if s[k] is None else s[k][::stride]  # noqa: E731
         return {"nodes": s["nodes"], "edges": s["edges"], "stride": stride, "n": int(len(s["xyz"])),
                 "xyz": [[[round(float(v), 1) for v in j] for j in f] for f in xyz.tolist()],
-                "sub": pick("sub"), "super": pick("super")}
+                "sub": pick("sub"), "super": pick("super"), "emb": pick("emb")}
+
+    def kp2d(q):
+        s, cam = core.load(root, q["path"][0]), int(q["cam"][0])
+        if s["kp"] is None:
+            raise ValueError("no 2D keypoints in this file")
+        return {"cam": cam, "kp": np.round(core.kp_cell(s, cam), 4).tolist()}
 
     return {
+        "kp2d": lambda q, b: kp2d(q),
         "sessions": lambda q, b: core.scan(root),
         "session": lambda q, b: session(q),
         "projects": lambda q, b: core.list_projects(root),

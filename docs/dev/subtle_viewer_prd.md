@@ -67,3 +67,34 @@ Legend: ✅ done and checked, 🟡 done, not checked in a browser, ⬜ not start
 | Cluster id to color | per page | ✅ one function for all views |
 | Overlay on video (2D points on 5 cameras) | not found | ⬜ PRD P5 |
 | Progress and debug log | task status polling | 🟡 job stage and percent, log tail panel |
+
+## 8. Plan for generalization (261023, design only; nothing below is built)
+Goal: the viewer must not stay tied to SUBTLE or to the AVATAR 5-camera rig.
+
+### P7 Triangulation as a module
+- Reuse `behavior_lab.rig.multiview` (`load_calib`, `triangulate` = DLT over n cameras by SVD, `reproj_px`).
+- Interface: `triangulate_sequence(kp2d, calib, method)`, `kp2d` = (T, cameras, nodes, 3) with x, y, conf; returns (T, nodes, 3) plus the number of cameras used per point.
+- Methods: `dlt_all` (all cameras above a conf threshold, general), `top2` (Justin's `recon3D`, for comparison only).
+- Check: on one AVATAR clip, `dlt_all` vs the file's own `skeleton3d`; report reprojection residual per method.
+- Rig info comes from a yaml (like `configs/rig/avatar.yaml`), so another rig is a new yaml, not new code.
+
+### P8 Clustering as a plug-in
+- Existing parts: `behavior_lab.models.get_model(name)`, wrappers for `SUBTLE`, `KeypointMoSeq`, `BehaveMAE`, `BSOiD`, `VAME`, and `scripts/isolated_run.py` (one method in its own env, writes `labels.npy` and `features.npy`).
+- Facts that shape the design:
+  - Methods conflict in one environment, so each runs in its own process or env.
+  - SUBTLE takes a list of sequences; the repo protocol `BehaviorClusterer` takes one array. The viewer needs the list form (joint fit).
+  - Output rate differs (B-SOiD 10 fps vs 20 fps): labels must be aligned to the frame count before frequency is computed.
+- Interface (viewer side): `run(method, sessions, params) -> {labels per session, embedding per session or None, fit_id}`.
+- Sidecar stays one file per session; `method` is recorded next to `fit_id`; frequency compares only labels with the same method and `fit_id`.
+- Order: SUBTLE (done) -> B-SOiD (CPU, small) -> keypoint-MoSeq (JAX, own env) -> hBehaveMAE (GPU; needs a go on GPU use).
+- Check per method: label count equals frame count for every session; pct sum = 100; same `fit_id` in one comparison.
+
+### Status of the viewer features requested 261023
+| Feature | State |
+|---|---|
+| Zoom and pan of the skeleton | 🟡 wheel zoom, shift or right-drag pan, double-click reset |
+| Cluster map (embedding scatter) | 🟡 zoom, pan, click to jump; needs the embedding stored by the job (stored from 261023) |
+| 2D keypoints on the raw video | 🟡 camera cell mapping checked on one frame (points on the mouse); bones colored by cluster |
+| Note: the Justin app has no keypoint-on-video overlay | video is shown next to the 3D skeleton only (`infer_api.js` has no drawing on the video) |
+| Open: reproducibility | 🔴 two joint fits of the same 8 animals gave 4 and 5 super clusters (261023). No random seed is set in the wrapper call. Fix before any group claim: fixed seed, then repeat the fit and compare. |
+| Open: video in a real browser | headless capture showed the overlay but a black video area; Range serving and codec (H.264 High, yuv420p) checked by request, playback itself not confirmed |

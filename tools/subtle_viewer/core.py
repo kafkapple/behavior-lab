@@ -24,6 +24,11 @@ _CACHE: "OrderedDict[tuple, dict]" = OrderedDict()  # LRU of parsed sessions
 CACHE_MAX = 2
 JOBS: "OrderedDict[str, dict]" = OrderedDict()
 JOBS_MAX = 20
+# AVATAR rig (configs/rig/avatar.yaml): composite 3600x2000, camera cell = (x0, y0, w, h) in composite px.
+# ponytail: cam_3 height 1200 is from the yaml comment, not measured; the page warns when a video's aspect differs.
+COMPOSITE = (3600, 2000)
+CELLS = {0: (0, 0, 1200, 1000), 1: (1200, 0, 1200, 1000), 2: (2400, 0, 1200, 1200),
+         3: (0, 1000, 1200, 1000), 4: (1200, 1000, 1200, 1000)}
 
 
 def safe(root: Path, rel: str) -> Path:
@@ -37,26 +42,63 @@ def stem_of(p: Path) -> str:
     return STEM_SUFFIX.sub("", p.name.removesuffix(".gz").removesuffix(".json"))
 
 
+def _token(stem: str) -> str | None:
+    m = re.match(r"([A-Za-z]+\d+)", stem)
+    return m.group(1) if m else None
+
+
 def scan(root: Path) -> list[dict]:
+    vids = [v for v in root.rglob("*.mp4") if not any(s.startswith(".") for s in v.relative_to(root).parts)]
     videos = {}
-    for v in root.rglob("*.mp4"):
-        if not any(s.startswith(".") for s in v.relative_to(root).parts):
-            videos.setdefault(v.stem, v)
+    for v in vids:
+        videos.setdefault(v.stem, v)
     out = []
     for p in sorted(root.rglob("*.json.gz")):
         rel = p.relative_to(root)
         if any(s.startswith(".") for s in rel.parts):
             continue
         v = videos.get(stem_of(p))
+        tok, cams = _token(stem_of(p)), {}
+        if tok:  # per-camera videos: name holds the animal token as a whole word and `cam_N`
+            pat = re.compile(rf"(?<![A-Za-z0-9]){re.escape(tok)}(?!\d)")
+            for x in vids:
+                m = re.search(r"cam_(\d)", x.stem)
+                if m and pat.search(x.stem) and 1 <= int(m.group(1)) <= 5:
+                    cams[int(m.group(1)) - 1] = str(x.relative_to(root))
         side = p.with_name(p.name.removesuffix(".json.gz") + SIDE)
         out.append({"path": str(rel), "mb": round(p.stat().st_size / 1e6, 2), "stem": stem_of(p),
-                    "video": str(v.relative_to(root)) if v else None, "subtle": side.exists()})
-    log.info("scan %s: %d sessions, %d videos", root, len(out), len(videos))
+                    "video": str(v.relative_to(root)) if v else None, "cams": cams, "subtle": side.exists()})
+    log.info("scan %s: %d sessions, %d videos", root, len(out), len(vids))
     return out
 
 
 def _side(p: Path) -> Path:
     return p.with_name(p.name.removesuffix(".json.gz") + SIDE)
+
+
+def _kp_array(d: dict, n: int) -> np.ndarray | None:
+    """keypoint[frame][camera][node] = [x, y, conf] (x, y relative to the composite) -> (n, 5, nodes, 3) float32."""
+    kp = d.get("keypoint")
+    if not kp or n == 0:
+        return None
+    nodes = len(d.get("node", {}).get("id", [])) or 11
+    out = np.zeros((n, 5, nodes, 3), np.float32)
+    for f, cams in kp.items():
+        i = int(f)
+        if i < n:
+            for c, pts in cams.items():
+                for k, v in pts.items():
+                    out[i, int(c), int(k)] = v
+    return out
+
+
+def kp_cell(s: dict, cam: int) -> np.ndarray:
+    """2D keypoints of one camera as (T, nodes, 3): x, y in 0-1 of that camera's cell, conf unchanged."""
+    x0, y0, w, h = CELLS[cam]
+    a = s["kp"][:, cam].copy()
+    a[..., 0] = (a[..., 0] * COMPOSITE[0] - x0) / w
+    a[..., 1] = (a[..., 1] * COMPOSITE[1] - y0) / h
+    return a
 
 
 def load(root: Path, rel: str) -> dict:
@@ -72,12 +114,14 @@ def load(root: Path, rel: str) -> dict:
     frames = sorted(sk, key=int)
     xyz = np.array([sk[k] for k in frames], dtype=np.float32) if frames else np.zeros((0, 0, 3), np.float32)
     s = {"nodes": d.get("node", {}).get("id", []), "edges": d.get("node", {}).get("line", []),
-         "xyz": xyz, "sub": None, "super": None, "fit_id": None}
+         "xyz": xyz, "sub": None, "super": None, "fit_id": None, "emb": None,
+         "kp": _kp_array(d, len(frames))}
     emb = d.get("subtle") or {}
     s["sub"], s["super"] = emb.get("subcluster"), emb.get("supercluster")
     if _side(p).exists():
         sd = json.loads(_side(p).read_text())
         s["sub"], s["super"], s["fit_id"] = sd.get("subcluster"), sd.get("supercluster"), sd.get("fit_id")
+        s["emb"] = sd.get("embedding")
     del d  # raw dict can be 40 MB+; keep only arrays
     _CACHE[key] = s
     while len(_CACHE) > CACHE_MAX:
@@ -176,9 +220,12 @@ def _run_job(root: Path, j: dict, max_frames: int) -> None:
         sup_parts = split_by_lengths(np.asarray(res.labels), lengths)
         sub_parts = split_by_lengths(np.asarray(sub), lengths) if sub is not None else [None] * len(seqs)
         fit_id = uuid.uuid4().hex[:8]  # same id on every session of this fit; frequency() requires one id per project
-        for rel, a, b, n in zip(j["paths"], sub_parts, sup_parts, lengths):
+        emb = getattr(res, "embeddings", None)
+        emb_parts = split_by_lengths(np.round(np.asarray(emb), 3), lengths) if emb is not None else [None] * len(seqs)
+        for rel, a, b, e, n in zip(j["paths"], sub_parts, sup_parts, emb_parts, lengths):
             _side(safe(root, rel)).write_text(json.dumps(
-                {"subcluster": a, "supercluster": b, "n_frames": n, "fit_id": fit_id, "fit_sessions": j["paths"]}))
+                {"subcluster": a, "supercluster": b, "embedding": e, "n_frames": n, "fit_id": fit_id,
+                 "fit_sessions": j["paths"]}))
         _CACHE.clear()  # sidecars changed
         j.update(stage="done", pct=100)
         _job_log(j, f"fit {fit_id}: clusters {res.n_clusters}, frames {sum(lengths)}, {time.time() - j['t0']:.0f}s")
