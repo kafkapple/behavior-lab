@@ -64,24 +64,23 @@ class SUBTLEConfig:
 # ---------------------------------------------------------------------------
 
 def _morlet2_compat(M, s, w=5):
-    """Drop-in replacement for scipy.signal.morlet2 (removed in scipy 1.15).
+    """Drop-in replacement for scipy.signal.morlet2 (removed in scipy 1.15), same math as scipy <= 1.14.
 
-    Normalized complex Morlet wavelet:
-        psi(t) = (pi * s)^(-0.25) * exp(i*w*t/s) * exp(-0.5*(t/s)^2)
+    psi(t) = pi^(-0.25) * sqrt(1/s) * exp(i*w*t/s) * exp(-0.5*(t/s)^2), centered at (M - 1) / 2.
     """
-    t = np.arange(0, M) - (M - 1.0) / 2
-    t = t / s
-    return np.exp(1j * w * t) * np.exp(-0.5 * t * t) * np.pi ** (-0.25)
+    t = (np.arange(0, M) - (M - 1.0) / 2) / s
+    return np.sqrt(1 / s) * np.exp(1j * w * t) * np.exp(-0.5 * t * t) * np.pi ** (-0.25)
 
 
 def _cwt_compat(data, wavelet, widths, **kwargs):
-    """Drop-in replacement for scipy.signal.cwt (removed in scipy 1.12)."""
+    """Drop-in replacement for scipy.signal.cwt (deprecated in 1.12, removed in 1.15), same math as scipy <= 1.14."""
+    from scipy.signal import convolve
+
     output = np.empty((len(widths), len(data)), dtype=np.complex128)
     for i, width in enumerate(widths):
-        N = int(np.min([10 * width, len(data)]))
-        N = max(N * 2 + 1, 3)
-        wavelet_data = wavelet(N, width, **kwargs)
-        output[i] = np.convolve(data, wavelet_data, mode="same")
+        N = np.min([10 * width, len(data)])  # float on purpose, as in scipy
+        wavelet_data = np.conj(wavelet(N, width, **kwargs)[::-1])
+        output[i] = convolve(data, wavelet_data, mode="same")
     return output
 
 
