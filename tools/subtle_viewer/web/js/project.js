@@ -137,7 +137,18 @@ function renderSweep() {
   $('swonly').onclick = () => { $('swuse').click(); const f = [...r.significant, ...r.exploratory]; if (!f.length) return toast('no flagged cluster: nothing to isolate'); st.F = new Set(f); emit('filter'); };
 }
 $('swgo').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
-  try { lastSweep = await api(`sweep?name=${encodeURIComponent(st.proj.name)}&criterion=${$('swcrit').value}`); } catch (e) { $('sweepres').innerHTML = `<span class="bad">${e.message}</span>`; return; } renderSweep(); };
+  try { lastSweep = await api(`sweep?name=${encodeURIComponent(st.proj.name)}&criterion=${$('swcrit').value}&excl=${$('swexcl').checked ? 1 : 0}&drop=${encodeURIComponent($('swdrop').value.replace(/\s/g, ''))}`); } catch (e) { $('sweepres').innerHTML = `<span class="bad">${e.message}</span>`; return; } renderSweep(); };
 $('swexp').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
   const {job} = await api('export', {name: st.proj.name, criterion: $('swcrit').value}); $('sweepres').insertAdjacentHTML('beforeend', '<div class="mut">exporting: progress is in the Project tab and the log</div>');
   poll(job, async () => { const d = (await api(`export_latest?name=${encodeURIComponent(st.proj.name)}`)).dir; $('sweepres').insertAdjacentHTML('beforeend', `<div class="ok">saved: <code id="swdirtxt">${d}</code></div>`); }); };
+
+// ---- quality: label-free consistency checks of the 3D skeleton per session (no ground truth yet). ⚠ = more than 1.5x the median of all sessions.
+$('qgo').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj); $('qual').textContent = 'computing…';
+  let R; try { R = await api(`quality?name=${encodeURIComponent(st.proj.name)}`); } catch (e) { $('qual').innerHTML = `<span class="bad">${e.message}</span>`; return; }
+  const cols = [['copied_frames', 'copied %', v => 100 * v, 1], ['jump_frames', 'jump %', v => 100 * v, 1], ['head_bone_cv', 'head CV', v => v, 3], ['tri_support', '≥2 cams', v => 100 * v, 1], ['reproj_px', 'resid px', v => { const a = v.filter(x => x != null); return a.reduce((s, x) => s + x, 0) / a.length; }, 1]];
+  const med = c => { const a = R.rows.map(r => c[2](r[c[0]])).sort((x, y) => x - y); return a[a.length >> 1]; };
+  const M = cols.map(med);
+  $('qual').innerHTML = '<table><tr><th>session</th>' + cols.map(c => `<th>${c[1]}</th>`).join('') + '</tr>' + R.rows.map(r => `<tr><td><span class="mut">${r.group}</span> ${r.session.split('_')[0]}</td>` +
+    cols.map((c, i) => { const v = c[2](r[c[0]]), bad = c[0] === 'tri_support' ? v < M[i] * .98 : v > 1.5 * M[i]; return `<td class="${bad ? 'bad' : ''}">${v.toFixed(c[3])}${bad ? ' ⚠' : ''}</td>`; }).join('') + '</tr>').join('') + '</table>' +
+    '<div class="mut">Consistency checks only. copied = a node identical to the previous frame; jump = a node moves over half a body length in one frame (heuristic); head CV = length variation of head edges; ≥2 cams = node-frames triangulation could use; resid px = weak-perspective residual per camera. A bad value flags a session; a good value does not prove accuracy. Plan: subtle_3d_quality_plan.md</div>';
+};

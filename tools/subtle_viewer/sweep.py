@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 
 import core
+import quality
 import stats
 
 CAP = 20_000
@@ -106,22 +107,27 @@ def sweep_levels(levels: dict[int, list[np.ndarray]], groups: list[list[int]], n
             "method": f"{CRITERIA[criterion]}; z against its own null, best level vs the null of the best level; {'exact' if exact else 'Monte Carlo'} {S} splits of {n} animals into {na}+{n - na}"}
 
 
-def project_sweep(root: Path, proj: dict, criterion: str = "omnibus") -> dict:
+def project_sweep(root: Path, proj: dict, criterion: str = "omnibus", exclude_copied: bool = False, drop: tuple[str, ...] = ()) -> dict:
+    """exclude_copied: drop frames with a copied 3D node (quality.copied_mask) from every share. drop: session stems left out (sensitivity analyses only)."""
     gn = [g for g, s in proj.get("groups", {}).items() if s]
     if len(gn) < 2:
         raise ValueError("need two non-empty groups")
-    paths = [r for g in gn[:2] for r in proj["groups"][g]]
+    keep = {g: [r for r in proj["groups"][g] if Path(r).stem.split("_")[0] not in drop] for g in gn[:2]}
+    paths = [r for g in gn[:2] for r in keep[g]]
     S = [core.load(root, r) for r in paths]
     if any(s["super"] is None for s in S) or len({s["fit_id"] for s in S}) != 1 or S[0]["fit_id"] is None:
         raise ValueError("every session needs supercluster labels from one fit")
     nl = [len(s["super"]) for s in S]
     raw = [np.asarray(s["super"]) for s in S]
+    if exclude_copied:
+        raw = [r[~quality.copied_mask(s["xyz"][: len(r)])] for r, s in zip(raw, S)]
+        nl = [len(r) for r in raw]
     if raw[0].ndim != 2:
         raise ValueError("the fit has one supercluster level only; run SUBTLE again")
     levels = {j: [r[:, j] for r in raw] for j in range(raw[0].shape[1])}
     idx, i = [], 0
     for g in gn[:2]:
-        idx.append(list(range(i, i + len(proj["groups"][g])))); i += len(proj["groups"][g])
+        idx.append(list(range(i, i + len(keep[g])))); i += len(keep[g])
     res = sweep_levels(levels, idx, gn[:2], criterion)
-    res.update({"fit_id": S[0]["fit_id"], "paths": paths, "frames": nl})
+    res.update({"fit_id": S[0]["fit_id"], "paths": paths, "frames": nl, "exclude_copied": exclude_copied, "dropped": list(drop)})
     return res
