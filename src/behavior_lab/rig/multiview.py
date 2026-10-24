@@ -58,6 +58,34 @@ def reproj_px(X: np.ndarray, ci: int, xy: np.ndarray, cams: list[dict]) -> float
     return float(np.hypot(*(p[:2] / p[2] - u)) * cams[ci]["K"][0, 0])
 
 
+METHODS = ("dlt_all", "top2")
+
+
+def triangulate_sequence(
+    kp2d: np.ndarray, cams: list[dict], method: str = "dlt_all", thr: float = 0.25
+) -> tuple[np.ndarray, np.ndarray]:
+    """kp2d (T, cameras, nodes, 3) = x, y in each camera's native pixels, conf -> xyz (T, nodes, 3),
+    NaN where fewer than two cameras pass, and the number of cameras used (T, nodes).
+
+    `dlt_all`: every camera with conf > thr. `top2`: only the two most confident of those, as
+    SUBTLE_gpu `recon3D` does (its thr is 0.25; it then fills, copies and smooths, which this
+    does not).
+    """
+    assert method in METHODS, f"method must be one of {METHODS}"
+    T, C, N, _ = kp2d.shape
+    assert C == len(cams), f"kp2d has {C} cameras, calibration has {len(cams)}"
+    xyz, used = np.full((T, N, 3), np.nan), np.zeros((T, N), int)
+    for t in range(T):
+        for k in range(N):
+            conf = kp2d[t, :, k, 2]
+            seen = [int(c) for c in np.argsort(-conf, kind="stable") if conf[c] > thr]
+            seen = seen[:2] if method == "top2" else seen
+            if len(seen) >= 2:
+                xyz[t, k] = triangulate([(c, kp2d[t, c, k, :2]) for c in seen], cams)
+                used[t, k] = len(seen)
+    return xyz, used
+
+
 def rotate_image_90(cam_cfg: dict) -> dict:
     """aniposelib camera table for the same camera when the recorded image is turned a quarter turn.
 

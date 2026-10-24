@@ -104,6 +104,32 @@ def test_residual_zero_when_exact_and_positive_when_one_camera_is_off(calib):
     assert off["median_px"] > 5 and int(np.argmax(off["per_cam_median_px"])) == 2
 
 
+def test_triangulate_sequence_methods(calib):
+    """Exact detections: both methods recover the points. One camera 50 px off with the lowest
+    conf: top2 ignores it (residual of the good cameras ~0), dlt_all is pulled by it."""
+    from behavior_lab.rig.multiview import triangulate_sequence
+
+    cams = load_calib(calib)
+    kp = _kp(cams, shift_cam=2, shift=50.0)
+    for f in kp["keypoint"].values():
+        for c, conf in zip(f, (0.9, 0.8, 0.3, 0.7, 0.6)):
+            for v in f[c].values():
+                v[2] = conf
+    k2 = avatar.kp2d_cells(kp, list(range(5)))
+    exact = avatar.kp2d_cells(_kp(cams), list(range(5)))
+    for m in ("dlt_all", "top2"):
+        xyz, used = triangulate_sequence(exact, cams, m)
+        assert used.min() == (5 if m == "dlt_all" else 2)
+        assert all(reproj_px(xyz[0, 0], c, exact[0, c, 0, :2], cams) < 1e-3 for c in range(5))
+    top, _ = triangulate_sequence(k2, cams, "top2")
+    allc, _ = triangulate_sequence(k2, cams, "dlt_all")
+    assert reproj_px(top[0, 0], 3, k2[0, 3, 0, :2], cams) < 1e-3
+    assert reproj_px(allc[0, 0], 3, k2[0, 3, 0, :2], cams) > 1.0
+    k2[0, :, 1, 2] = [0.9, 0.1, 0.1, 0.1, 0.1]  # one camera above thr -> no point
+    xyz, used = triangulate_sequence(k2, cams, "dlt_all")
+    assert np.isnan(xyz[0, 1]).all() and used[0, 1] == 0
+
+
 def test_rotate_image_90_matches_rotating_the_pixels(calib):
     import tomllib
 
