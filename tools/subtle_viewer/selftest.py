@@ -153,7 +153,7 @@ def stability_checks() -> None:
     w = stability.runs_of(np.array([0, 0, 1, 1, 1, 2]), [3, 3])
     assert w == {"median_run": 1.5, "mean_run": 1.5, "frac_runs_len1": 0.5}, w
     import model
-    assert model.clustering_of(None) == "pca_consensus" and model.clustering_of("umap_phenograph") == "umap_phenograph"
+    assert model.clustering_of(None) == "umap_phenograph" and model.clustering_of("pca_consensus") == "pca_consensus"
     print("stability checks OK")
 
 

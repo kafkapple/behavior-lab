@@ -25,7 +25,9 @@ import numpy as np
 from ...core.types import ClusteringResult
 
 logger = logging.getLogger(__name__)
-CLUSTERINGS = ("pca_consensus", "umap_phenograph")  # first = default, see SUBTLEConfig.clustering
+CLUSTERINGS = ("umap_phenograph", "pca_consensus")  # first = default, see SUBTLEConfig.clustering
+# default back to umap_phenograph (261024): pca_consensus lowered human-label AMI on paper data (-0.007, 3/10 sessions,
+# p=0.049), the hold rule set before that run; vault _Notes/261024_SUBTLE_군집화기본값_일반화_계획
 
 
 # ---------------------------------------------------------------------------
