@@ -149,6 +149,11 @@ def stability_checks() -> None:
     lab = np.concatenate([np.array([0] * 8 + [1] * 2)] * 3 + [np.array([0] * 2 + [1] * 8)] * 3)
     r = stability.level_result(lab, [10] * 6, [[0, 1, 2], [3, 4, 5]], ["a", "b"])
     assert r["k"] == 2 and abs(r["min_p_adj"] - 0.1) < 1e-9 and r["n_sig"] == 0, r
+    # runs cut at the session border: [0,0,1 | 1,1,2] -> runs 2,1 | 2,1 (the two 1s are not joined)
+    w = stability.runs_of(np.array([0, 0, 1, 1, 1, 2]), [3, 3])
+    assert w == {"median_run": 1.5, "mean_run": 1.5, "frac_runs_len1": 0.5}, w
+    import model
+    assert model.clustering_of(None) == "pca_consensus" and model.clustering_of("umap_phenograph") == "umap_phenograph"
     print("stability checks OK")
 
 

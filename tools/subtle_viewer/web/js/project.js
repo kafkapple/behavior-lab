@@ -39,7 +39,7 @@ export async function freq() {
 $('an').onclick = async () => {
   const paths = [...new Set(Object.values(st.proj.groups).flat())];
   if (!paths.length) return toast('add sessions to groups first (the fit covers all project sessions)');
-  const sd = $('seed').value; const {job} = await api('analyze', {paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd}); poll(job);
+  const sd = $('seed').value; const {job} = await api('analyze', {paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd, clustering: $('clu').value}); poll(job);
 };
 async function poll(id, done) {
   const j = await api('job?id=' + id); $('pg').style.display = 'block'; $('pg').value = j.pct;
@@ -54,7 +54,7 @@ on('labels', freq);
 const projPaths = () => [...new Set(Object.values(st.proj.groups).flat())];
 async function refreshModels() { try { $('ml').innerHTML = (await api('models')).map(m => `<option value="${m.name}">${m.name} · ${m.n_sub} sub · ${m.id}</option>`).join(''); } catch (e) { /* none yet */ } }
 $('mt').onclick = async () => { const name = $('mn').value.trim(), paths = projPaths(); if (!name || !paths.length) return toast('model name + project sessions needed');
-  const sd = $('seed').value; const {job} = await api('train', {name, paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd}); poll(job); };
+  const sd = $('seed').value; const {job} = await api('train', {name, paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd, clustering: $('clu').value}); poll(job); };
 $('mm').onclick = async () => { const name = $('ml').value, paths = projPaths(); if (!name || !paths.length) return toast('pick a model + add sessions to groups');
   const {job} = await api('map', {name, paths}); poll(job); };
 on('reload', refreshModels); refreshModels();
@@ -115,11 +115,13 @@ async function showStability() {
   const R = await api(`stability_result?name=${encodeURIComponent(st.proj.name)}`), s = Object.keys(R.per_seed);
   const row = (o, k) => `<tr><td>${k}</td><td>${Object.entries(o).map(([a, v]) => `${a}: ${v.toFixed(3)}`).join('<br>')}</td></tr>`;
   $('stabres').innerHTML = `<h3 style="margin-top:8px">Seed stability (${R.created})</h3><div class="${R.star_pattern === 'stable' ? 'ok' : 'bad'}">star pattern across seeds: ${R.star_pattern} (any cluster below .05 at the default level: ${Object.entries(R.star_flags).map(([a, v]) => `seed ${a} ${v ? 'yes' : 'no'}`).join(', ')})</div>` +
-    `<div class="mut">first ${R.max_frames} frames per animal; groups ${R.groups.join(' vs ')} (provisional); ARI 1 = same partition, 0 = chance</div><table><tr><th>ARI</th><th>seed pairs</th></tr>${row(R.ari_sub, 'subclusters')}${row(R.ari_super_default, 'super, default level')}</table>` +
+    `<div class="mut">clustering ${R.clustering || 'umap_phenograph (before 261024)'}; first ${R.max_frames} frames per animal; groups ${R.groups.join(' vs ')} (provisional); ARI/AMI 1 = same partition, 0 = chance</div><table><tr><th>ARI</th><th>seed pairs</th></tr>${row(R.ari_sub, 'subclusters')}${row(R.ari_super_default, 'super, default level')}</table>` +
+    (R.ami_sub ? `<table><tr><th>AMI</th><th>seed pairs</th></tr>${row(R.ami_sub, 'subclusters')}${row(R.ami_super_default, 'super, default level')}</table>` : '') +
+    (R.per_seed[s[0]].runs_sub ? '<table><tr><th>seed</th><th>labels</th><th>median run</th><th>mean run</th><th>1-frame runs</th></tr>' + s.flatMap(sd => [['sub', R.per_seed[sd].runs_sub], ['super ★', R.per_seed[sd].runs_super_default]].map(([n, x]) => `<tr><td>${sd}</td><td>${n}</td><td>${x.median_run.toFixed(1)}</td><td>${x.mean_run.toFixed(1)}</td><td>${(100 * x.frac_runs_len1).toFixed(1)}%</td></tr>`)).join('') + '</table><div class="mut">run = consecutive frames with one label, frames (20 fps)</div>' : '') +
     '<table><tr><th>seed</th><th>level</th><th>clusters</th><th>min p adj</th><th>n &lt; .05</th></tr>' + s.flatMap(sd => [['sub', R.per_seed[sd].sub], ...R.per_seed[sd].levels.map(l => ['L' + l.level + (l.level === R.per_seed[sd].default_level ? ' ★' : ''), l])].map(([n, l]) => `<tr><td>${sd}</td><td>${n}</td><td>${l.k}</td><td>${l.min_p_adj.toFixed(3)}</td><td>${l.n_sig}</td></tr>`)).join('') + '</table><div class="mut">★ = default level (most clusters)</div>';
 }
 $('stab').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
-  const {job} = await api('stability', {name: st.proj.name, max_frames: +$('mf').value, seeds: [0, 1, 2]}); $('stabres').innerHTML = '<span class="mut">running 3 fits: progress is in the Project tab and the log</span>'; poll(job, showStability); };
+  const {job} = await api('stability', {name: st.proj.name, max_frames: +$('mf').value, seeds: [0, 1, 2], clustering: $('clu').value}); $('stabres').innerHTML = '<span class="mut">running 3 fits: progress is in the Project tab and the log</span>'; poll(job, showStability); };
 
 // ---- level sweep: recommended n with the selection corrected (max-T), flagged clusters marked in the legend, results saved to a folder
 let lastSweep = null;

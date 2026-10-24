@@ -229,18 +229,19 @@ def split_by_lengths(labels, lengths: list[int]) -> list[list]:
     return [np.asarray(labels[a:b]).tolist() for a, b in zip(cuts[:-1], cuts[1:])]
 
 
-def start_job(root: Path, paths: list[str], max_frames: int = 0, seed: int | None = None) -> str:
+def start_job(root: Path, paths: list[str], max_frames: int = 0, seed: int | None = None, clustering: str | None = None) -> str:
     """One SUBTLE fit over ALL given sessions, so cluster ids mean the same thing in every session."""
     j = {"id": uuid.uuid4().hex[:8], "paths": paths, "stage": "queued", "pct": 0, "t0": time.time(),
          "done": False, "error": None, "log": []}
     JOBS[j["id"]] = j
     while len(JOBS) > JOBS_MAX:
         JOBS.popitem(last=False)
-    threading.Thread(target=_run_job, args=(root, j, max_frames, seed), daemon=True).start()
+    import model  # clustering_of lives with the other SUBTLE run helpers
+    threading.Thread(target=_run_job, args=(root, j, max_frames, seed, model.clustering_of(clustering)), daemon=True).start()
     return j["id"]
 
 
-def _run_job(root: Path, j: dict, max_frames: int, seed: int | None) -> None:
+def _run_job(root: Path, j: dict, max_frames: int, seed: int | None, clustering: str) -> None:
     try:
         j.update(stage="load", pct=10)
         seqs = []
@@ -252,7 +253,7 @@ def _run_job(root: Path, j: dict, max_frames: int, seed: int | None) -> None:
         lengths = [len(s) for s in seqs]
         j.update(stage=f"joint fit on {len(seqs)} sessions (UMAP + clustering, isolated subprocess)", pct=30)
         from behavior_lab.models.discovery.subtle_wrapper import SUBTLE
-        res = SUBTLE(fps=20, seed=seed).fit_predict(seqs, use_superclusters=True, isolate=True)
+        res = SUBTLE(fps=20, seed=seed, clustering=clustering).fit_predict(seqs, use_superclusters=True, isolate=True)
         j.update(stage="write", pct=90)
         sub = res.metadata.get("subclusters")
         sup_all = res.metadata.get("superclusters")  # (T, levels): one column per DIB solution, coarse to fine as returned
@@ -263,7 +264,7 @@ def _run_job(root: Path, j: dict, max_frames: int, seed: int | None) -> None:
         emb_parts = split_by_lengths(np.round(np.asarray(emb), 3), lengths) if emb is not None else [None] * len(seqs)
         for rel, a, b, e, n in zip(j["paths"], sub_parts, sup_parts, emb_parts, lengths):
             _side(safe(root, rel)).write_text(json.dumps(
-                {"subcluster": a, "supercluster": b, "embedding": e, "n_frames": n, "fit_id": fit_id, "seed": seed,
+                {"subcluster": a, "supercluster": b, "embedding": e, "n_frames": n, "fit_id": fit_id, "seed": seed, "clustering": clustering,
                  "fit_sessions": j["paths"]}))
         _CACHE.clear()  # sidecars changed
         j.update(stage="done", pct=100)

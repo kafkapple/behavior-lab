@@ -1,3 +1,5 @@
+# no-split: one model wrapper; config, scipy/umap compat patches and subprocess isolation share module state
+# (421L before the 261001 NaN fix; PCA consensus clustering lives in subtle_consensus.py).
 """SUBTLE wrapper: Spectrogram-UMAP-based Temporal Link Embedding.
 
 Reference: Kwon et al. (2024), IJCV.
@@ -6,8 +8,6 @@ Install: pip install git+https://github.com/jeakwon/subtle.git
 Compatibility: scipy >= 1.12 removed signal.cwt. We monkey-patch the
 SUBTLE module's morlet_cwt to use a manual convolution-based CWT.
 """
-# no-split: one model wrapper; config, scipy/umap compat patches and subprocess isolation
-# share module state (file was already 421L before the 261001 one-line NaN fix).
 from __future__ import annotations
 
 import json
@@ -25,6 +25,7 @@ import numpy as np
 from ...core.types import ClusteringResult
 
 logger = logging.getLogger(__name__)
+CLUSTERINGS = ("pca_consensus", "umap_phenograph")  # first = default, see SUBTLEConfig.clustering
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +51,9 @@ class SUBTLEConfig:
     isolate: bool = False
     timeout: int = 600
     seed: Optional[int] = None  # None = SUBTLE's own unseeded behavior (UMAP, Leiden, DIB sampling all random)
+    # "pca_consensus" = clusters from PCA (subtle_consensus.py), UMAP for display only; seed None -> 0 (deterministic)
+    # "umap_phenograph" = original SUBTLE, Phenograph on the 2D UMAP
+    clustering: str = CLUSTERINGS[0]
     extra: dict = field(default_factory=dict)
 
     @classmethod
@@ -162,13 +166,13 @@ class SUBTLE:
 
     def __init__(self, fps: int = 20, n_train_frames: int = 120_000,
                  embedding_method: str = "umap", config: Optional[SUBTLEConfig] = None,
-                 seed: Optional[int] = None, **kwargs):
+                 seed: Optional[int] = None, clustering: str = CLUSTERINGS[0], **kwargs):
         if config is not None:
             self.config = config
         else:
             self.config = SUBTLEConfig(
                 fps=fps, n_train_frames=n_train_frames,
-                embedding_method=embedding_method, seed=seed, extra=kwargs,
+                embedding_method=embedding_method, seed=seed, clustering=clustering, extra=kwargs,
             )
         self._mapper = None
 
@@ -218,14 +222,22 @@ class SUBTLE:
         self._mapper = subtle.Mapper(
             fs=self.config.fps, n_train_frames=self.config.n_train_frames,
             embedding_method=self.config.embedding_method, **self.config.extra)
-        if self.config.seed is not None:  # the Mapper takes no seed: fix numpy (DIB, sampling) and UMAP here
+        assert self.config.clustering in CLUSTERINGS, f"clustering must be one of {CLUSTERINGS}"
+        seed = self.config.seed
+        if seed is None and self.config.clustering == "pca_consensus":
+            seed = 0
+        if seed is not None:  # the Mapper takes no seed: fix numpy (DIB, sampling) and UMAP here
             import random
-            random.seed(self.config.seed)
-            np.random.seed(self.config.seed)
+            random.seed(seed)
+            np.random.seed(seed)
             from umap import UMAP
-            self._mapper.umap = UMAP(n_neighbors=50, n_components=2, random_state=self.config.seed)
+            self._mapper.umap = UMAP(n_neighbors=50, n_components=2, random_state=seed)
             from subtle.module import Phenograph  # Leiden/Louvain: phenograph.cluster takes `seed`
-            self._mapper.pheno = Phenograph(seed=self.config.seed)
+            self._mapper.pheno = Phenograph(seed=seed)
+        if self.config.clustering == "pca_consensus":
+            from .subtle_consensus import PCAConsensus, PCKeep
+            self._mapper.umap = PCKeep(self._mapper.umap)
+            self._mapper.pheno = PCAConsensus(self._mapper.umap, seed=seed)
         data_list = self._mapper.fit(flat)
 
         # Mapper.Z/y/Y are in shuffled training order (Mapper.fit permutes frames before
@@ -318,6 +330,7 @@ config = SUBTLEConfig(fps={self.config.fps},
                       n_train_frames={self.config.n_train_frames},
                       use_superclusters={use_super},
                       seed={self.config.seed},
+                      clustering={self.config.clustering!r},
                       isolate=False)
 model = SUBTLE(config=config)
 t0 = time.time()

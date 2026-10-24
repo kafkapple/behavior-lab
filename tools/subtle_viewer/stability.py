@@ -1,5 +1,6 @@
 """Seed stability: fit the project sessions with several seeds (isolated subprocess, nothing written to the sidecars), then report
-how much the labels agree (adjusted Rand index) and whether the group result repeats, at every supercluster level. No web code."""
+how much the labels agree (ARI and AMI), how long labels last (run length within each session) and whether the group result repeats,
+at every supercluster level. No web code."""
 from __future__ import annotations
 
 import json
@@ -9,7 +10,7 @@ from itertools import combinations
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import adjusted_rand_score
+from sklearn.metrics import adjusted_mutual_info_score, adjusted_rand_score
 
 import core
 import model
@@ -31,11 +32,17 @@ def level_result(lab: np.ndarray, lengths: list[int], groups: list[list[int]], n
     return {"k": len(cl), "min_p_adj": float(min(q)), "n_sig": int(sum(v < 0.05 for v in q)), "groups": names[:2]}
 
 
-def start(root: Path, name: str, max_frames: int, seeds: list[int]) -> str:
-    return model._job(root, _run, name, max_frames, seeds)
+def runs_of(lab: np.ndarray, lengths: list[int]) -> dict:
+    """Run lengths of one label vector, cut at session borders: median, mean (= dwell) and share of 1-frame runs (flicker)."""
+    r = np.concatenate([np.diff(np.r_[0, np.flatnonzero(x[1:] != x[:-1]) + 1, len(x)]) for x in map(np.asarray, core.split_by_lengths(lab, lengths))])
+    return {"median_run": float(np.median(r)), "mean_run": float(r.mean()), "frac_runs_len1": float(np.mean(r == 1))}
 
 
-def _run(root: Path, j: dict, name: str, max_frames: int, seeds: list[int]) -> None:
+def start(root: Path, name: str, max_frames: int, seeds: list[int], clustering: str | None = None) -> str:
+    return model._job(root, _run, name, max_frames, seeds, model.clustering_of(clustering))
+
+
+def _run(root: Path, j: dict, name: str, max_frames: int, seeds: list[int], clustering: str) -> None:
     proj = core.load_project(root, name)
     gnames = [g for g, s in proj["groups"].items() if s]
     if len(gnames) < 2:
@@ -52,20 +59,23 @@ def _run(root: Path, j: dict, name: str, max_frames: int, seeds: list[int]) -> N
         np.savez(Path(t) / "in.npz", keypoints=np.concatenate(seqs), lengths=np.array(lengths))
         for n, sd in enumerate(seeds):
             j.update(stage=f"fit seed {sd} ({n + 1}/{len(seeds)})", pct=5 + int(90 * n / len(seeds)))
-            model._run(["train", f"{t}/in.npz", f"{t}/o{sd}.npz", f"{t}/m{sd}.pkl", str(sd)])
+            model._run(["train", f"{t}/in.npz", f"{t}/o{sd}.npz", f"{t}/m{sd}.pkl", str(sd), clustering])
             r = np.load(Path(t) / f"o{sd}.npz")
             runs[sd] = (r["subclusters"], np.atleast_2d(r["superclusters"].T).T)
             core._job_log(j, f"seed {sd}: {len(np.unique(runs[sd][0]))} subclusters, {runs[sd][1].shape[1]} levels")
-    out = {"seeds": seeds, "max_frames": max_frames, "groups": gnames, "frames": lengths, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
-           "per_seed": {}, "ari_sub": {}, "ari_super_default": {}, "note": "ARI compares label vectors over identical frames; ids differ between seeds, ARI does not need them to match"}
+    out = {"seeds": seeds, "clustering": clustering, "max_frames": max_frames, "groups": gnames, "frames": lengths, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+           "per_seed": {}, "ari_sub": {}, "ari_super_default": {}, "ami_sub": {}, "ami_super_default": {},
+           "note": "ARI and AMI compare label vectors over identical frames; ids differ between seeds, neither needs them to match. ARI favours coarse partitions, AMI does not"}
     for sd, (sub, sup) in runs.items():
         ks = [len(np.unique(sup[:, k])) for k in range(sup.shape[1])]
         out["per_seed"][str(sd)] = {"sub": level_result(sub, lengths, idx, gnames), "levels": [{"level": k, **level_result(sup[:, k], lengths, idx, gnames)} for k in range(sup.shape[1])],
-                                    "default_level": int(np.argmax(ks))}
+                                    "default_level": int(np.argmax(ks)), "runs_sub": runs_of(sub, lengths), "runs_super_default": runs_of(sup[:, int(np.argmax(ks))], lengths)}
     for a, b in combinations(seeds, 2):
         out["ari_sub"][f"{a}-{b}"] = float(adjusted_rand_score(runs[a][0], runs[b][0]))
         da, db = (runs[s][1][:, out["per_seed"][str(s)]["default_level"]] for s in (a, b))
         out["ari_super_default"][f"{a}-{b}"] = float(adjusted_rand_score(da, db))
+        out["ami_sub"][f"{a}-{b}"] = float(adjusted_mutual_info_score(runs[a][0], runs[b][0]))
+        out["ami_super_default"][f"{a}-{b}"] = float(adjusted_mutual_info_score(da, db))
     # stable = every seed agrees on whether any cluster passes .05 at its default level
     flags = {sd: out["per_seed"][str(sd)]["levels"][out["per_seed"][str(sd)]["default_level"]]["n_sig"] > 0 for sd in seeds}
     out["star_pattern"] = "stable" if len(set(flags.values())) == 1 else "seed-dependent"
@@ -75,7 +85,7 @@ def _run(root: Path, j: dict, name: str, max_frames: int, seeds: list[int]) -> N
     core._job_log(j, f"stability {name}: {out['star_pattern']}, ARI sub {out['ari_sub']}")
 
 
-def node_sensitivity(root: Path, name: str, drop: list[str], max_frames: int = 3000, seed: int = 0) -> dict:
+def node_sensitivity(root: Path, name: str, drop: list[str], max_frames: int = 3000, seed: int = 0, clustering: str | None = None) -> dict:
     """Refit SUBTLE without the named nodes (isolated, sidecars untouched) and rerun the level sweep on the new labels: does the group result
     depend on a node that the quality checks flag? Same seed and frames as the baseline fit."""
     proj = core.load_project(root, name)
@@ -87,7 +97,7 @@ def node_sensitivity(root: Path, name: str, drop: list[str], max_frames: int = 3
     lengths = [len(x) for x in seqs]
     with tempfile.TemporaryDirectory() as t:
         np.savez(Path(t) / "in.npz", keypoints=np.concatenate(seqs), lengths=np.array(lengths))
-        model._run(["train", f"{t}/in.npz", f"{t}/o.npz", f"{t}/m.pkl", str(seed)])
+        model._run(["train", f"{t}/in.npz", f"{t}/o.npz", f"{t}/m.pkl", str(seed), model.clustering_of(clustering)])
         sup = np.load(Path(t) / "o.npz")["superclusters"]
     sup = np.atleast_2d(sup.T).T
     per = [core.split_by_lengths(sup[:, k], lengths) for k in range(sup.shape[1])]
