@@ -68,26 +68,33 @@ Legend: ✅ done and checked, 🟡 done, not checked in a browser, ⬜ not start
 | Overlay on video (2D points on 5 cameras) | not found | ✅ 2D keypoints on the camera video, dim for low confidence; all-camera tiles built, only checked for cam_2 |
 | Progress and debug log | task status polling | 🟡 job stage and percent, log tail panel |
 
-## 8. Plan for generalization (261023, design only; nothing below is built)
-Goal: the viewer must not stay tied to SUBTLE or to the AVATAR 5-camera rig.
+## 8. Generalization (261023 design; minimal P7 and P8 built 261024, branch `feat/subtle-p7-p8`)
+Goal: the viewer must not stay tied to SUBTLE or to the AVATAR 5-camera rig. Rule (user 261024): build an interface only with two or more real implementations behind it; default clustering stays `umap_phenograph`.
 
-### P7 Triangulation as a module
-- Reuse `behavior_lab.rig.multiview` (`load_calib`, `triangulate` = DLT over n cameras by SVD, `reproj_px`).
-- Interface: `triangulate_sequence(kp2d, calib, method)`, `kp2d` = (T, cameras, nodes, 3) with x, y, conf; returns (T, nodes, 3) plus the number of cameras used per point.
-- Methods: `dlt_all` (all cameras above a conf threshold, general), `top2` (Justin's `recon3D`, for comparison only).
-- Check: on one AVATAR clip, `dlt_all` vs the file's own `skeleton3d`; report reprojection residual per method.
-- Rig info comes from a yaml (like `configs/rig/avatar.yaml`), so another rig is a new yaml, not new code.
+### P7 Triangulation as a module (built 261024)
+- `behavior_lab.rig.multiview.triangulate_sequence(kp2d, cams, method, thr=0.25)`: `kp2d` (T, cameras, nodes, 3) in camera pixels; returns xyz (T, nodes, 3), NaN below two cameras, and cameras used per point. Reuses `triangulate`.
+- Methods: `dlt_all` (every camera with conf > thr), `top2` (two most confident, like `recon3D`, without its fill and smoothing).
+- AVATAR json to `kp2d`: `rig.avatar.kp2d_cells` (origins from `configs/rig/avatar.yaml`). Another rig = new yaml and calibration toml.
+- Check: `scripts/rig_triangulation_check.py`; synthetic test in `tests/test_data/test_rig_avatar.py`.
+- cort1, every 10th frame (1,200 frames), thr 0.25. Descriptive only, no ground truth:
 
-### P8 Clustering as a plug-in
-- Existing parts: `behavior_lab.models.get_model(name)`, wrappers for `SUBTLE`, `KeypointMoSeq`, `BehaveMAE`, `BSOiD`, `VAME`, and `scripts/isolated_run.py` (one method in its own env, writes `labels.npy` and `features.npy`).
-- Facts that shape the design:
-  - Methods conflict in one environment, so each runs in its own process or env.
-  - SUBTLE takes a list of sequences; the repo protocol `BehaviorClusterer` takes one array. The viewer needs the list form (joint fit).
-  - Output rate differs (B-SOiD 10 fps vs 20 fps): labels must be aligned to the frame count before frequency is computed.
-- Interface (viewer side): `run(method, sessions, params) -> {labels per session, embedding per session or None, fit_id}`.
-- Sidecar stays one file per session; `method` is recorded next to `fit_id`; frequency compares only labels with the same method and `fit_id`.
-- Order: SUBTLE (done) -> B-SOiD (CPU, small) -> keypoint-MoSeq (JAX, own env) -> hBehaveMAE (GPU; needs a go on GPU use).
-- Check per method: label count equals frame count for every session; pct sum = 100; same `fit_id` in one comparison.
+| | dlt_all | top2 |
+|---|---|---|
+| Points triangulated | 99.85 % (4.06 cameras) | 99.85 % (2) |
+| Reprojection, all cameras above thr, median / p90 px | 10.6 / 46.9 | 8.4 / 59.2 |
+| Reprojection, cameras top2 left out | - | 19.5 / 93.7 |
+| `skeleton3d` mapped by similarity fit, reprojection median px | 34.1 | 12.1 |
+
+- Reading: the stored `skeleton3d` agrees far better with `top2` than with `dlt_all`, as expected if `recon3D` used this calibration with top 2. The similarity fit is outlier-sensitive (scale 0.021 to 0.026). At thr 0.5 `dlt_all` gives 7.3 px and mapped `skeleton3d` 32.3 px (earlier 7.5 and 32.2 px).
+- Not built: viewer use of re-triangulated 3D. It changes the clustering input; wait for ground truth (`subtle_3d_quality_plan.md` P4).
+
+### P8 Clustering as a plug-in (built 261024, SUBTLE paths only)
+- `tools/subtle_viewer/cluster.py`: `run(method, sessions, params) -> {labels, sub, embedding (per session or None), fit_id, method, lengths}`. `check()` asserts label count = frame count for every session and shares summing to 100.
+- Methods: `subtle/umap_phenograph` (default), `subtle/pca_consensus`. Analyze (`core._run_job`) goes through `run`; the sidecar adds `method` next to `clustering` and `fit_id`. Train, Map and Seed stability still call `subtle_proc.py` directly (they need the saved model).
+- Check: selftest (default method, bad length rejected); both methods on cort1 + veh1, first 3,000 frames, seed 0, through `core._run_job`: every sidecar has 3,000 labels, one `fit_id` and `method`, `frequency` ok with sums 100.0 and `same_fit`. umap_phenograph 44 subclusters, default level 3 clusters, 800 s; pca_consensus 40 and 4, 811 s.
+- B-SOiD not added: `hdbscan` is missing in `.venv` and `.venv-subtle` (installing it changes the shared env), its labels are 10 fps bins and HDBSCAN noise = -1. Both need a decision before it is a third method.
+- Order left: B-SOiD -> keypoint-MoSeq (JAX, own env) -> hBehaveMAE (GPU; needs a go on GPU use).
+- Facts kept from the design: methods conflict in one env (own process each); the viewer needs the list form (joint fit); output rate must be aligned to the frame count before frequency.
 
 ### Status of the viewer features requested 261023
 | Feature | State |
@@ -122,6 +129,8 @@ Details, checks and residual risks: `subtle_stats_plan.md`.
 | P12 | seed stability across seeds, all levels shown | ✅ ARI and per-level group test; demo ARI 0.40 to 0.60 |
 | P13 | manuals readable in the page | ✅ |
 | P14 | level sweep with selection correction, flagged clusters, saved csv, figure and clips | ✅ exact max-T, 56-assignment null 3.6 percent; export folder checked |
+| P7 | triangulation module, `dlt_all` and `top2` | ✅ built and checked on cort1 (descriptive, section 8); not used by the viewer |
+| P8 | clustering `run()` with the two SUBTLE paths; Analyze uses it | ✅ both paths checked on 2 sessions; B-SOiD not added (section 8) |
 
 ## 10. UX basis and module structure (261023)
 Sources read: BS scene-flow viewer (`src/behaviorsplatter/web/`, `docs/code/viewer_controls_audit.md`) and the HTML report rule (`html-report-pages.md`).

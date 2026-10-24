@@ -247,26 +247,18 @@ def _run_job(root: Path, j: dict, max_frames: int, seed: int | None, clustering:
             xyz = xyz[:max_frames] if max_frames else xyz
             _job_log(j, f"input {rel} {xyz.shape}, NaN {int(np.isnan(xyz).sum())}")
             seqs.append(np.nan_to_num(xyz))  # ponytail: zero-fill; interpolate if NaN share is large
-        lengths = [len(s) for s in seqs]
         j.update(stage=f"joint fit on {len(seqs)} sessions (UMAP + clustering, isolated subprocess)", pct=30)
-        from behavior_lab.models.discovery.subtle_wrapper import SUBTLE, SUBTLEConfig
-        cfg = SUBTLEConfig(fps=20, seed=seed, clustering=clustering, timeout=3600)  # same cap as model._run; consensus on all frames > 600 s
-        res = SUBTLE(config=cfg).fit_predict(seqs, use_superclusters=True, isolate=True)
+        import cluster
+        r = cluster.run(cluster.method_of(clustering), seqs, {"seed": seed})
         j.update(stage="write", pct=90)
-        sub = res.metadata.get("subclusters")
-        sup_all = res.metadata.get("superclusters")  # (T, levels): one column per DIB solution, coarse to fine as returned
-        sup_parts = split_by_lengths(np.asarray(sup_all if sup_all is not None else res.labels), lengths)
-        sub_parts = split_by_lengths(np.asarray(sub), lengths) if sub is not None else [None] * len(seqs)
-        fit_id = uuid.uuid4().hex[:8]  # same id on every session of this fit; frequency() requires one id per project
-        emb = getattr(res, "embeddings", None)
-        emb_parts = split_by_lengths(np.round(np.asarray(emb), 3), lengths) if emb is not None else [None] * len(seqs)
-        for rel, a, b, e, n in zip(j["paths"], sub_parts, sup_parts, emb_parts, lengths):
+        fit_id, lengths = r["fit_id"], r["lengths"]  # same id on every session of this fit; frequency() requires one id per project
+        for rel, a, b, e, n in zip(j["paths"], r["sub"] or [None] * len(seqs), r["labels"], r["embedding"] or [None] * len(seqs), lengths):
             _side(safe(root, rel)).write_text(json.dumps(
                 {"subcluster": a, "supercluster": b, "embedding": e, "n_frames": n, "fit_id": fit_id, "seed": seed, "clustering": clustering,
-                 "fit_sessions": j["paths"]}))
+                 "method": r["method"], "fit_sessions": j["paths"]}))
         _CACHE.clear()  # sidecars changed
         j.update(stage="done", pct=100)
-        _job_log(j, f"fit {fit_id}: clusters {res.n_clusters}, frames {sum(lengths)}, {time.time() - j['t0']:.0f}s")
+        _job_log(j, f"fit {fit_id}: clusters {r['n_clusters']}, frames {sum(lengths)}, {time.time() - j['t0']:.0f}s")
     except Exception as e:  # report to UI; do not kill the server
         j["error"] = f"{type(e).__name__}: {e}"
         _job_log(j, "ERROR " + j["error"])

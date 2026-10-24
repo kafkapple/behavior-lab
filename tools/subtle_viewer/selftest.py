@@ -154,6 +154,15 @@ def stability_checks() -> None:
     assert w == {"median_run": 1.5, "mean_run": 1.5, "frac_runs_len1": 0.5}, w
     import model
     assert model.clustering_of(None) == "umap_phenograph" and model.clustering_of("pca_consensus") == "pca_consensus"
+    import cluster  # P8: default method unchanged; the per-method check rejects a label count != frame count
+    assert cluster.METHODS[0] == cluster.method_of(model.clustering_of(None)) == "subtle/umap_phenograph"
+    good = {"method": "m", "lengths": [3, 2], "labels": [[0, 1, 1], [[2, 0], [2, 1]]]}
+    cluster.check(good)
+    try:
+        cluster.check({**good, "labels": [[0, 1], [[2, 0], [2, 1]]]})
+        raise SystemExit("label count != frame count accepted")
+    except AssertionError:
+        pass
     print("stability checks OK")
 
 
