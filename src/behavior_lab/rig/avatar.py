@@ -28,12 +28,12 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import cv2
 import numpy as np
 import tomllib
 import yaml
 
-from .multiview import load_calib, reproj_px, triangulate
+# cv2 and .multiview (which imports cv2) are imported inside the functions that use them: the
+# SUBTLE viewer's .venv has no cv2 and reads only the layout below.
 
 # ponytail: configs/ sits at the repo root, so this needs a source checkout (editable install).
 # Ship it as package data if the package is ever installed without one.
@@ -41,6 +41,7 @@ RIG_YAML = Path(__file__).resolve().parents[3] / "configs" / "rig" / "avatar.yam
 _RIG = yaml.safe_load(RIG_YAML.read_text())
 COMPOSITE: tuple[int, int] = tuple(_RIG["composite"])
 ORIGIN: dict[str, tuple[int, int]] = {c: tuple(o) for c, o in _RIG["origin"].items()}
+SIZE: dict[str, tuple[int, int]] = {c: tuple(s) for c, s in _RIG["size"].items()}
 CALIB_DATE: dt.date = _RIG["calib_date"]
 # Hosts without ffmpeg/ffprobe on PATH point these at a binary (eren: imageio_ffmpeg, no ffprobe).
 FFMPEG: str = os.environ.get("BEHAVIOR_LAB_FFMPEG", "ffmpeg")
@@ -51,6 +52,7 @@ def cells(calib: str | Path) -> dict[str, tuple[int, int, int, int]]:
     """camera -> (x0, y0, w, h) in the composite; asserts the cells fit and do not overlap."""
     cfg = tomllib.loads(Path(calib).expanduser().read_text())
     cs = {c: (*ORIGIN[c], *cfg[c]["size"]) for c in ORIGIN}
+    assert all(cs[c][2:] == SIZE[c] for c in cs), f"calib sizes {cs} differ from {RIG_YAML.name} size"
     boxes = list(cs.values())
     for i, (x, y, w, h) in enumerate(boxes):
         assert x + w <= COMPOSITE[0] and y + h <= COMPOSITE[1], (
@@ -63,11 +65,22 @@ def cells(calib: str | Path) -> dict[str, tuple[int, int, int, int]]:
     return cs
 
 
+def to_cell(xy_norm, cam: int) -> np.ndarray:
+    """Composite-normalised x, y (..., 2) -> pixels of camera `cam`'s cell; cam 0 = cam_1 (json index).
+
+    Keeps the input dtype, so a float32 array gives the same numbers as float32 arithmetic.
+    """
+    xy = np.asarray(xy_norm)
+    return xy * np.array(COMPOSITE, xy.dtype) - np.array(ORIGIN[f"cam_{cam + 1}"], xy.dtype)
+
+
 def _probe_cv2(p: Path) -> tuple[int, int, int]:
     """Same triple without ffprobe (eren has only the imageio ffmpeg binary): container metadata via OpenCV.
 
     ffmpeg's own stats show no frame counter for a stream copy (eren build, 261004), so it cannot count.
     """
+    import cv2
+
     cap = cv2.VideoCapture(str(p))
     try:
         w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -176,7 +189,8 @@ def residuals(
     kp: dict, cams: list[dict], thr: float = 0.5, min_cams: int = 3, n_frames: int = 100
 ) -> dict:
     """kp = SUBTLE/SLEAP json: keypoint[frame][cam][k] = [x, y, conf], composite-normalised."""
-    origin = np.array(list(ORIGIN.values()), float)
+    from .multiview import reproj_px, triangulate
+
     frames = sorted(int(f) for f in kp["keypoint"])[:n_frames]
     per_cam: list[list[float]] = [[] for _ in cams]
     seen = tri = 0
@@ -184,7 +198,7 @@ def residuals(
         pc = kp["keypoint"][str(f)]
         for k in range(len(kp["node"]["id"])):
             obs = [
-                (int(c), np.array(v[str(k)][:2]) * COMPOSITE - origin[int(c)])
+                (int(c), to_cell(v[str(k)][:2], int(c)))
                 for c, v in pc.items()
                 if str(k) in v and v[str(k)][2] >= thr
             ]
@@ -209,6 +223,8 @@ def residuals(
 
 def residual_by_date(calib: Path, specs: list[str], **kw) -> dict:
     """specs = TAG=YYYYMMDD=<json.gz>; rows sorted by date with days from the calibration date."""
+    from .multiview import load_calib
+
     cams, rows = load_calib(calib), []
     for spec in specs:
         tag, date, path = spec.split("=", 2)

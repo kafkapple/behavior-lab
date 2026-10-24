@@ -74,6 +74,19 @@ def test_cells_match_calibrated_sizes(calib):
     assert cs["cam_3"] == (2400, 0, 1200, 1200) and cs["cam_5"] == (1200, 1000, 1200, 1000)
 
 
+def test_cells_reject_a_calib_size_that_differs_from_the_yaml(calib):
+    calib.write_text(calib.read_text().replace("size = [1200, 1200]", "size = [1200, 1000]"))
+    with pytest.raises(AssertionError, match="differ"):
+        avatar.cells(calib)
+
+
+def test_to_cell_removes_the_cell_origin_and_keeps_dtype(calib):
+    for i, (x0, y0, w, h) in enumerate(avatar.cells(calib).values()):
+        px = np.array([[0.0, 0.0], [w - 1, h - 1], [w / 2, h / 3]])
+        assert np.allclose(avatar.to_cell((px + (x0, y0)) / avatar.COMPOSITE, i), px, atol=1e-9)
+    assert avatar.to_cell(np.float32([0.5, 0.5]), 1).dtype == np.float32
+
+
 def test_triangulation_round_trip(calib):
     cams = load_calib(calib)
     X = np.array([0.02, -0.03, 0.01])

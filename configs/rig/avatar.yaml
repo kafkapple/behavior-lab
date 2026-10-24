@@ -1,5 +1,6 @@
 # AVATAR rig: 5 cameras recorded as one composite video.
-# Cell size is not listed here: it is each camera's calibrated `size` in the aniposelib config.toml.
+# Cell size: each camera's calibrated `size` in the aniposelib config.toml; `size` below is the same
+# numbers for code without a calib (SUBTLE viewer), and cells(calib) asserts that they agree.
 #   cam_1 | cam_2 | cam_3 (bottom, 1200x1200)
 #   cam_4 | cam_5 | UI panel
 name: avatar
@@ -10,4 +11,10 @@ origin:                   # top-left corner of each camera cell in the composite
   cam_2: [1200, 0]
   cam_3: [2400, 0]
   cam_4: [0, 1000]
+  cam_5: [1200, 1000]
+size:                     # cell width, height px (= calib config.toml `size`, 2024-12-24 calibration)
+  cam_1: [1200, 1000]
+  cam_2: [1200, 1000]
+  cam_3: [1200, 1200]
+  cam_4: [1200, 1000]
   cam_5: [1200, 1000]

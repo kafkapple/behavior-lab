@@ -17,6 +17,8 @@ from pathlib import Path
 
 import numpy as np
 
+from behavior_lab.rig.avatar import ORIGIN, SIZE, to_cell
+
 log = logging.getLogger("subtle_viewer")
 SIDE = ".subtle.json"  # sidecar suffix; the original json.gz is never modified
 STEM_SUFFIX = re.compile(r"(_det|_sleap.*|_tailless.*)$")
@@ -25,11 +27,8 @@ _CACHE: "OrderedDict[tuple, dict]" = OrderedDict()  # LRU of parsed sessions
 CACHE_MAX = 2
 JOBS: "OrderedDict[str, dict]" = OrderedDict()
 JOBS_MAX = 20
-# AVATAR rig (configs/rig/avatar.yaml): composite 3600x2000, camera cell = (x0, y0, w, h) in composite px.
-# ponytail: cam_3 height 1200 is from the yaml comment, not measured; the page warns when a video's aspect differs.
-COMPOSITE = (3600, 2000)
-CELLS = {0: (0, 0, 1200, 1000), 1: (1200, 0, 1200, 1000), 2: (2400, 0, 1200, 1200),
-         3: (0, 1000, 1200, 1000), 4: (1200, 1000, 1200, 1000)}
+# AVATAR rig (configs/rig/avatar.yaml via behavior_lab.rig.avatar): camera index -> cell (x0, y0, w, h) in composite px.
+CELLS = {i: (*ORIGIN[c], *SIZE[c]) for i, c in enumerate(ORIGIN)}
 
 
 def safe(root: Path, rel: str) -> Path:
@@ -95,10 +94,8 @@ def _kp_array(d: dict, n: int) -> np.ndarray | None:
 
 def kp_cell(s: dict, cam: int) -> np.ndarray:
     """2D keypoints of one camera as (T, nodes, 3): x, y in 0-1 of that camera's cell, conf unchanged."""
-    x0, y0, w, h = CELLS[cam]
     a = s["kp"][:, cam].copy()
-    a[..., 0] = (a[..., 0] * COMPOSITE[0] - x0) / w
-    a[..., 1] = (a[..., 1] * COMPOSITE[1] - y0) / h
+    a[..., :2] = to_cell(a[..., :2], cam) / np.array(CELLS[cam][2:], a.dtype)
     return a
 
 
