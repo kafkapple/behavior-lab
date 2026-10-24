@@ -35,6 +35,7 @@
 
 ## Running SUBTLE
 - Add sessions to groups, then `Run SUBTLE jointly on all project sessions`. One fit covers all sessions, so ids are comparable.
+- Clustering: `UMAP + Phenograph` (original SUBTLE, default) or `PCA consensus` (5 Leiden runs in PCA space, merged, cluster count matched to the UMAP path; UMAP only for the map). Analyze, Train and Seed stability use the same choice and record it as `clustering`. PCA consensus is slower: all 95,991 demo frames took 2,884 s. Evidence and the hold rule: vault `_Notes/261024_SUBTLE_개선_연구계획`.
 - Set a seed (default 0) for a repeatable fit; empty = random. What the seed controls: `subtle_theory.md` section 4. Max frames limits the time (3,000 frames for 8 animals took about 100 s).
 - Model: `Train` fits the project sessions once and saves `<root>/.subtle_models/<name>/model.pkl` and `model.json`. `Map` loads a saved model and labels every frame of the project sessions with it; the log prints how many trained frames keep their label (about 85 to 88 percent in a 2-session test, because mapping classifies new points).
 - Frequency table: the sum must be 100 and all sessions must come from one fit; otherwise the badge turns red.
@@ -77,6 +78,8 @@
 - Stats tab, `Seed stability`: refits the project sessions with seeds 0, 1, 2 (isolated, sidecars untouched; about 80 s per seed for 8 animals at 3,000 frames) and saves `<name>.stability.json`.
 - Shows the adjusted Rand index (ARI) between seeds for subclusters and for the default supercluster level, and the group test at every level (min adjusted p, number of clusters below .05), so no level is chosen after seeing the stars.
 - `stable` means every seed agrees on whether any cluster passes .05 at its default level; it can also mean a stable null. `seed-dependent` means they disagree.
+- Also reports AMI (does not favour coarse partitions) and label run lengths (median, mean, share of 1-frame runs), cut at session borders.
+- Demo refit 261024 (3,000 frames, seeds 0-2): UMAP + Phenograph ARI 0.44, AMI 0.72, 39% 1-frame runs; PCA consensus ARI 0.60-0.62, AMI 0.79-0.80, 4% 1-frame runs. Both gave no cluster below .05.
 - Demo (8 animals, first 3,000 frames): ARI 0.41 to 0.45 for subclusters (61 to 66 clusters) and 0.40 to 0.60 for the default supercluster level. No seed gave a cluster below .05. The partition itself is only partly reproducible across seeds, so keep the seed fixed and say which seed a figure used.
 
 ## Keys
