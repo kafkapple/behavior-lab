@@ -188,12 +188,11 @@ def split_composite(
 def kp2d_cells(kp: dict, frames: list[int]) -> np.ndarray:
     """SUBTLE/SLEAP json keypoint[frame][cam][k] = [x, y, conf] (composite-normalised) ->
     (len(frames), cams, nodes, 3) with x, y in each camera cell's pixels; missing = conf 0."""
-    origin = np.array(list(ORIGIN.values()), float)
-    out = np.zeros((len(frames), len(origin), len(kp["node"]["id"]), 3))
+    out = np.zeros((len(frames), len(ORIGIN), len(kp["node"]["id"]), 3))
     for i, f in enumerate(frames):
         for c, v in kp["keypoint"][str(f)].items():
             for k, p in v.items():
-                out[i, int(c), int(k)] = [*(np.array(p[:2]) * COMPOSITE - origin[int(c)]), p[2]]
+                out[i, int(c), int(k)] = [*to_cell(np.array(p[:2], float), int(c)), p[2]]
     return out
 
 
