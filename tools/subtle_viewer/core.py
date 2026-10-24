@@ -252,8 +252,9 @@ def _run_job(root: Path, j: dict, max_frames: int, seed: int | None, clustering:
             seqs.append(np.nan_to_num(xyz))  # ponytail: zero-fill; interpolate if NaN share is large
         lengths = [len(s) for s in seqs]
         j.update(stage=f"joint fit on {len(seqs)} sessions (UMAP + clustering, isolated subprocess)", pct=30)
-        from behavior_lab.models.discovery.subtle_wrapper import SUBTLE
-        res = SUBTLE(fps=20, seed=seed, clustering=clustering).fit_predict(seqs, use_superclusters=True, isolate=True)
+        from behavior_lab.models.discovery.subtle_wrapper import SUBTLE, SUBTLEConfig
+        cfg = SUBTLEConfig(fps=20, seed=seed, clustering=clustering, timeout=3600)  # same cap as model._run; consensus on all frames > 600 s
+        res = SUBTLE(config=cfg).fit_predict(seqs, use_superclusters=True, isolate=True)
         j.update(stage="write", pct=90)
         sub = res.metadata.get("subclusters")
         sup_all = res.metadata.get("superclusters")  # (T, levels): one column per DIB solution, coarse to fine as returned
