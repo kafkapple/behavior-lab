@@ -8,6 +8,10 @@ so a time step always shows the pose, the map position and the labels of the sam
 Clusters of the chosen method can be switched off in the legend; playback then skips their
 steps. Every skip is a cut: the trail is reset and a "cut" mark is shown, so two bouts that
 were minutes apart never look like continuous motion.
+
+A focus class narrows the view to one cluster: its points stay coloured on the map, the
+others fade, arrows show where its bouts go next (share of its outgoing transitions, top 3),
+and the bout list holds its runs. Picking a bout jumps to it and plays it to its end.
 """
 # ruff: noqa: E501  (the embedded script keeps its own line lengths)
 from __future__ import annotations
@@ -67,6 +71,9 @@ def player_block(pid: str, title: str, data: dict, *, open_: bool = False) -> st
             '<option value="5">5x</option><option value="0.5">0.5x</option></select> '
             '<label><input type="checkbox" class="follow" checked> follow animal</label> '
             '<span class="info"></span></p>'
+            '<p>focus class <select class="c"><option value="">all</option></select> '
+            'bout <select class="b" disabled><option value="">pick a class first</option></select> '
+            '<span class="binfo"></span></p>'
             '<p class="legend" style="line-height:2"></p>'
             '<canvas width="960" height="560" style="max-width:100%;touch-action:none"></canvas>'
             f'<script type="application/json">{json.dumps(data, separators=(",", ":"))}</script>'
@@ -82,6 +89,8 @@ function init(root){
   const sl=root.querySelector('input[type=range]'),btn=root.querySelector('button.play');
   const sel=root.querySelector('select.m'),sp=root.querySelector('select.s');
   const fol=root.querySelector('input.follow'),info=root.querySelector('.info'),leg=root.querySelector('.legend');
+  const csel=root.querySelector('select.c'),bsel=root.querySelector('select.b'),binfo=root.querySelector('.binfo');
+  let focus=null,bend=null,runs=[],outs=[];
   const P=380,MX=440,EX=170,EW=cv.width-EX-10,EY=P+26,RH=Math.min(22,(cv.height-EY)/d.methods.length);
   sl.max=d.n-1; let t=0,timer=null,cent={},yaw=0.6,pitch=1.0,cut=-99,trail0=0;
   d.methods.forEach(m=>{m.col={};m.on={};m.order.forEach((c,i)=>{m.col[c]=m.colors[i];m.on[c]=true;});});
@@ -92,9 +101,9 @@ function init(root){
   const map=document.createElement('canvas');map.width=P;map.height=P;
   const ex=i=>d.emb[2*i]*(P-20)/1000+10, ey=i=>P-10-d.emb[2*i+1]*(P-20)/1000;
   function drawMap(){const m=M(),x=map.getContext('2d');x.clearRect(0,0,P,P);const s={},n={};
-    for(let pass=0;pass<2;pass++)for(let i=0;i<d.n;i++){const c=m.labels[i],on=m.on[c];if(on!==(pass===1))continue;
+    for(let pass=0;pass<2;pass++)for(let i=0;i<d.n;i++){const c=m.labels[i],on=m.on[c]&&(focus===null||c===focus);if(on!==(pass===1))continue;
       x.globalAlpha=on?.7:.08;x.fillStyle=on?m.col[c]:'#888';x.fillRect(ex(i)-1.5,ey(i)-1.5,3,3);
-      if(pass===1&&c>=0){(s[c]=s[c]||[0,0]);s[c][0]+=ex(i);s[c][1]+=ey(i);n[c]=(n[c]||0)+1;}}
+      if(c>=0){(s[c]=s[c]||[0,0]);s[c][0]+=ex(i);s[c][1]+=ey(i);n[c]=(n[c]||0)+1;}}
     cent={};for(const c in s)cent[c]=[s[c][0]/n[c],s[c][1]/n[c]];}
   function legend(){const m=M();leg.innerHTML='';
     const mk=(txt,fn,bg)=>{const b=document.createElement('button');b.type='button';b.textContent=txt;
@@ -104,6 +113,19 @@ function init(root){
     mk('all',all(true));mk('none',all(false));
     m.order.forEach((c,i)=>{const b=mk((c<0?'noise':c)+' · '+(m.share[i]*100).toFixed(0)+'%',()=>{m.on[c]=!m.on[c];refresh();},m.col[c]);
       b.style.color='#000';b.style.opacity=m.on[c]?1:.3;});}
+  function classes(){const m=M();csel.innerHTML='<option value="">all</option>'+m.order.filter(c=>c>=0)
+      .map((c,i)=>'<option value="'+c+'">'+c+' · '+(m.share[m.order.indexOf(c)]*100).toFixed(0)+'%</option>').join('');
+    focus=null;setFocus();}
+  function setFocus(){const m=M();runs=[];outs=[];bend=null;
+    if(focus!==null){let s0=-1;for(let i=0;i<=d.n;i++){const c=i<d.n?m.labels[i]:null;
+        if(c===focus&&s0<0)s0=i;if(c!==focus&&s0>=0){runs.push([s0,i-1]);s0=-1;}}
+      const cnt={};let tot=0;runs.forEach(r=>{const nx=m.labels[r[1]+1];if(r[1]+1<d.n&&nx>=0){cnt[nx]=(cnt[nx]||0)+1;tot++;}});
+      outs=Object.keys(cnt).map(k=>[+k,cnt[k]/tot]).sort((a,b)=>b[1]-a[1]).slice(0,3);}
+    bsel.disabled=focus===null;
+    bsel.innerHTML=focus===null?'<option value="">pick a class first</option>':'<option value="">'+runs.length+' bouts</option>'+
+      runs.map((r,i)=>'<option value="'+i+'">#'+(i+1)+'  '+(r[0]/d.hz).toFixed(1)+' s  ('+((r[1]-r[0]+1)/d.hz).toFixed(1)+' s)</option>').join('');
+    binfo.textContent=focus===null?'':'next after a bout: '+(outs.map(o=>o[0]+' '+(o[1]*100).toFixed(0)+'%').join(', ')||'none');
+    drawMap();draw();}
   function refresh(){legend();drawMap();drawEth(+sel.value);draw();}
   function badge(c,m,big){const p=cent[c];if(!p)return;g.beginPath();g.arc(MX+p[0],p[1],big?11:8,0,7);
     g.fillStyle='#fff';g.fill();g.lineWidth=big?3:1.5;g.strokeStyle=m.col[c];g.stroke();
@@ -135,6 +157,11 @@ function init(root){
     g.globalAlpha=1;q.map((p,j)=>[p,j]).sort((a,b)=>b[0][2]-a[0][2]).forEach(([p,j])=>{g.beginPath();g.arc(p[0],p[1],4,0,7);g.fillStyle=d.joint_colors[j];g.fill();});
     if(t-cut<8){g.fillStyle='#d62728';g.font='bold 14px sans-serif';g.fillText('cut',P-40,14);}
     g.drawImage(map,MX,0);
+    if(focus!==null&&cent[focus])outs.forEach(o=>{const p=cent[focus],r=cent[o[0]];if(!r)return;
+      const an=Math.atan2(r[1]-p[1],r[0]-p[0]);g.globalAlpha=.85;g.strokeStyle=m.col[o[0]];g.lineWidth=1+6*o[1];g.beginPath();
+      g.moveTo(MX+p[0],p[1]);g.lineTo(MX+r[0],r[1]);g.lineTo(MX+r[0]-14*Math.cos(an-.35),r[1]-14*Math.sin(an-.35));
+      g.moveTo(MX+r[0],r[1]);g.lineTo(MX+r[0]-14*Math.cos(an+.35),r[1]-14*Math.sin(an+.35));g.stroke();g.globalAlpha=1;
+      g.fillStyle=fg;g.font='10px sans-serif';g.textAlign='center';g.fillText((o[1]*100).toFixed(0)+'%',MX+(p[0]+r[0])/2,(p[1]+r[1])/2-4);badge(o[0],m,false);});
     // recent positions as fading dots, never joined (the plane is a projection); reset at a cut
     for(let b=20;b>0;b--){const i=t-b;if(i<trail0)continue;g.globalAlpha=(21-b)/40;g.beginPath();g.arc(MX+ex(i),ey(i),2.5,0,7);g.fillStyle=fg;g.fill();}
     g.globalAlpha=1;
@@ -156,11 +183,13 @@ function init(root){
     g.lineTo(cx,EY+d.methods.length*RH);g.stroke();
     info.textContent=(t/d.hz).toFixed(1)+' s of '+(d.n/d.hz).toFixed(0)+' s';sl.value=t;}
   function stop(){clearInterval(timer);timer=null;btn.textContent='play';}
-  function step(){const m=M();let u=t+1;while(u<d.n&&!m.on[m.labels[u]])u++;
+  function step(){const m=M();let u=t+1;if(bend!==null&&u>bend){bend=null;stop();return;}while(u<d.n&&!m.on[m.labels[u]])u++;
     if(u>=d.n){stop();return;}if(u>t+1){cut=u;trail0=u;}t=u;draw();}
   function play(){stop();btn.textContent='pause';timer=setInterval(step,1000/d.hz/sp.value);}
   btn.onclick=()=>timer?stop():(t>=d.n-1&&(t=0,trail0=0),play());
-  sl.oninput=()=>{t=+sl.value;trail0=t;draw();};sel.onchange=refresh;sp.onchange=()=>timer&&play();fol.onchange=draw;
+  sl.oninput=()=>{t=+sl.value;trail0=t;bend=null;draw();};sel.onchange=()=>{refresh();classes();};
+  csel.onchange=()=>{focus=csel.value===''?null:+csel.value;setFocus();};
+  bsel.onchange=()=>{if(bsel.value==='')return;const r=runs[+bsel.value];t=r[0];trail0=t;cut=t;bend=r[1];draw();play();};sp.onchange=()=>timer&&play();fol.onchange=draw;
   const xy=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height];};
   let drag=null;
   cv.onpointerdown=e=>{const [x,y]=xy(e);if(y>EY-6&&x>=EX){t=Math.min(d.n-1,Math.floor((x-EX)*d.n/EW));trail0=t;draw();}
@@ -168,7 +197,7 @@ function init(root){
   cv.onpointermove=e=>{if(!drag)return;const [x,y]=xy(e);yaw+=(x-drag[0])*.01;
     pitch=Math.max(0,Math.min(Math.PI/2,pitch+(y-drag[1])*.01));drag=[x,y];draw();};
   cv.onpointerup=()=>{drag=null;};
-  d.methods.forEach((_,r)=>drawEth(r));refresh();
+  d.methods.forEach((_,r)=>drawEth(r));refresh();classes();
 }
 document.querySelectorAll('details.bl-player').forEach(el=>{
   el.addEventListener('toggle',()=>{if(el.open)init(el);});if(el.open)init(el);});
