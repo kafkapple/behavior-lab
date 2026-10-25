@@ -89,7 +89,7 @@ def _routes(root: Path):
         "export": lambda q, b: {"job": results.start(root, b["name"], b.get("criterion", "omnibus"))},
         "export_latest": lambda q, b: {"dir": (core.results_dir(root, q["name"][0]) / "latest.txt").read_text()},
         "models": lambda q, b: model.list_models(root),
-        "methods": lambda q, b: {"methods": list(cluster.METHODS), "default": cluster.METHODS[0], "fit_capable": [m for m in cluster.METHODS if m.startswith("subtle/")]},
+        "methods": lambda q, b: {"methods": list(cluster.METHODS), "default": cluster.METHODS[0]},
         "train": lambda q, b: {"job": model.start_train(root, b["name"], b["paths"], int(b.get("max_frames", 0)), b.get("seed"), subtle_only(b))},
         "map": lambda q, b: {"job": model.start_map(root, b["name"], b["paths"])},
         "docs": lambda q, b: sorted(p.name for p in docs.glob("subtle_*.md")),
