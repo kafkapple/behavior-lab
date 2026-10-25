@@ -103,7 +103,7 @@ if (mode === 'keys') {
   // PNG exports: capture the download and check the PNG signature
   await js(`window.__dl = []; HTMLAnchorElement.prototype.click = function () { fetch(this.href).then(r => r.blob()).then(async b => window.__dl.push({name: this.download, size: b.size, magic: [...new Uint8Array(await b.slice(0, 4).arrayBuffer())].join()})); }`);
   await js(`${$('stgo')}.click()`); await until(`!!document.querySelector('#stat table')`, 30000); await js(`${$('stpng')}.click()`);
-  check('Stats PNG downloaded', await until(`window.__dl.some(d => d.name === 'group_stats.png' && d.magic === '137,80,78,71' && d.size > 4000)`, 8000));
+  check('Stats PNG downloaded', await until(`window.__dl.some(d => d.name === 'group_stats.png' && d.magic === '137,80,78,71' && d.size > 4000)`, 8000), JSON.stringify(await js('window.__dl')));
   await js(`${$('dkgo')}.click()`); await until(`!!document.querySelector('#dek table')`, 60000); await js(`${$('dkpng')}.click()`);
   check('DEK PNG downloaded', await until(`window.__dl.some(d => d.name === 'dek.png' && d.magic === '137,80,78,71' && d.size > 4000)`, 8000), JSON.stringify(await js('window.__dl')));
 } else if (mode === 'train') {

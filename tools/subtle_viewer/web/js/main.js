@@ -47,7 +47,7 @@ function stop() { clearInterval(timer); cancelAnimationFrame(raf); timer = raf =
 function toggle() {
   if (playing()) return stop();
   if (!st.S) return; $('play').textContent = '⏸';
-  if (videoOn()) { const V = vids(), v = V[0]; V.forEach(x => { x.currentTime = st.fr * st.S.stride / FPS(); x.play(); });
+  if (videoOn()) { const V = vids(), v = V[0]; V.forEach(x => { x.currentTime = st.fr * st.S.stride / FPS(); x.play().catch(() => {}); });
     const tick = () => { if (!v.paused) st.fr = Math.min(st.S.xyz.length - 1, Math.round(v.currentTime * FPS() / st.S.stride));
       if (st.F.size && !inF(st.fr)) st.fr = nextIn(st.fr);
       emit('frame'); raf = requestAnimationFrame(tick); };
