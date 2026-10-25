@@ -152,8 +152,15 @@
 | Format | CSV (27 cols = 9 joints × 3D) |
 | FPS | 20 Hz |
 | Skeleton Name | `subtle`, `subtle_mouse` |
-| Reference | Kwon et al. (2022), bioRxiv |
-| Source | [GitHub](https://github.com/jeakwon/subtle) |
+| Reference | Kwon et al. (2024), IJCV 132:4589–4615, doi:10.1007/s11263-024-02072-0 (bioRxiv 2022) |
+| Source | [GitHub](https://github.com/jeakwon/subtle) `dataset/y5a5` (coords 10 + annots 10), `dataset/y3a6` (coords only); local `~/dev/external/subtle_ref/subtle/dataset/` |
+
+#### Human labels (provenance, 261025)
+
+- Files: `dataset/y5a5/annots/<session>.csv`, one row per frame (`time, label`), labels `walking, rearing, standing, grooming, na`; 10 sessions = adult 6112·6115·6116·6127·7678, young 7100·7678·8294·8296·8301, about 12,010 frames each.
+- Repo README: "19 action skeleton recordings 10 human annotations", recorded with the AVATAR system (5 cameras, AVATARnet keypoints); only the 3D coordinates and annotations are released, not the videos.
+- Paper: Fig. 5F compares SUBTLE superclusters with the human-annotated categories by ARI and NMI (n = 8); the main text does not state who annotated, how many annotators, or the rule for `na`. Asked the authors (handoff 261023_Handoff_SUBTLE_CWT_seed_안정성 item 8).
+- Measured here: labelled frames 50–67 % per session, 3,388 labelled bouts, median bout 12 frames = 600 ms (p25/p75 = 7/23), rearing the largest class (`cwt_compat` stage 2 notes, vault `261025_SUBTLE_단계2b_KPMS_arm`).
 
 #### Joint Names
 
