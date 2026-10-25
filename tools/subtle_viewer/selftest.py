@@ -163,6 +163,13 @@ def stability_checks() -> None:
         raise SystemExit("label count != frame count accepted")
     except AssertionError:
         pass
+    assert "bsoid/umap_hdbscan" in cluster.METHODS and cluster.METHODS[0].startswith("subtle/")
+    rng = np.random.default_rng(0)  # two random walks: B-SOiD bins 10 fps, labels and map must come back per frame (300 and 241)
+    walks = [np.cumsum(rng.normal(size=(T, 9, 3)), axis=0).astype(np.float32) for T in (300, 241)]
+    r = cluster.run("bsoid/umap_hdbscan", walks, {"seed": 0})  # run() already calls check(); -1 (noise) is a share like any other
+    assert [len(x) for x in r["labels"]] == [300, 241] == [len(x) for x in r["embedding"]] and r["sub"] is None, r["lengths"]
+    assert all(min(x) >= -1 for x in r["labels"]) and r["method"] == "bsoid/umap_hdbscan"
+    print(f"bsoid: {r['n_clusters']} clusters, labels per session {[sorted(set(x)) for x in r['labels']]}")
     print("stability checks OK")
 
 

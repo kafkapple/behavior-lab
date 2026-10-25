@@ -3,6 +3,10 @@ import {$, st, on, emit, api, toast, nkey, cname} from './state.js';
 import {color} from './colors.js';
 import {statsPng, dekPng} from './export.js';
 
+// clustering methods come from the server (cluster.METHODS); Train and Seed stability take SUBTLE only, the server says so
+const MNAME = {'subtle/umap_phenograph': 'UMAP + Phenograph (original SUBTLE, default)', 'subtle/pca_consensus': 'PCA consensus', 'bsoid/umap_hdbscan': 'B-SOiD (UMAP + HDBSCAN, 10 fps bins, -1 = noise)'};
+api('methods').then(M => { $('clu').innerHTML = M.methods.map(m => `<option value="${m}">${MNAME[m] || m}</option>`).join(''); $('clu').value = M.default; }).catch(e => toast(e.message));
+const cluArgs = () => { const m = $('clu').value; return m.startsWith('subtle/') ? {method: m, clustering: m.split('/')[1]} : {method: m}; };
 export async function refreshProjects() { $('pl').innerHTML = (await api('projects')).map(n => `<option>${n}</option>`).join(''); }
 // meta (PRD R6): st.proj.meta = {description, group_notes: {group: text}, sessions: {path: {animal, condition, date}}}; the server cleans it on save
 const M = () => (st.proj.meta = Object.assign({description: '', group_notes: {}, sessions: {}}, st.proj.meta));
@@ -39,7 +43,7 @@ export async function freq() {
 $('an').onclick = async () => {
   const paths = [...new Set(Object.values(st.proj.groups).flat())];
   if (!paths.length) return toast('add sessions to groups first (the fit covers all project sessions)');
-  const sd = $('seed').value; const {job} = await api('analyze', {paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd, clustering: $('clu').value}); poll(job);
+  const sd = $('seed').value; const {job} = await api('analyze', {paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd, method: $('clu').value}); poll(job);
 };
 async function poll(id, done) {
   const j = await api('job?id=' + id); $('pg').style.display = 'block'; $('pg').value = j.pct;
@@ -54,7 +58,7 @@ on('labels', freq);
 const projPaths = () => [...new Set(Object.values(st.proj.groups).flat())];
 async function refreshModels() { try { $('ml').innerHTML = (await api('models')).map(m => `<option value="${m.name}">${m.name} · ${m.n_sub} sub · ${m.id}</option>`).join(''); } catch (e) { /* none yet */ } }
 $('mt').onclick = async () => { const name = $('mn').value.trim(), paths = projPaths(); if (!name || !paths.length) return toast('model name + project sessions needed');
-  const sd = $('seed').value; const {job} = await api('train', {name, paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd, clustering: $('clu').value}); poll(job); };
+  const sd = $('seed').value; const r = await api('train', {name, paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd, ...cluArgs()}).catch(e => toast(e.message)); if (r) poll(r.job); };
 $('mm').onclick = async () => { const name = $('ml').value, paths = projPaths(); if (!name || !paths.length) return toast('pick a model + add sessions to groups');
   const {job} = await api('map', {name, paths}); poll(job); };
 on('reload', refreshModels); refreshModels();
@@ -121,7 +125,7 @@ async function showStability() {
     '<table><tr><th>seed</th><th>level</th><th>clusters</th><th>min p adj</th><th>n &lt; .05</th></tr>' + s.flatMap(sd => [['sub', R.per_seed[sd].sub], ...R.per_seed[sd].levels.map(l => ['L' + l.level + (l.level === R.per_seed[sd].default_level ? ' ★' : ''), l])].map(([n, l]) => `<tr><td>${sd}</td><td>${n}</td><td>${l.k}</td><td>${l.min_p_adj.toFixed(3)}</td><td>${l.n_sig}</td></tr>`)).join('') + '</table><div class="mut">★ = default level (most clusters)</div>';
 }
 $('stab').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
-  const {job} = await api('stability', {name: st.proj.name, max_frames: +$('mf').value, seeds: [0, 1, 2], clustering: $('clu').value}); $('stabres').innerHTML = '<span class="mut">running 3 fits: progress is in the Project tab and the log</span>'; poll(job, showStability); };
+  const r = await api('stability', {name: st.proj.name, max_frames: +$('mf').value, seeds: [0, 1, 2], ...cluArgs()}).catch(e => toast(e.message)); if (!r) return; const {job} = r; $('stabres').innerHTML = '<span class="mut">running 3 fits: progress is in the Project tab and the log</span>'; poll(job, showStability); };
 
 // ---- level sweep: recommended n with the selection corrected (max-T), flagged clusters marked in the legend, results saved to a folder
 let lastSweep = null;

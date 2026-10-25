@@ -9,8 +9,8 @@
     <select id="sl" title="supercluster level = number of clusters (DIB solution), see subtle_theory"></select></div>
   <div class="grp"><span class="glabel">Fit</span>
     <label class="mut">frames/session <input id="mf" type="number" value="3000" style="width:64px" title="0 = all"></label>
-    <label class="mut">seed <input id="seed" type="number" value="0" style="width:50px" title="0 = reproducible; empty = random (PCA consensus uses 0)"></label><label class="mut" title="same choice for Analyze, Train and Seed stability; UMAP is always computed for the map">clustering <select id="clu"><option value="umap_phenograph">UMAP + Phenograph (original SUBTLE, default)</option><option value="pca_consensus">PCA consensus</option></select></label>
-    <button id="an" title="one SUBTLE fit on every session of the project, so cluster ids are comparable">Run SUBTLE on project</button></div>
+    <label class="mut">seed <input id="seed" type="number" value="0" style="width:50px" title="0 = reproducible; empty = random (PCA consensus uses 0)"></label><label class="mut" title="list from /api/methods; Train and Seed stability run SUBTLE only; UMAP is always computed for the map">clustering <select id="clu"></select></label>
+    <button id="an" title="one joint fit (chosen method) on every session of the project, so cluster ids are comparable">Run clustering on project</button></div>
   <div class="grp"><span class="glabel">Help</span><span id="docs"></span></div>
   <span id="toast" class="mut"></span>
 </div>

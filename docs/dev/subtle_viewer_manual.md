@@ -35,7 +35,7 @@
 
 ## Running SUBTLE
 - Add sessions to groups, then `Run SUBTLE jointly on all project sessions`. One fit covers all sessions, so ids are comparable.
-- Clustering: `UMAP + Phenograph` (original SUBTLE, default) or `PCA consensus` (5 Leiden runs in PCA space, merged, cluster count matched to the UMAP path; UMAP only for the map). Analyze, Train and Seed stability use the same choice and record it as `clustering`. PCA consensus is slower: all 95,991 demo frames took 2,884 s. Evidence and the hold rule: vault `_Notes/261024_SUBTLE_개선_연구계획`.
+- Clustering: `UMAP + Phenograph` (original SUBTLE, default) or `PCA consensus` (5 Leiden runs in PCA space, merged, cluster count matched to the UMAP path; UMAP only for the map). A third entry `B-SOiD (UMAP + HDBSCAN)` labels 10 fps bins mapped back to frames, -1 = noise (grey); it serves Analyze only, Train and Seed stability run SUBTLE (the server says so). The list comes from `/api/methods`; the sidecar records `method` and `clustering`. PCA consensus is slower: all 95,991 demo frames took 2,884 s. Evidence and the hold rule: vault `_Notes/261024_SUBTLE_개선_연구계획`.
 - Set a seed (default 0) for a repeatable fit; empty = random. What the seed controls: `subtle_theory.md` section 4. Max frames limits the time (3,000 frames for 8 animals took about 100 s).
 - Model: `Train` fits the project sessions once and saves `<root>/.subtle_models/<name>/model.pkl` and `model.json`. `Map` loads a saved model and labels every frame of the project sessions with it; the log prints how many trained frames keep their label (about 85 to 88 percent in a 2-session test, because mapping classifies new points).
 - Frequency table: the sum must be 100 and all sessions must come from one fit; otherwise the badge turns red.

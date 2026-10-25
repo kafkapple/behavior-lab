@@ -226,19 +226,23 @@ def split_by_lengths(labels, lengths: list[int]) -> list[list]:
     return [np.asarray(labels[a:b]).tolist() for a, b in zip(cuts[:-1], cuts[1:])]
 
 
-def start_job(root: Path, paths: list[str], max_frames: int = 0, seed: int | None = None, clustering: str | None = None) -> str:
-    """One SUBTLE fit over ALL given sessions, so cluster ids mean the same thing in every session."""
+def start_job(root: Path, paths: list[str], max_frames: int = 0, seed: int | None = None, clustering: str | None = None, method: str | None = None) -> str:
+    """One joint fit over ALL given sessions, so cluster ids mean the same thing in every session. method = cluster.METHODS id; clustering = SUBTLE name fallback."""
     j = {"id": uuid.uuid4().hex[:8], "paths": paths, "stage": "queued", "pct": 0, "t0": time.time(),
          "done": False, "error": None, "log": []}
     JOBS[j["id"]] = j
     while len(JOBS) > JOBS_MAX:
         JOBS.popitem(last=False)
+    import cluster
     import model  # clustering_of lives with the other SUBTLE run helpers
-    threading.Thread(target=_run_job, args=(root, j, max_frames, seed, model.clustering_of(clustering)), daemon=True).start()
+    method = method or cluster.method_of(model.clustering_of(clustering))
+    if method not in cluster.METHODS:
+        raise ValueError(f"method must be one of {cluster.METHODS}")
+    threading.Thread(target=_run_job, args=(root, j, max_frames, seed, method), daemon=True).start()
     return j["id"]
 
 
-def _run_job(root: Path, j: dict, max_frames: int, seed: int | None, clustering: str) -> None:
+def _run_job(root: Path, j: dict, max_frames: int, seed: int | None, method: str) -> None:
     try:
         j.update(stage="load", pct=10)
         seqs = []
@@ -247,9 +251,10 @@ def _run_job(root: Path, j: dict, max_frames: int, seed: int | None, clustering:
             xyz = xyz[:max_frames] if max_frames else xyz
             _job_log(j, f"input {rel} {xyz.shape}, NaN {int(np.isnan(xyz).sum())}")
             seqs.append(np.nan_to_num(xyz))  # ponytail: zero-fill; interpolate if NaN share is large
-        j.update(stage=f"joint fit on {len(seqs)} sessions (UMAP + clustering, isolated subprocess)", pct=30)
+        j.update(stage=f"joint fit on {len(seqs)} sessions ({method})", pct=30)
         import cluster
-        r = cluster.run(cluster.method_of(clustering), seqs, {"seed": seed})
+        r = cluster.run(method, seqs, {"seed": seed})
+        clustering = method.split("/", 1)[1] if method.startswith("subtle/") else None  # sidecar: SUBTLE name or None
         j.update(stage="write", pct=90)
         fit_id, lengths = r["fit_id"], r["lengths"]  # same id on every session of this fit; frequency() requires one id per project
         for rel, a, b, e, n in zip(j["paths"], r["sub"] or [None] * len(seqs), r["labels"], r["embedding"] or [None] * len(seqs), lengths):

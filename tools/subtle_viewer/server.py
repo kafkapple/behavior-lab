@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlparse
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
+import cluster  # noqa: E402
 import core  # noqa: E402
 import dek  # noqa: E402
 import model  # noqa: E402
@@ -68,20 +69,28 @@ def _routes(root: Path):
         return core.load_project(root, q["name"][0])
 
     sl = lambda q: int(q["sl"][0]) if "sl" in q else None  # noqa: E731
+
+    def subtle_only(b) -> str:  # Train and Seed stability save a SUBTLE model; other methods have no model file
+        m = b.get("method") or cluster.METHODS[0]
+        if not m.startswith("subtle/"):
+            raise ValueError("Train/Seed stability run SUBTLE only; pick a subtle/* method")
+        return b.get("clustering") or m.split("/", 1)[1]
+
     return {
         "camview": lambda q, b: camview(q),
         "stats": lambda q, b: stats.group_stats(root, proj_of(q), q.get("level", ["super"])[0], sl(q), q.get("correct", ["1"])[0] == "1"),
         "dek": lambda q, b: dek.group_dek(root, proj_of(q), q.get("level", ["super"])[0], sl(q), q.get("correct", ["1"])[0] == "1"),
         "names": lambda q, b: stats.names_all(root),
         "set_name": lambda q, b: stats.names_set(root, b["key"], b["name"]),
-        "stability": lambda q, b: {"job": stability.start(root, b["name"], int(b.get("max_frames", 3000)), [int(x) for x in b.get("seeds", [0, 1, 2])], b.get("clustering"))},
+        "stability": lambda q, b: {"job": stability.start(root, b["name"], int(b.get("max_frames", 3000)), [int(x) for x in b.get("seeds", [0, 1, 2])], subtle_only(b))},
         "stability_result": lambda q, b: json.loads(stability.result_path(root, q["name"][0]).read_text()),
         "sweep": lambda q, b: sweep.project_sweep(root, proj_of(q), q.get("criterion", ["omnibus"])[0], q.get("excl", ["0"])[0] == "1", tuple(filter(None, q.get("drop", [""])[0].split(",")))),
         "quality": lambda q, b: quality.project_quality(root, proj_of(q)),
         "export": lambda q, b: {"job": results.start(root, b["name"], b.get("criterion", "omnibus"))},
         "export_latest": lambda q, b: {"dir": (core.results_dir(root, q["name"][0]) / "latest.txt").read_text()},
         "models": lambda q, b: model.list_models(root),
-        "train": lambda q, b: {"job": model.start_train(root, b["name"], b["paths"], int(b.get("max_frames", 0)), b.get("seed"), b.get("clustering"))},
+        "methods": lambda q, b: {"methods": list(cluster.METHODS), "default": cluster.METHODS[0], "fit_capable": [m for m in cluster.METHODS if m.startswith("subtle/")]},
+        "train": lambda q, b: {"job": model.start_train(root, b["name"], b["paths"], int(b.get("max_frames", 0)), b.get("seed"), subtle_only(b))},
         "map": lambda q, b: {"job": model.start_map(root, b["name"], b["paths"])},
         "docs": lambda q, b: sorted(p.name for p in docs.glob("subtle_*.md")),
         "doc": lambda q, b: doc(q),
@@ -94,7 +103,7 @@ def _routes(root: Path):
         "frequency": lambda q, b: core.frequency(root, core.load_project(root, q["name"][0]),
                                                   q.get("level", ["super"])[0],
                                                   int(q["sl"][0]) if "sl" in q else None),
-        "analyze": lambda q, b: {"job": core.start_job(root, b["paths"], int(b.get("max_frames", 0)), b.get("seed"), b.get("clustering"))},
+        "analyze": lambda q, b: {"job": core.start_job(root, b["paths"], int(b.get("max_frames", 0)), b.get("seed"), b.get("clustering"), b.get("method"))},
         "job": lambda q, b: {k: v for k, v in core.JOBS[q["id"][0]].items()} | {
             "elapsed": round(__import__("time").time() - core.JOBS[q["id"][0]]["t0"], 1)},
         "log": lambda q, b: list(LOGBUF),
