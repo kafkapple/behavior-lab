@@ -88,12 +88,12 @@ Goal: the viewer must not stay tied to SUBTLE or to the AVATAR 5-camera rig. Rul
 - Reading: the stored `skeleton3d` agrees far better with `top2` than with `dlt_all`, as expected if `recon3D` used this calibration with top 2. The similarity fit is outlier-sensitive (scale 0.021 to 0.026). At thr 0.5 `dlt_all` gives 7.3 px and mapped `skeleton3d` 32.3 px (earlier 7.5 and 32.2 px).
 - Not built: viewer use of re-triangulated 3D. It changes the clustering input; wait for ground truth (`subtle_3d_quality_plan.md` P4).
 
-### P8 Clustering as a plug-in (built 261024, SUBTLE paths only)
+### P8 Clustering as a plug-in (built 261024; third method B-SOiD 261025)
 - `tools/subtle_viewer/cluster.py`: `run(method, sessions, params) -> {labels, sub, embedding (per session or None), fit_id, method, lengths}`. `check()` asserts label count = frame count for every session and shares summing to 100.
 - Methods: `subtle/umap_phenograph` (default), `subtle/pca_consensus`. Analyze (`core._run_job`) goes through `run`; the sidecar adds `method` next to `clustering` and `fit_id`. Train, Map and Seed stability still call `subtle_proc.py` directly (they need the saved model).
 - Check: selftest (default method, bad length rejected); both methods on cort1 + veh1, first 3,000 frames, seed 0, through `core._run_job`: every sidecar has 3,000 labels, one `fit_id` and `method`, `frequency` ok with sums 100.0 and `same_fit`. umap_phenograph 44 subclusters, default level 3 clusters, 800 s; pca_consensus 40 and 4, 811 s.
-- B-SOiD not added: `hdbscan` is missing in `.venv` and `.venv-subtle` (installing it changes the shared env), its labels are 10 fps bins and HDBSCAN noise = -1. Both need a decision before it is a third method.
-- Order left: B-SOiD -> keypoint-MoSeq (JAX, own env) -> hBehaveMAE (GPU; needs a go on GPU use).
+- Third method `bsoid/umap_hdbscan` (261025, approved as handoff 9-1): `behavior_lab` BSOiD on the 3D keypoints at 20 fps (its features are distance- and angle-based, so D = 3 runs as is), hdbscan 0.8.44 in `.venv-subtle`. Alignment: one 10 fps bin = 2 frames, each bin label repeated twice, the tail of 1-2 frames (the displacement diff drops one frame) takes the last bin's label; selftest asserts 300 and 241 frames back. HDBSCAN noise -1 stays -1 (grey in the page, a share like any other). Train, Map and Seed stability run SUBTLE only (the server rejects a `bsoid/*` method). The page fills its select from `/api/methods`; Analyze sends `method`, the sidecar keeps `method` and `clustering` (SUBTLE name or null).
+- Order left: keypoint-MoSeq (JAX, own env) -> hBehaveMAE (GPU; needs a go on GPU use).
 - Facts kept from the design: methods conflict in one env (own process each); the viewer needs the list form (joint fit); output rate must be aligned to the frame count before frequency.
 
 ### Status of the viewer features requested 261023
@@ -130,7 +130,7 @@ Details, checks and residual risks: `subtle_stats_plan.md`.
 | P13 | manuals readable in the page | ✅ |
 | P14 | level sweep with selection correction, flagged clusters, saved csv, figure and clips | ✅ exact max-T, 56-assignment null 3.6 percent; export folder checked |
 | P7 | triangulation module, `dlt_all` and `top2` | ✅ built and checked on cort1 (descriptive, section 8); not used by the viewer |
-| P8 | clustering `run()` with the two SUBTLE paths; Analyze uses it | ✅ both paths checked on 2 sessions; B-SOiD not added (section 8) |
+| P8 | clustering `run()` with the two SUBTLE paths; Analyze uses it | ✅ both paths checked on 2 sessions; B-SOiD third method and `/api/methods` select 261025 (section 8) |
 
 ## 10. UX basis and module structure (261023)
 Sources read: BS scene-flow viewer (`src/behaviorsplatter/web/`, `docs/code/viewer_controls_audit.md`) and the HTML report rule (`html-report-pages.md`).
