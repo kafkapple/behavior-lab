@@ -68,13 +68,19 @@ def plot_cluster_map(embedding: np.ndarray, labels: np.ndarray, title: str = "",
     ax.scatter(*emb[::step][~grey].T, s=7, linewidths=0, alpha=0.75,
                c=[color[int(c)] for c in labels[::step][~grey]])
     cent = {c: emb[labels == c].mean(axis=0) for c in ids}
+    # Arrows carry the SOURCE cluster's color and leave from its id circle, so the direction reads
+    # "colored cluster -> next". Only the colored (largest) clusters send arrows, at most 2 each
+    # (their most probable next clusters); the arc keeps A->B and B->A apart. (261025 user: the
+    # grey arrows of every pair hid the direction.)
     for i, a in enumerate(ids):
-        for j, b in enumerate(ids):
+        if color[int(a)] == OTHER_COLOR:
+            continue
+        for j in np.argsort(P[i])[::-1][:2]:
             if P[i, j] >= min_transition:
-                ax.annotate("", xy=cent[b], xytext=cent[a], zorder=3,
-                            arrowprops=dict(arrowstyle="-|>", color="0.25", alpha=0.7,
-                                            lw=0.5 + 3 * P[i, j], shrinkA=7, shrinkB=7,
-                                            connectionstyle="arc3,rad=0.15"))
+                ax.annotate("", xy=cent[ids[j]], xytext=cent[a], zorder=3,
+                            arrowprops=dict(arrowstyle="-|>,head_width=0.4,head_length=0.8", mutation_scale=12,
+                                            color=color[int(a)], alpha=0.9, lw=0.8 + 3 * P[i, j],
+                                            shrinkA=11, shrinkB=9, connectionstyle="arc3,rad=0.2"))
     for c in ids:
         if color[int(c)] == OTHER_COLOR:  # ids only for the colored (largest) clusters
             continue
