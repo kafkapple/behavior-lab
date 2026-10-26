@@ -12,7 +12,7 @@ import numpy as np
 
 import core
 from behavior_lab.models.discovery.bsoid import BSOiD
-from behavior_lab.models.discovery.subtle_wrapper import CLUSTERINGS, SUBTLE, SUBTLEConfig
+from behavior_lab.models.discovery.subtle_wrapper import CLUSTERINGS, CWT_IMPL, SUBTLE, SUBTLEConfig
 
 METHODS = (*(f"subtle/{c}" for c in CLUSTERINGS), "bsoid/umap_hdbscan")  # first = default (umap_phenograph)
 FPS = 20
@@ -28,7 +28,7 @@ def _subtle(sessions: list[np.ndarray], params: dict, clustering: str) -> dict:
     sub, sup = res.metadata.get("subclusters"), res.metadata.get("superclusters")  # sup (T, levels): one column per DIB solution
     emb = getattr(res, "embeddings", None)
     return {"labels": np.asarray(sup if sup is not None else res.labels), "sub": None if sub is None else np.asarray(sub),
-            "embedding": None if emb is None else np.round(np.asarray(emb), 3), "n_clusters": res.n_clusters}
+            "embedding": None if emb is None else np.round(np.asarray(emb), 3), "n_clusters": res.n_clusters, "cwt_impl": CWT_IMPL}
 
 
 def _bsoid(sessions: list[np.ndarray], params: dict) -> dict:
@@ -52,7 +52,7 @@ def run(method: str, sessions: list[np.ndarray], params: dict | None = None) -> 
     lengths = [len(s) for s in sessions]
     r = _bsoid(sessions, params or {}) if method.startswith("bsoid/") else _subtle(sessions, params or {}, method.split("/", 1)[1])
     cut = lambda a: None if a is None else core.split_by_lengths(a, lengths)  # noqa: E731  asserts total length
-    out = {"method": method, "fit_id": uuid.uuid4().hex[:8], "n_clusters": r["n_clusters"], "lengths": lengths,
+    out = {"method": method, "fit_id": uuid.uuid4().hex[:8], "n_clusters": r["n_clusters"], "cwt_impl": r.get("cwt_impl"), "lengths": lengths,
            "labels": cut(r["labels"]), "sub": cut(r["sub"]), "embedding": cut(r["embedding"])}
     check(out)
     return out

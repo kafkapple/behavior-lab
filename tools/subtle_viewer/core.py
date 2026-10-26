@@ -260,7 +260,7 @@ def _run_job(root: Path, j: dict, max_frames: int, seed: int | None, method: str
         for rel, a, b, e, n in zip(j["paths"], r["sub"] or [None] * len(seqs), r["labels"], r["embedding"] or [None] * len(seqs), lengths):
             _side(safe(root, rel)).write_text(json.dumps(
                 {"subcluster": a, "supercluster": b, "embedding": e, "n_frames": n, "fit_id": fit_id, "seed": seed, "clustering": clustering,
-                 "method": r["method"], "fit_sessions": j["paths"]}))
+                 "method": r["method"], "cwt_impl": r["cwt_impl"], "fit_sessions": j["paths"]}))
         _CACHE.clear()  # sidecars changed
         j.update(stage="done", pct=100)
         _job_log(j, f"fit {fit_id}: clusters {r['n_clusters']}, frames {sum(lengths)}, {time.time() - j['t0']:.0f}s")

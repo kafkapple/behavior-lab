@@ -78,6 +78,9 @@ def _morlet2_compat(M, s, w=5):
     return np.sqrt(1 / s) * np.exp(1j * w * t) * np.exp(-0.5 * t * t) * np.pi ** (-0.25)
 
 
+CWT_IMPL = "scipy_le_1.14_equiv"  # kernel identity written to sidecars and model.json (note 261023: pickles had no kernel field)
+
+
 def _cwt_compat(data, wavelet, widths, **kwargs):
     """Drop-in replacement for scipy.signal.cwt (deprecated in 1.12, removed in 1.15), same math as scipy <= 1.14."""
     from scipy.signal import convolve

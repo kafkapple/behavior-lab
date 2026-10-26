@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 
 import core
-from behavior_lab.models.discovery.subtle_wrapper import CLUSTERINGS
+from behavior_lab.models.discovery.subtle_wrapper import CLUSTERINGS, CWT_IMPL
 
 REPO = Path(__file__).resolve().parents[2]
 ENV = {**os.environ, "LOKY_MAX_CPU_COUNT": "1", "OMP_NUM_THREADS": "1", "NUMBA_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
@@ -105,9 +105,9 @@ def _train(root: Path, j: dict, name: str, paths: list[str], max_frames: int, se
     mid = uuid.uuid4().hex[:8]
     for rel, a, b, e, n in zip(paths, core.split_by_lengths(sub, lengths), core.split_by_lengths(sup, lengths),
                                core.split_by_lengths(np.round(emb, 3), lengths), lengths):
-        _write(root, rel, {"subcluster": a, "supercluster": b, "embedding": e}, {"n_frames": n, "fit_id": mid, "seed": seed, "clustering": clustering, "model": name})
+        _write(root, rel, {"subcluster": a, "supercluster": b, "embedding": e}, {"n_frames": n, "fit_id": mid, "seed": seed, "clustering": clustering, "cwt_impl": CWT_IMPL, "model": name})
     levels = [len(np.unique(sup[:, k])) for k in range(sup.shape[1])] if sup.ndim == 2 else [len(np.unique(sup))]
-    (d / "model.json").write_text(json.dumps({"id": mid, "name": name, "seed": seed, "clustering": clustering, "train_paths": paths, "frames": lengths,
+    (d / "model.json").write_text(json.dumps({"id": mid, "name": name, "seed": seed, "clustering": clustering, "cwt_impl": CWT_IMPL, "train_paths": paths, "frames": lengths,
         "max_frames": max_frames, "n_sub": int(len(np.unique(sub))), "levels": levels, "created": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=1))
     core._CACHE.clear()
     j.update(stage="done", pct=100)
@@ -133,7 +133,7 @@ def _map(root: Path, j: dict, name: str, paths: list[str]) -> None:
         sub = np.asarray(r["subclusters"])
         _write(root, rel, {"subcluster": sub.tolist(), "supercluster": np.asarray(r["superclusters"]).tolist(),
                            "embedding": np.round(r["embeddings"], 3).tolist()},
-               {"n_frames": len(sub), "fit_id": meta["id"], "seed": meta["seed"], "clustering": meta.get("clustering"), "model": name, "mapped": True})
+               {"n_frames": len(sub), "fit_id": meta["id"], "seed": meta["seed"], "clustering": meta.get("clustering"), "cwt_impl": meta.get("cwt_impl"), "model": name, "mapped": True})
         if old is not None:
             n = min(len(old), len(sub))
             core._job_log(j, f"{rel}: mapped labels equal training labels on {100 * float((np.asarray(old)[:n] == sub[:n]).mean()):.1f}% of the {n} trained frames")
