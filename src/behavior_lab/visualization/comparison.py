@@ -11,6 +11,10 @@ so results collected across conda envs (as ``labels.npy``) drop straight in.
 """
 from __future__ import annotations
 
+import base64
+import os
+import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -226,4 +230,78 @@ def render_cluster_gallery(keypoints: np.ndarray, runs: Any, skeleton_name: str,
     return out
 
 
-__all__ = ["render_comparison_report", "render_cluster_gallery"]
+def _retime_gif(raw: bytes, fps: float) -> bytes:
+    """Change only per-image Graphic Control Extension delay bytes."""
+    from .skeleton import _gif_durations_ms
+
+    if len(raw) < 13 or raw[:6] not in (b"GIF87a", b"GIF89a"):
+        raise ValueError("expected a GIF stream")
+    data = bytearray(raw)
+    pos = 13 + (3 * 2 ** ((data[10] & 7) + 1) if data[10] & 128 else 0)
+    offsets, pending = [], None
+
+    def subblocks(start: int) -> int:
+        while start < len(data):
+            size = data[start]
+            start += size + 1
+            if start > len(data):
+                raise ValueError("truncated GIF subblock")
+            if not size:
+                return start
+        raise ValueError("unterminated GIF subblocks")
+
+    while pos < len(data) and data[pos] != 0x3B:
+        if data[pos] == 0x21 and pos + 2 < len(data):
+            if data[pos + 1] == 0xF9:
+                if pos + 8 > len(data) or data[pos + 2] != 4 or data[pos + 7]:
+                    raise ValueError("invalid GIF graphic control extension")
+                pending = pos + 4
+            pos = subblocks(pos + 2)
+        elif data[pos] == 0x2C and pos + 10 < len(data):
+            if pending is None:
+                raise ValueError("GIF frame has no delay metadata")
+            offsets.append(pending)
+            pending = None
+            packed = data[pos + 9]
+            pos += 10 + (3 * 2 ** ((packed & 7) + 1) if packed & 128 else 0)
+            pos = subblocks(pos + 1)  # Skip the LZW minimum code size.
+        else:
+            raise ValueError("invalid GIF block")
+    if pos >= len(data) or not offsets:
+        raise ValueError("GIF has no complete image sequence")
+    for offset, duration in zip(offsets, _gif_durations_ms(len(offsets), fps)):
+        data[offset:offset + 2] = (duration // 10).to_bytes(2, "little")
+    return bytes(data)
+
+
+def retime_cluster_gallery(path: str | Path) -> Path:
+    """Republish existing gallery frames at its declared fps without rerunning discovery."""
+    path = Path(path)
+    original = path.read_bytes()
+    text = original.decode("utf-8")
+    match = re.search(r"fps=([^\s<]+)\.</p>", text)
+    if not match:
+        raise ValueError("gallery has no declared frame rate")
+    fps = float(match[1])
+
+    def retime(match: re.Match) -> str:
+        raw = base64.b64decode(match[2], validate=True)
+        return match[1] + base64.b64encode(_retime_gif(raw, fps)).decode("ascii")
+
+    text, count = re.subn(r"(data:image/gif;base64,)([A-Za-z0-9+/=]+)", retime, text)
+    if not count:
+        raise ValueError("gallery has no embedded GIFs")
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as output:
+            output.write(text.encode("utf-8"))
+        if path.read_bytes() != original:
+            raise RuntimeError("gallery changed during publication")
+        os.chmod(temporary, path.stat().st_mode)
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    return path
+
+
+__all__ = ["render_comparison_report", "render_cluster_gallery", "retime_cluster_gallery"]
