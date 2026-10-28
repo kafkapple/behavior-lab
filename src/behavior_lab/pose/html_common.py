@@ -13,6 +13,11 @@ select,input{font:inherit}label{margin-right:12px;white-space:nowrap}.vw{display
 @media(max-width:800px){.vw{flex-direction:column}}"""
 
 
+def zoom_img(src: str, style: str = "width:100%") -> str:
+    """Figure that opens its full-resolution file in a new tab on click (browser zoom then works on the original)."""
+    return f'<a href="{src}" target="_blank" title="원본 크기로 열기"><img src="{src}" style="{style};cursor:zoom-in"></a>'
+
+
 def page(title: str, body: str, script: str, data: dict, extra_css: str = "") -> str:
     """One HTML file: `script` reads the global `D` (the JSON-embedded `data`)."""
     js = script.replace("__DATA__", json.dumps(data, separators=(",", ":")))
