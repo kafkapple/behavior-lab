@@ -26,15 +26,13 @@ import pandas as pd
 from behavior_lab.pose.html_common import page
 from behavior_lab.pose.predictors.compare import _distance
 from behavior_lab.pose.predictors.joints import PAIRED, PART_MAP, PARTS
+from behavior_lab.pose.predictors.styles import FLAGGED_RING, LABEL_RING, legend_html, style
 from behavior_lab.pose.slp_labels import load_predictions, load_slp
 
 SA_Q = PART_MAP["superanimal_quadruped"]
 SA_Q_BASE = {**{k: v for k, v in SA_Q.items() if v not in ("ear", "neck")},
              "left_earbase": "ear", "right_earbase": "ear", "neck_end": "neck"}
 LABEL = PART_MAP["sleap_1423"]
-COLOR = {"sa_quad": "#e07b00", "sa_quad_base": "#b35900", "sleap1423_val": "#2f6fdb", "sa_tvm_bot": "#1a9e5c"}
-NAME = {"sa_quad": "SA-Quadruped (ear end, neck base)", "sa_quad_base": "SA-Quadruped (ear base, neck end)",
-        "sleap1423_val": "SLEAP 1423 (val frames)", "sa_tvm_bot": "SA-TopViewMouse (bot cam)"}
 
 
 def session(src: str) -> str:
@@ -150,20 +148,23 @@ def overlay(lab: dict, preds: dict, maps: dict, picks: list[str], img_dir: Path,
             ax.set_ylim(min(y1, img.shape[0]), max(y0, 0))
             for k, (x, y) in d["kp"].items():
                 if k in LABEL:
-                    ax.scatter(x, y, s=26, facecolors="none", edgecolors="red" if (im, k) in flags else "white", linewidths=1.3)
+                    ring = FLAGGED_RING if (im, k) in flags else LABEL_RING
+                    ax.scatter(x, y, s=34, facecolors="none", edgecolors=ring.color, linewidths=1.6)
+                    ax.scatter(x, y, s=50, facecolors="none", edgecolors="black", linewidths=0.6)
             p = preds[key].get(im)
             if p is None:
                 ax.text(0.5, 0.5, "n/a", transform=ax.transAxes, ha="center", color="white", fontsize=12)
             else:
                 pts = np.array([v for n, v in p.items() if n in maps[key]]).reshape(-1, 2)
-                ax.scatter(*pts.T, s=30, marker="x", color=COLOR[key], linewidths=1.5)
+                st = style(key)
+                ax.scatter(*pts.T, s=46, marker=st.marker, color=st.color, edgecolors="black", linewidths=0.5)
             ax.set_xticks([])
             ax.set_yticks([])
             if r == 0:
                 ax.set_title(f"{d['camera']} · {session(d['src'])}", fontsize=8)
             if c == 0:
-                ax.set_ylabel(NAME[key], fontsize=7)
-    fig.suptitle("Fig. A1 · white ○ hand label, red ○ flagged label error, × method", fontsize=10)
+                ax.set_ylabel(style(key).label, fontsize=7)
+    fig.suptitle("Fig. A1 · white ring = hand label, yellow ring = flagged label error, marker = method (definitions box)", fontsize=10)
     fig.tight_layout()
     fig.savefig(out, dpi=100)
     plt.close(fig)
@@ -227,7 +228,7 @@ def main() -> None:
 
     def tr(key: str, w: str) -> str:
         s = out["main"][key][w].get("all_parts") if out["main"][key][w] else None
-        return "" if not s else f"<tr><td><span style='color:{COLOR.get(key, '#555')}'>■</span> {NAME.get(key, key)}</td><td>{w}</td><td class=c>{s['n']}</td><td class=c>{s['fail']:.3f}</td><td class=c>{s['median_px']}</td><td class=c>{s['median_body']}</td></tr>"
+        return "" if not s else f"<tr><td><span style='color:{style(key).color}'>■</span> {style(key).label}</td><td>{w}</td><td class=c>{s['n']}</td><td class=c>{s['fail']:.3f}</td><td class=c>{s['median_px']}</td><td class=c>{s['median_body']}</td></tr>"
 
     head = "<tr><th>method</th><th>set</th><th class=c>n (image·part)</th><th class=c>실패율</th><th class=c>중앙값 px</th><th class=c>몸 길이 비</th></tr>"
     rows_html = "".join(tr(k, w) for k in ("sa_quad", "sa_quad_base", "sa_tvm_bot", "sleap1423_val") for w in ("all", "clean", "flagged"))
@@ -237,7 +238,7 @@ def main() -> None:
     body = f"""<h1>AVATAR 손 라벨 대 SuperAnimal zero-shot</h1>
 <div class=card><b>목표</b> 옆 · 비스듬한 rig 의 첫 학습 0 검출기 (SA-Quadruped, 결정 a) 를 AVATAR 손 라벨로 잰다.<br>
 <b>정의</b> 라벨 = SUBTLE SLEAP pkg AVATAR {out['n_images']} 장, visible 점만 · 귀 오류 표시 {out['n_flagged_points']} 점 (261013 측정) · clean = 표시 점 제외 · flagged = 표시 점만 · 쌍 부위 = 1:1 배정 · 몸 길이 비 = 오차 ÷ 영상별 nose1–tailstart1 중앙값 · SLEAP val = 학습에 안 쓰인 {out['n_sleap_val_images']} 장<br>
-<b>색</b> {' · '.join(f"<span style='color:{c}'>■</span> {NAME[k]}" for k, c in COLOR.items())} · 흰 원 = 라벨 · 빨간 원 = 표시된 라벨 오류</div>
+<b>색</b> {legend_html(["sa_quad", "sa_quad_base", "sleap1423_val", "sa_tvm_bot"])}</div>
 <h2>전체 · clean · flagged</h2><p class=lead>모든 부위를 합친 중앙값이다. flagged 는 라벨 쪽 오류라 큰 값이 정상이다.</p><table>{head}{rows_html}</table>
 <h2>같은 frame 비교 (SLEAP val 장)</h2><p class=lead>학습에 안 쓰인 val 장에서 SA-Quadruped 와 SLEAP 1423 의 중앙값 px.</p><table><tr><th>set</th><th class=c>SA-Quadruped</th><th class=c>SLEAP 1423</th></tr>{val_html}</table>
 <h2>부위별 (clean, 중앙값 px)</h2><p class=lead>귀 · 목은 대응 정의에 따라 값이 바뀐다.</p><table><tr><th>part</th><th class=c>SA-Q (end)</th><th class=c>SA-Q (base)</th><th class=c>SLEAP val</th></tr>{parts_html}</table>

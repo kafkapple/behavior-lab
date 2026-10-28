@@ -17,11 +17,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from behavior_lab.pose.html_common import page
+from behavior_lab.pose.predictors.styles import LABEL_RING, legend_html, style
 
-LABEL = {"base": "A′ (DANNCE, same rig)", "sa_quad_2d": "SA-Quadruped 2D (mp4v video)", "sa_quad_dlt2d": "SA-Quadruped DLT→2D",
-         "sa_quad_png": "SA-Quadruped 2D (png)", "sa_tvm_png": "SA-TopViewMouse 2D (png)", "sa_tvm_eartip_png": "SA-TopViewMouse ear tip (png)"}
-COLOR = {"base": "#2f6fdb", "sa_quad_2d": "#e07b00", "sa_quad_dlt2d": "#8a3ffc", "sa_quad_png": "#b35900",
-         "sa_tvm_png": "#1a9e5c", "sa_tvm_eartip_png": "#0f6b3f"}
 POINTS = {"ext8": ["nose", "L_ear", "R_ear", "tail_end", "L_paw_end", "R_paw_end", "L_foot", "R_foot"],
           "head4": ["nose", "L_ear", "R_ear", "tail_end"]}
 
@@ -43,15 +40,17 @@ def overlay(d: dict, rows: list[str], pts: list[str], frames_dir: Path, fr: int,
             ax.imshow(img)
             ax.set_xlim(max(x0, 0), min(x1, img.shape[1]))
             ax.set_ylim(min(y1, img.shape[0]), max(y0, 0))
-            ax.scatter(*g.T, s=26, facecolors="none", edgecolors="white", linewidths=1.3)
-            ax.scatter(*d[key][c, fi, ix].T, s=30, marker="x", color=COLOR.get(key, "#d00"), linewidths=1.5)
+            ax.scatter(*g.T, s=34, facecolors="none", edgecolors=LABEL_RING.color, linewidths=1.6)
+            ax.scatter(*g.T, s=50, facecolors="none", edgecolors="black", linewidths=0.6)
+            st = style(key)
+            ax.scatter(*d[key][c, fi, ix].T, s=46, marker=st.marker, color=st.color, edgecolors="black", linewidths=0.5)
             ax.set_xticks([])
             ax.set_yticks([])
             if r == 0:
                 ax.set_title(f"cam{c + 1}", fontsize=9)
             if c == 0:
-                ax.set_ylabel(LABEL.get(key, key), fontsize=7)
-    fig.suptitle(f"Fig. {fig_id} · frame {fr} · white ○ hand label, × method ({', '.join(pts)})", fontsize=10)
+                ax.set_ylabel(style(key).label, fontsize=7)
+    fig.suptitle(f"Fig. {fig_id} · frame {fr} · white ring = hand label, marker = method ({', '.join(pts)}), colours in the definitions box", fontsize=10)
     fig.tight_layout()
     fig.savefig(out, dpi=100)
     plt.close(fig)
@@ -64,7 +63,7 @@ def per_joint(m: dict, rows: list[str], out: Path) -> None:
     fig, ax = plt.subplots(figsize=(10, 3.4))
     for i, key in enumerate(rows):
         v = [m["per_joint_median_px"][key][j] or np.nan for j in joints]
-        ax.bar(x + (i - (len(rows) - 1) / 2) * w, v, w, label=LABEL.get(key, key), color=COLOR.get(key))
+        ax.bar(x + (i - (len(rows) - 1) / 2) * w, v, w, label=style(key).label, color=style(key).color)
     ax.set_xticks(x, joints, rotation=45, ha="right", fontsize=8)
     ax.set_ylabel("median error (px)")
     ax.legend(fontsize=7, frameon=False)
@@ -82,7 +81,7 @@ def cdf(d: dict, rows: list[str], pts: list[str], out: Path) -> None:
     fig, ax = plt.subplots(figsize=(5.2, 3.4))
     for k in rows:
         v = np.sort(errs[k][common])
-        ax.plot(v, np.arange(1, len(v) + 1) / len(v), label=LABEL.get(k, k), color=COLOR.get(k))
+        ax.plot(v, np.arange(1, len(v) + 1) / len(v), label=style(k).label, color=style(k).color)
     ax.set_xscale("log")
     ax.set_xlabel("2D error (px, log)")
     ax.set_ylabel("cumulative fraction")
@@ -119,17 +118,17 @@ def main() -> None:
 
     def table(res: dict) -> str:
         head = "<tr><th>row</th><th class=c>실패율</th><th class=c>중앙값 px</th><th class=c>중앙값 mm 상당</th></tr>"
-        body = "".join(f"<tr><td><span style='color:{COLOR.get(k)}'>■</span> {LABEL.get(k, k)}</td><td class=c>{res[f'failure_rate_{pset}'][k]:.3f}</td>"
+        body = "".join(f"<tr><td><span style='color:{style(k).color}'>■</span> {style(k).label}</td><td class=c>{res[f'failure_rate_{pset}'][k]:.3f}</td>"
                        f"<td class=c>{res[f'median_{pset}_px'][k]:.1f}</td><td class=c>{res[f'median_{pset}_mm_eq'][k]:.2f}</td></tr>" for k in rows)
         diffs = "".join(f"<tr><td>{k}</td><td class=c>{v[0]:+.2f} [{v[1]:+.2f}, {v[2]:+.2f}]</td></tr>" for k, v in res["paired_diff_mm_eq"].items())
         return f"<table>{head}{body}</table><table><tr><th>짝 차이 (mm 상당, 중앙값 [95 % frame bootstrap])</th><th class=c>값</th></tr>{diffs}</table>"
 
     p = next(v for k, v in s.items() if k.startswith("pcut_"))
     best = min((k for k in rows if k != "base"), key=lambda k: m[f"median_{pset}_px"][k])
-    legend = " · ".join(f"<span style='color:{COLOR.get(k)}'>■</span> {LABEL.get(k, k)}" for k in rows)
+    legend = legend_html(rows)
     body = f"""<h1>{a.title}</h1>
 <div class=card><b>목표</b> {a.goal}<br>
-<b>결정 요약</b> 학습 0 행 중 중앙값이 가장 작은 것은 {LABEL.get(best, best)} ({m[f'median_{pset}_px'][best]:.1f} px), A′ 는 {m[f'median_{pset}_px']['base']:.1f} px. 판정선 없음, 결정은 사람.<br>
+<b>결정 요약</b> 학습 0 행 중 중앙값이 가장 작은 것은 {style(best).label} ({m[f'median_{pset}_px'][best]:.1f} px), A′ 는 {m[f'median_{pset}_px']['base']:.1f} px. 판정선 없음, 결정은 사람.<br>
 <b>정의</b> 점 = {', '.join(pts)} · 기준 = 손 라벨 3D 를 Label3D 보정으로 투영 · mm 상당 = px × 깊이 Z / fx · 공통 집합 = 모든 행이 있는 frame · cam · 관절 ({m[f'n_common_{pset}']} 점, {m['n_common_frames']} frame)<br>
 <b>색</b> {legend}</div>
 <h2>주 지표 (likelihood 문턱 없음)</h2><p class=lead>모든 행을 같은 공통 집합에서 잰다.</p>{table(m)}
