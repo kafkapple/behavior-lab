@@ -1,6 +1,8 @@
 """Skeleton visualization — static plots and animations with color support."""
 from __future__ import annotations
 
+# no-split: Existing plotting API predates this timing fix; avoid unrelated API moves.
+
 import numpy as np
 
 from .colors import (
@@ -422,6 +424,18 @@ def plot_skeleton(
     return fig, ax
 
 
+def _gif_durations_ms(frame_count: int, fps: float) -> list[int]:
+    """Distribute GIF 10ms ticks without accumulating frame-rate rounding error."""
+    if not np.isfinite(fps) or fps <= 0:
+        raise ValueError("fps must be finite and positive")
+    fps = min(fps, 50)  # Preserve the existing browser-safe 20ms minimum delay.
+    ticks = [round(i * 100 / fps) for i in range(frame_count + 1)]
+    durations = [10 * (b - a) for a, b in zip(ticks, ticks[1:])]
+    if any(d < 20 or d > 655350 for d in durations):
+        raise ValueError("fps is outside GIF's supported frame-delay range")
+    return durations
+
+
 def animate_skeleton(
     keypoints: np.ndarray,
     skeleton=None,
@@ -452,6 +466,8 @@ def animate_skeleton(
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation
 
+    if not np.isfinite(fps) or fps <= 0:
+        raise ValueError("fps must be finite and positive")
     T, K, D = keypoints.shape
     is_3d = D >= 3
 
@@ -627,13 +643,16 @@ def animate_skeleton(
 
     if save_path:
         if save_path.endswith(".gif"):
-            # GIF format only supports 10ms frame delay granularity.
-            # Pillow truncates (e.g. 15fps → 60ms instead of 67ms → 16.7fps).
-            # Round to nearest 10ms for accuracy: 15fps → 70ms → 14.3fps.
-            duration_ms = round(1000 / fps / 10) * 10
-            duration_ms = max(duration_ms, 20)  # minimum 20ms (50fps)
-            anim.save(save_path, writer="pillow",
-                      fps=1000 / duration_ms)
+            from matplotlib.animation import PillowWriter
+
+            class _TimedGifWriter(PillowWriter):
+                def finish(self):
+                    # Cumulative 10ms ticks preserve total duration at rates such as 30fps.
+                    delays = _gif_durations_ms(len(self._frames), self.fps)
+                    self._frames[0].save(self.outfile, save_all=True,
+                                         append_images=self._frames[1:], duration=delays, loop=0)
+
+            anim.save(save_path, writer=_TimedGifWriter(fps=min(fps, 50)))
         else:
             anim.save(save_path, writer="ffmpeg", fps=fps)
 
