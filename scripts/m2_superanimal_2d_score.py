@@ -137,10 +137,15 @@ def main() -> None:
                 df = pd.read_hdf(h5)
                 df = df.xs(df.columns.get_level_values("individuals")[0], axis=1, level="individuals")
                 df.columns = df.columns.droplevel(0)
-                col = lambda kp, co, df=df: df[(kp, co)].to_numpy()
+                key = tuple
             else:
                 df = pd.read_csv(d / f"{model.replace('_eartip', '')}_cam{c + 1}.csv", index_col=0)
-                col = lambda kp, co, df=df: df[f"{kp}_{co}"].to_numpy()
+
+                def key(kc: tuple) -> str:
+                    return f"{kc[0]}_{kc[1]}"
+
+            def col(kp: str, co: str, df=df, key=key) -> np.ndarray:
+                return df[key((kp, co))].to_numpy()
             assert len(df) == n_f, (d, c, len(df), n_f)
             nobox[c] = (df.to_numpy() == -1).all(1)
             for j_sa, j_m in mp.items():
