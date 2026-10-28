@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from behavior_lab.pose.html_common import page
+from behavior_lab.pose.html_common import page, zoom_img
 from behavior_lab.pose.predictors.styles import LABEL_RING, legend_html, style
 
 POINTS = {"ext8": ["nose", "L_ear", "R_ear", "tail_end", "L_paw_end", "R_paw_end", "L_foot", "R_foot"],
@@ -50,9 +50,9 @@ def overlay(d: dict, rows: list[str], pts: list[str], frames_dir: Path, fr: int,
                 ax.set_title(f"cam{c + 1}", fontsize=9)
             if c == 0:
                 ax.set_ylabel(style(key).label, fontsize=7)
-    fig.suptitle(f"Fig. {fig_id} · frame {fr} · white ring = hand label, marker = method ({', '.join(pts)}), colours in the definitions box", fontsize=10)
+    fig.suptitle(f"Fig. {fig_id} · frame {fr} · white ○ hand label, × method ({', '.join(pts)})", fontsize=10)
     fig.tight_layout()
-    fig.savefig(out, dpi=100)
+    fig.savefig(out, dpi=220)
     plt.close(fig)
 
 
@@ -134,9 +134,9 @@ def main() -> None:
 <h2>주 지표 (likelihood 문턱 없음)</h2><p class=lead>모든 행을 같은 공통 집합에서 잰다.</p>{table(m)}
 <h2>부가: SA 행에 likelihood ≥ 0.5</h2><p class=lead>문턱을 두면 오차와 실패율이 함께 바뀐다.</p>{table(p)}
 <h2>방법별 overlay</h2><p class=lead>모든 칸이 같은 crop 이다. 흰 원과 × 의 거리가 오차다.</p>
-{''.join(f'<img src="{f}" style="width:100%">' for f in figs)}
+{''.join(zoom_img(f) for f in figs)}
 <h2>관절별 · 분포</h2><p class=lead>Fig. M2 는 관절별 중앙값, Fig. M3 는 공통 집합 전체의 누적 분포다.</p>
-<img src="fig_m2_per_joint.png" style="width:100%"><img src="fig_m3_cdf.png" style="max-width:560px;width:100%">
+{zoom_img("fig_m2_per_joint.png")}{zoom_img("fig_m3_cdf.png", "max-width:560px;width:100%")}
 <h2>한계</h2><p class=mut>M2 1 마리 · 1 rig. A′ 는 같은 rig 로 학습해 학습 0 행과 여러 요인이 다르다. 기준 2D 는 3D 재투영이라 가림을 구분하지 못한다.</p>"""
     (a.out_dir / "index.html").write_text(page(a.title, body, "", {}))
     print("wrote", a.out_dir)

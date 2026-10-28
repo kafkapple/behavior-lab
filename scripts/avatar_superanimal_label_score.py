@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from behavior_lab.pose.html_common import page
+from behavior_lab.pose.html_common import page, zoom_img
 from behavior_lab.pose.predictors.compare import _distance
 from behavior_lab.pose.predictors.joints import PAIRED, PART_MAP, PARTS
 from behavior_lab.pose.predictors.styles import FLAGGED_RING, LABEL_RING, legend_html, style
@@ -166,7 +166,7 @@ def overlay(lab: dict, preds: dict, maps: dict, picks: list[str], img_dir: Path,
                 ax.set_ylabel(style(key).label, fontsize=7)
     fig.suptitle("Fig. A1 · white ring = hand label, yellow ring = flagged label error, marker = method (definitions box)", fontsize=10)
     fig.tight_layout()
-    fig.savefig(out, dpi=100)
+    fig.savefig(out, dpi=220)
     plt.close(fig)
 
 
@@ -243,7 +243,7 @@ def main() -> None:
 <h2>같은 frame 비교 (SLEAP val 장)</h2><p class=lead>학습에 안 쓰인 val 장에서 SA-Quadruped 와 SLEAP 1423 의 중앙값 px.</p><table><tr><th>set</th><th class=c>SA-Quadruped</th><th class=c>SLEAP 1423</th></tr>{val_html}</table>
 <h2>부위별 (clean, 중앙값 px)</h2><p class=lead>귀 · 목은 대응 정의에 따라 값이 바뀐다.</p><table><tr><th>part</th><th class=c>SA-Q (end)</th><th class=c>SA-Q (base)</th><th class=c>SLEAP val</th></tr>{parts_html}</table>
 <h2>cam 별 (SA-Quadruped, clean)</h2><p class=lead>bot 과 side 를 나눠 본다.</p><table><tr><th>cam</th><th class=c>n</th><th class=c>실패율</th><th class=c>중앙값 px</th></tr>{cam_html}</table>
-<h2>방법별 overlay</h2><p class=lead>열 = 이미지 (clean 4 장 + 라벨 오류 2 장), 행 = 방법, 모든 칸이 같은 crop 이다.</p><img src="fig_a1_overlay.png" style="width:100%">
+<h2>방법별 overlay</h2><p class=lead>열 = 이미지 (clean 4 장 + 라벨 오류 2 장), 행 = 방법, 모든 칸이 같은 crop 이다.</p>{zoom_img("fig_a1_overlay.png")}
 <h2>한계</h2><p class=mut>라벨은 학습용으로 고른 frame 이고 몸 밖 오류만 걸렀다. 몇 px 어긋난 라벨은 남는다. 단일 시점이라 라벨 오차 크기는 재라벨 없이 모른다.</p>"""
     (a.out / "index.html").write_text(page("AVATAR SuperAnimal vs hand labels", body, "", {}))
     print(json.dumps({k: out["main"][k]["clean"].get("all_parts") for k in ("sa_quad", "sa_quad_base", "sleap1423_val", "sa_tvm_bot")}, indent=1))

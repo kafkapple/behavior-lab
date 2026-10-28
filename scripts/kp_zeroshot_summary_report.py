@@ -11,7 +11,7 @@ import json
 import shutil
 from pathlib import Path
 
-from behavior_lab.pose.html_common import page
+from behavior_lab.pose.html_common import page, zoom_img
 from behavior_lab.pose.predictors.styles import legend_html, style
 
 
@@ -70,10 +70,10 @@ A′ = DANNCE 를 M1 라벨로만 학습해 M2 를 예측한 모델 · SA = Supe
 <p><b>Table T1 · M2 extremity-8 error</b></p>{m2_table(s0, 'ext8', ['base', 'sa_quad_2d', 'sa_quad_dlt2d'])}
 <h2>M2 머리 · 꼬리 4 점</h2><p class=lead>입력 압축은 영향이 없고 (짝 차이 {inp[0]:+.3f} mm 상당), TopViewMouse 는 옆 cam 에서 거의 실패한다.</p>
 <p><b>Table T2 · M2 head + tail 4 error</b></p>{m2_table(s1, 'head4', ['base', 'sa_quad_2d', 'sa_quad_png', 'sa_tvm_png'])}
-<img src="{a.fig_m2.name}" style="width:100%"><p><b>Fig. K1 · M2 overlay, one row per method</b><br>같은 crop 에서 흰 원과 기호의 거리가 오차다.</p>
+{zoom_img(a.fig_m2.name)}<p><b>Fig. K1 · M2 overlay, one row per method</b><br>같은 crop 에서 흰 원과 기호의 거리가 오차다. 그림을 누르면 원본 크기로 열린다.</p>
 <h2>AVATAR 손 라벨</h2><p class=lead>SA-Quadruped 는 SLEAP 1423 보다 멀고 실패가 많다. side cam 은 {min(side):.1f}–{max(side):.1f} px, bot cam 은 {cams['bot']['median_px']:.1f} px.</p>
 <p><b>Table T3 · AVATAR error vs SUBTLE hand labels</b></p><table><tr><th>방법</th><th>범위</th><th class=c>n (이미지 · 부위)</th><th class=c>실패율</th><th class=c>중앙값 px</th></tr>{t3}</table>
-<img src="{a.fig_avatar.name}" style="width:100%"><p><b>Fig. K2 · AVATAR overlay, one row per method</b><br>노란 원은 몸 밖에 찍힌 라벨 오류라 채점에서 뺐다.</p>
+{zoom_img(a.fig_avatar.name)}<p><b>Fig. K2 · AVATAR overlay, one row per method</b><br>노란 원은 몸 밖에 찍힌 라벨 오류라 채점에서 뺐다.</p>
 <h2>한계</h2><p class=mut>M2 는 1 마리 · 1 rig. AVATAR SLEAP 비교는 32 장이고, SLEAP 은 같은 주석자의 라벨로 학습했다. 몇 px 라벨 오차는 재라벨 없이 모른다.</p>"""
     (a.out_dir / "index.html").write_text(page("Zero-shot keypoint summary", body, "", {}))
     print("wrote", a.out_dir)
