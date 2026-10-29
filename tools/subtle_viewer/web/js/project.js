@@ -91,27 +91,44 @@ $('stgo').onclick = async () => {
 function renderStats() {
   const R = lastStats; if (!R) return;
   $('stat').innerHTML = `<div class="${R.one_fit ? 'ok' : 'bad'}">${R.one_fit ? 'all sessions from one fit' : 'sessions are NOT from one fit: ids are not comparable'}</div><div class="mut">unit: ${R.unit}. Groups come from the project (folder names unless you set them): provisional.</div>` +
-    R.pairs.map(P => { const [ga, gb] = P.groups, mx = Math.max(1, ...P.tests.flatMap(t => [...t.values[ga], ...t.values[gb]]));
+    R.pairs.map(P => { const [ga, gb] = P.groups;
       return `<h3 style="margin-top:10px">${ga} (n=${P.n[ga]}) vs ${gb} (n=${P.n[gb]})</h3><div class="mut">${P.method}; smallest possible p = ${P.min_p.toFixed(4)}; ${P.correction}</div>` +
       (P.min_p >= .05 ? '<div class="bad">smallest possible p ≥ 0.05: no star is reachable with these group sizes</div>' : '') +
-      '<table><tr><th>cluster</th><th>% ' + ga + ' / ' + gb + '</th><th>animals</th><th>g</th><th>p adj</th></tr>' +
-      P.tests.map(t => { const nm = cname(t.cluster), dot = (v, c) => v.map(x => `<i style="left:${100 * x / mx}%;background:${c}"></i>`).join('');
-        return `<tr><td>${t.cluster}${nm ? ' ' + nm : ''}</td><td>${t.mean[ga].toFixed(1)} / ${t.mean[gb].toFixed(1)}</td><td><div class="dots">${dot(t.values[ga], '#5ac8fa')}${dot(t.values[gb], '#ff9f0a')}</div></td>` +
-          `<td>${t.g == null ? '–' : t.g.toFixed(2)}</td><td title="raw p ${t.p.toFixed(4)}">${t.p_adj.toFixed(3)} <b class="${t.stars === 'ns' ? 'mut' : 'ok'}">${t.stars}</b></td></tr>`; }).join('') + '</table><div class="mut">dots: ' + ga + ' blue, ' + gb + ' orange; one dot = one animal</div>'; }).join('');
+      '<table><tr><th>cluster</th><th>% mean ± SD</th><th>animals and SD bars (0–100%)</th><th>g</th><th>p adj</th></tr>' +
+      P.tests.map(t => { const nm = cname(t.cluster);
+        const track = (g, c) => { const lo = Math.max(0, t.mean[g] - (t.sd[g] || 0)), hi = Math.min(100, t.mean[g] + (t.sd[g] || 0));
+          return `<div class="share-track" title="${g}: mean ${t.mean[g].toFixed(1)}%, SD ${t.sd[g]?.toFixed(1) ?? 'n/a'}%; one dot per animal"><span class="share-group" style="color:${c}">${g}</span><span class="share-axis"><i class="share-sd" style="left:${lo}%;width:${hi - lo}%;background:${c}"></i><i class="share-mean" style="left:${t.mean[g]}%;background:${c}"></i>${t.values[g].map(v => `<i class="share-dot" style="left:${v}%;background:${c}"></i>`).join('')}</span></div>`; };
+        return `<tr><td>${t.cluster}${nm ? ' ' + nm : ''}</td><td>${t.mean[ga].toFixed(1)} ± ${t.sd[ga]?.toFixed(1) ?? '–'}<br>${t.mean[gb].toFixed(1)} ± ${t.sd[gb]?.toFixed(1) ?? '–'}</td><td><div class="share-plot">${track(ga, '#5ac8fa')}${track(gb, '#ff9f0a')}</div></td>` +
+          `<td>${t.g == null ? '–' : t.g.toFixed(2)}</td><td title="raw p ${t.p.toFixed(4)}">${t.p_adj.toFixed(3)} <b class="${t.stars === 'ns' ? 'mut' : 'ok'}">${t.stars}</b></td></tr>`; }).join('') + '</table><div class="mut">Bars = mean ± sample SD, clipped to 0–100%; dots = individual animals. ' + ga + ' blue, ' + gb + ' orange. Error bars describe spread, not a confidence interval.</div>'; }).join('');
 }
 $('stcsv').onclick = () => { if (!lastStats) return toast('run Compare groups first');
-  const rows = [['group_a', 'group_b', 'cluster', 'mean_a', 'mean_b', 'diff', 'hedges_g', 'p', 'p_adj', 'stars', 'method']];
-  for (const P of lastStats.pairs) for (const t of P.tests) rows.push([P.groups[0], P.groups[1], t.cluster, t.mean[P.groups[0]], t.mean[P.groups[1]], t.diff, t.g, t.p, t.p_adj, t.stars, P.method]);
+  const rows = [['group_a', 'group_b', 'cluster', 'mean_a', 'sd_a', 'mean_b', 'sd_b', 'diff', 'hedges_g', 'p', 'p_adj', 'stars', 'method']];
+  for (const P of lastStats.pairs) for (const t of P.tests) rows.push([P.groups[0], P.groups[1], t.cluster, t.mean[P.groups[0]], t.sd[P.groups[0]], t.mean[P.groups[1]], t.sd[P.groups[1]], t.diff, t.g, t.p, t.p_adj, t.stars, P.method]);
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(r => r.join(',')).join('\n')], {type: 'text/csv'})); a.download = 'group_stats.csv'; a.click(); };
 
 // ---- DEK: per animal and cluster mean of kinematic features, Welch t per cell. Heatmap = signed t, stars on BH-adjusted p.
 let lastDek = null;
 $('dkgo').onclick = async () => {
-  if (!requireProject()) return; await api('save_project', st.proj);
-  const sl = $('sl').style.display === '' && $('lvl').value === 'super' ? '&sl=' + $('sl').value : '';
-  $('dek').textContent = 'computing…';
-  try { lastDek = await api(`dek?name=${encodeURIComponent(st.proj.name)}&level=${$('lvl').value}${sl}&correct=${$('stbh').checked ? 1 : 0}`); } catch (e) { $('dek').innerHTML = `<span class="bad">${e.message}</span>`; return; }
-  $('dkpair').innerHTML = lastDek.pairs.map((P, i) => `<option value="${i}">${P.groups.join(' vs ')}</option>`).join(''); renderDek(); };
+  if (!requireProject()) return;
+  $('dkgo').disabled = true; $('dkprogress').style.display = 'block'; $('dkprogress').value = 0;
+  $('dkstatus').textContent = 'Starting…'; $('dek').textContent = 'Computing kinematic features for each session…';
+  try {
+    await api('save_project', st.proj);
+    const {job} = await api('dek_start', {name: st.proj.name, level: $('lvl').value,
+      sl: $('sl').style.display === '' && $('lvl').value === 'super' ? +$('sl').value : null, correct: $('stbh').checked});
+    let s;
+    do {
+      s = await api('dek_job?id=' + job); $('dkprogress').value = s.pct;
+      $('dkstatus').textContent = `${s.stage} · ${s.pct}% · ${s.elapsed}s`;
+      if (!s.done) await new Promise(resolve => setTimeout(resolve, 1000));
+    } while (!s.done);
+    if (s.error) throw new Error(s.error);
+    lastDek = await api('dek_result?id=' + job);
+    $('dkpair').innerHTML = lastDek.pairs.map((P, i) => `<option value="${i}">${P.groups.join(' vs ')}</option>`).join('');
+    renderDek();
+  } catch (e) { $('dkstatus').textContent = 'Failed'; $('dek').textContent = e.message; }
+  finally { $('dkgo').disabled = false; }
+};
 ['dktype', 'dkn', 'dkpair'].forEach(i => $(i).onchange = renderDek);
 const sig = q => q == null ? '' : q < .001 ? '***' : q < .01 ? '**' : q < .05 ? '*' : '';
 function renderDek() {

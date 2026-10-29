@@ -4,6 +4,9 @@ import {resetView, zoomSkel} from './views.js';
 import './legend.js';
 import {setCam, setAll, vids, videoOn, toggleKp, toggleConf, isAll} from './video.js';
 import {refreshProjects, renderGroups} from './project.js';
+import {palette, setPalette, partOf} from './kp_palette.js';
+import {color} from './colors.js';
+let sessionIndex = [];
 
 async function init() {
   const R = await api('root'); $('root').textContent = R.path;
@@ -16,7 +19,7 @@ async function init() {
     if (!status.done) await new Promise(resolve => setTimeout(resolve, 350));
   } while (!status.done);
   if (status.error) throw new Error(`Session scan failed: ${status.error}`);
-  const L = status.items; $('root').textContent = `${L.length} sessions · ${R.path}`;
+  const L = status.items; sessionIndex = L; $('root').textContent = `${L.length} sessions · ${R.path}`;
   $('scanprogress').remove();
   $('list').innerHTML = L.map(s => `<div class="sess" data-p="${s.path}"><b>${s.stem}</b> <span class="mut">${s.mb} MB${Object.keys(s.cams).length ? ' · ' + Object.keys(s.cams).length + ' cam' : ''}${s.subtle ? ' · SUBTLE' : ''}</span></div>`).join('') || 'no *.json.gz under the root';
   document.querySelectorAll('.sess').forEach(e => e.onclick = () => open_(e.dataset.p, L.find(x => x.path === e.dataset.p)));
@@ -44,14 +47,28 @@ on('reload', () => st.cur && open_(st.cur.path, st.cur, $('camsel').value || nul
 $('camsel').onchange = () => setCam();
 $('allcam').onclick = () => isAll() ? setCam() : setAll();
 $('confbtn').onclick = () => { const on = toggleConf(); $('confbtn').classList.toggle('on', on); $('confbtn').setAttribute('aria-pressed', String(on)); };
+$('kpal').value = palette;
+function showPalette() {
+  const mode = $('kpal').value, nodes = st.S?.nodes || ['nose1', 'neck1', 'earL1', 'earR1', 'forelegL1', 'forelegR1', 'tailstart1', 'hindlegL1', 'hindlegR1', 'tail1', 'tailend1'];
+  $('kpalmeaning').textContent = mode === 'body' ?
+    'BS body-part colors are fixed by anatomy. An edge takes its destination joint’s color; a color change along the skeleton is not a behavior transition.' :
+    'Legacy mode: 2D points stay green; edges and the 3D skeleton take the current cluster ID color. Color changes over time mean the selected cluster label changed.';
+  $('kpallegend').innerHTML = mode === 'body' ? nodes.map((name, i) => { const p = partOf(nodes, i); return `<span><i style="background:${p?.[1] || '#7ee6b1'}"></i>${name} · ${p?.[0] || 'unmapped'}</span>`; }).join('') :
+    '<span><i style="background:#7ee6b1"></i>2D point</span><span>Edges and 3D: current cluster color; see the cluster badge.</span>';
+}
+$('kpal').onchange = () => { setPalette($('kpal').value); showPalette(); emit('palette'); };
+on('session', showPalette); showPalette();
 $('shutdown').onclick = async () => { $('shutdown').disabled = true; try { await api('shutdown', {}); stop(); $('toast').textContent = 'Server stopped. You can close this tab.'; } catch (e) { $('shutdown').disabled = false; toast(e.message); } };
 on('cam', () => { $('allcam').classList.toggle('on', isAll()); $('allcam').setAttribute('aria-pressed', String(isAll())); });
-$('lvl').onchange = () => { fillLevels(); relabel(); emit('labels'); };
-$('sl').onchange = () => { relabel(); emit('labels'); };
+$('lvl').onchange = () => { fillLevels(); relabel(); emit('labels'); emit('frame'); };
+$('sl').onchange = () => { relabel(); emit('labels'); emit('frame'); };
 
 // ---- slider and per-frame readout
 on('frame', () => { const S = st.S; if (!S) return; $('fr').value = st.fr; $('fi').textContent = `${st.fr * S.stride}/${S.n - 1}`;
-  const id = S.L && S.L[st.fr]; $('cur').textContent = id == null ? 'no cluster labels (run SUBTLE)' : `cluster ${id}`; });
+  const id = S.L && S.L[st.fr]; $('cur').textContent = id == null ? 'no cluster labels (run SUBTLE)' : `cluster ${id}`;
+  $('clusterbadge').textContent = id == null ? 'No cluster label' : `Cluster ${id}`;
+  $('clusterbadge').style.borderColor = id == null ? 'var(--line)' : color(id);
+  $('clusterbadge').style.color = id == null ? 'var(--mut)' : color(id); });
 $('fr').oninput = e => { st.fr = +e.target.value; emit('frame'); };
 
 // ---- playback: the first video is the clock when shown, else a timer; a filter makes replay skip other clusters.
@@ -63,9 +80,13 @@ function toggle() {
   if (playing()) return stop();
   if (!st.S) return; $('play').textContent = '⏸';
   if (videoOn()) { const V = vids(), v = V[0], token = ++playToken;
+    let lastMedia = v.currentTime, lastAdvance = performance.now(), lastTick = lastAdvance, fallbackFrames = 0;
     V.forEach(x => { const start = () => { if (token !== playToken) return; x.currentTime = st.fr * st.S.stride / FPS(); x.play().catch(e => { if (e.name !== 'AbortError') toast(`Video: ${e.message}`); }); };
       if (x.readyState >= 1) start(); else x.addEventListener('loadedmetadata', start, {once: true}); });
-    const tick = () => { if (!v.paused) st.fr = Math.min(st.S.xyz.length - 1, Math.round(v.currentTime * FPS() / st.S.stride));
+    const tick = () => { const now = performance.now(), media = v.currentTime;
+      if (!v.paused && media > lastMedia + .001) { st.fr = Math.min(st.S.xyz.length - 1, Math.max(st.fr, Math.round(media * FPS() / st.S.stride))); lastAdvance = now; fallbackFrames = 0; }
+      else if (now - lastAdvance > 500) { fallbackFrames += Math.max(0, (now - lastTick) * FPS() / 1000 / st.S.stride); const step = Math.floor(fallbackFrames); st.fr = Math.min(st.S.xyz.length - 1, st.fr + step); fallbackFrames -= step; }
+      lastMedia = media; lastTick = now;
       if (st.F.size && !inF(st.fr)) st.fr = nextIn(st.fr);
       emit('frame'); raf = requestAnimationFrame(tick); };
     raf = requestAnimationFrame(tick);
@@ -110,6 +131,21 @@ $('tstart').onclick = async () => {
     };
     pollTutorial();
   } catch (e) { $('tstart').disabled = false; $('tutorial').textContent = e.message; }
+};
+$('tdemo').onclick = async () => {
+  $('tdemo').disabled = true;
+  try {
+    const p = await api('project?name=cort_vs_veh');
+    st.proj = p; $('pn').value = p.name; $('projsaved').textContent = `Loaded: ${p.name} · last saved ${p.updated || 'unknown'}`;
+    renderGroups();
+    const first = Object.values(p.groups).flat()[0];
+    const meta = sessionIndex.find(s => s.path === first);
+    if (meta) await open_(first, meta, null, 0);
+    document.querySelector('#tabs button[data-t="stat"]').click();
+    $('stgo').click();
+    $('tdemostatus').textContent = 'Project loaded. Compare groups is running in Stats. Open DEK next to calculate kinematic differences.';
+  } catch (e) { $('tdemostatus').textContent = e.message; }
+  finally { $('tdemo').disabled = false; }
 };
 
 // ---- manuals: docs/dev/subtle_*.md through a small markdown reader

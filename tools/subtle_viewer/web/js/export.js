@@ -10,12 +10,14 @@ function canvas(w, h) { const c = document.createElement('canvas'); c.width = w;
 export function statsPng(R, name = 'group_stats.png') {
   const rowH = 30, left = 70, pw = 520, gap = 70;
   const H = R.pairs.reduce((s, P) => s + 90 + P.tests.length * rowH, 20), [c, x] = canvas(left + pw + 120, H); let y = 20;
-  for (const P of R.pairs) { const [ga, gb] = P.groups, mx = Math.max(1, ...P.tests.flatMap(t => [...t.values[ga], ...t.values[gb]])) * 1.05;
+  for (const P of R.pairs) { const [ga, gb] = P.groups, mx = 100;
     x.fillStyle = FG; x.font = 'bold 15px sans-serif'; x.fillText(`${ga} (n=${P.n[ga]}) vs ${gb} (n=${P.n[gb]})  share of frames per animal (%)`, 10, y + 10);
-    x.font = '12px sans-serif'; x.fillStyle = MUT; x.fillText(`${P.method}; ${P.correction}; smallest possible p ${P.min_p.toFixed(4)}; dots: ${ga} blue, ${gb} orange; groups provisional`, 10, y + 32); y += 60;
+    x.font = '12px sans-serif'; x.fillStyle = MUT; x.fillText(`${P.method}; ${P.correction}; smallest possible p ${P.min_p.toFixed(4)}; dots: animals, bar: mean ± SD; groups provisional`, 10, y + 32); y += 60;
     for (const t of P.tests) { const cy = y + rowH / 2; x.fillStyle = color(t.cluster); x.fillRect(10, cy - 6, 12, 12); x.fillStyle = FG; x.font = '13px sans-serif'; x.fillText(String(t.cluster), 30, cy);
       x.strokeStyle = '#ccc'; x.beginPath(); x.moveTo(left, cy); x.lineTo(left + pw, cy); x.stroke();
       for (const [g, col, dy] of [[ga, BLUE, -4], [gb, ORANGE, 4]]) { t.values[g].forEach(v => { x.fillStyle = col; x.beginPath(); x.arc(left + v / mx * pw, cy + dy, 4, 0, 7); x.fill(); });
+        const lo = Math.max(0, t.mean[g] - (t.sd[g] || 0)), hi = Math.min(100, t.mean[g] + (t.sd[g] || 0));
+        x.strokeStyle = col; x.lineWidth = 4; x.beginPath(); x.moveTo(left + lo / mx * pw, cy + dy); x.lineTo(left + hi / mx * pw, cy + dy); x.stroke();
         x.strokeStyle = col; x.lineWidth = 2; x.beginPath(); x.moveTo(left + t.mean[g] / mx * pw, cy + dy - 8); x.lineTo(left + t.mean[g] / mx * pw, cy + dy + 8); x.stroke(); x.lineWidth = 1; }
       x.fillStyle = t.stars === 'ns' ? MUT : FG; x.fillText(`p_adj ${t.p_adj.toFixed(3)} ${t.stars}`, left + pw + 12, cy); y += rowH; }
     y += gap - 40; }

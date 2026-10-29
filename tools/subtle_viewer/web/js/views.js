@@ -1,6 +1,7 @@
 // The three drawing views: 3D skeleton, cluster map, timeline. They redraw on bus events and never call each other.
 import {$, st, on, emit, fit, lid, inF, api} from './state.js';
 import {color} from './colors.js';
+import {pointColor, edgeColor} from './kp_palette.js';
 
 const cen = f => [0, 1, 2].map(i => f.reduce((s, j) => s + j[i], 0) / f.length);
 const fg = () => getComputedStyle(document.body).color;
@@ -19,9 +20,10 @@ function drawSkel() {
   const P = j => { let a = j[0] - c0[0], b = j[1] - c0[1], d = j[2] - c0[2];
     if (R0) { const u = R0[0][0] * a + R0[0][1] * b + R0[0][2] * d, w = R0[1][0] * a + R0[1][1] * b + R0[1][2] * d, z = R0[2][0] * a + R0[2][1] * b + R0[2][2] * d; a = u; b = w; d = z; }
     const X = a * cy - d * sy, Z = a * sy + d * cy, Y = b * cp - Z * sp; return [W / 2 + V.px + X * k, H / 2 + V.py - Y * k]; };
-  const col = color(lid(st.fr)); x.lineWidth = 3; x.strokeStyle = col; x.fillStyle = col;
-  for (const [a, b] of S.edges) { const p = P(f[a]), q = P(f[b]); x.beginPath(); x.moveTo(...p); x.lineTo(...q); x.stroke(); }
-  f.forEach(j => { const p = P(j); x.beginPath(); x.arc(p[0], p[1], 3.5, 0, 7); x.fill(); });
+  const d = window.devicePixelRatio || 1; x.lineCap = 'round'; x.lineWidth = 1.5 * d;
+  for (const [a, b] of S.edges) { const p = P(f[a]), q = P(f[b]); x.globalAlpha = .66; x.strokeStyle = edgeColor(S.nodes, b, lid(st.fr)); x.beginPath(); x.moveTo(...p); x.lineTo(...q); x.stroke(); }
+  f.forEach((j, i) => { const p = P(j); x.globalAlpha = .88; x.fillStyle = pointColor(S.nodes, i, lid(st.fr), true); x.beginPath(); x.arc(p[0], p[1], 2.8 * d, 0, 2 * Math.PI); x.fill(); });
+  x.globalAlpha = 1;
   x.fillStyle = fg(); x.font = '11px sans-serif'; x.fillText(`zoom ${V.zoom.toFixed(2)}x${R0 ? ` · aligned to cam_${st.camNow + 1} (double-click = back to it)` : ' · free view (no camera alignment)'}`, 8, H - 8);
 }
 function bodySize() {                                                  // median max joint distance from the centroid
@@ -92,6 +94,7 @@ on('cam', async () => { R0 = null;
 on('session', () => { B = bodySize(); V = home(); M = {zoom: 1, px: 0, py: 0}; eb = null; cache = null; drawSkel(); drawMap(); drawTl(); });
 on('frame', () => { drawSkel(); drawMap(); drawTl(); });
 on('labels', () => { cache = null; drawSkel(); drawMap(); drawTl(); });
+on('palette', drawSkel);
 on('filter', () => { cache = null; drawMap(); drawTl(); });
 $('trace').onchange = drawMap;
 window.addEventListener('resize', () => { cache = null; drawSkel(); drawMap(); drawTl(); });

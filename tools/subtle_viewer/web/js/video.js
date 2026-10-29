@@ -2,7 +2,7 @@
 // The video letterboxes (object-fit: contain), so points map into the visible picture, not the element box.
 // kp2d gives x, y in 0-1 of the camera cell (server: core.kp_cell). Low-confidence points are drawn dim, never dropped silently.
 import {$, st, on, emit, api, toast, FPS, fit, lid} from './state.js';
-import {color} from './colors.js';
+import {pointColor, edgeColor} from './kp_palette.js';
 
 const CELL_ASPECT = {0: 1.2, 1: 1.2, 2: 1.0, 3: 1.2, 4: 1.2};      // cell w/h of the rig (core.CELLS)
 let tiles = [], showKp = true, showConf = false, all = false;
@@ -49,19 +49,21 @@ export function draw() {
     const scale = Math.max(.45, Math.min(1, Math.min(W, H) / d / 280));
     const a = t.KP[tt], hi = p => p[2] > .25, seen = p => p[2] > .05;                       // missing points are (0,0) with conf 0; conf below .05 is noise (a stray corner point drew a long bone)
     const pt = p => [ox + p[0] * vw, oy + p[1] * vh];
-    x.lineCap = 'round'; x.lineJoin = 'round'; x.lineWidth = 1.25 * d * scale; x.strokeStyle = color(lid(st.fr));
+    x.lineCap = 'round'; x.lineJoin = 'round'; x.lineWidth = 1.25 * d * scale;
     for (const [i, j] of S.edges) { if (!a[i] || !a[j] || !seen(a[i]) || !seen(a[j])) continue;
-      x.globalAlpha = hi(a[i]) && hi(a[j]) ? .68 : .25; x.setLineDash(hi(a[i]) && hi(a[j]) ? [] : [3 * d * scale, 3 * d * scale]);
+      x.strokeStyle = edgeColor(S.nodes, j, lid(st.fr));
+      x.globalAlpha = hi(a[i]) && hi(a[j]) ? .62 : .22; x.setLineDash(hi(a[i]) && hi(a[j]) ? [] : [3 * d * scale, 3 * d * scale]);
       x.beginPath(); x.moveTo(...pt(a[i])); x.lineTo(...pt(a[j])); x.stroke(); }
     x.setLineDash([]);
-    for (const p of a) { if (!seen(p)) continue; const [u, w] = pt(p);
-      x.globalAlpha = hi(p) ? .84 : .48; x.fillStyle = '#7ee6b1'; x.strokeStyle = '#7ee6b1';
+    a.forEach((p, i) => { if (!seen(p)) return; const [u, w] = pt(p), col = pointColor(S.nodes, i, lid(st.fr));
+      x.globalAlpha = hi(p) ? .82 : .45; x.fillStyle = col; x.strokeStyle = col;
       x.beginPath(); x.arc(u, w, 2.3 * d * scale, 0, 2 * Math.PI);
       if (hi(p)) x.fill(); else { x.lineWidth = 1.1 * d * scale; x.stroke(); }
       if (showConf) { x.globalAlpha = 1; x.font = `${Math.max(8, 10 * scale) * d}px ui-monospace,monospace`; x.lineWidth = 2 * d; x.strokeStyle = '#101318'; x.fillStyle = '#e8eaf0';
-        const label = String(Math.round(100 * p[2])); x.strokeText(label, u + 4 * d * scale, w - 3 * d * scale); x.fillText(label, u + 4 * d * scale, w - 3 * d * scale); } }
+        const label = String(Math.round(100 * p[2])); x.strokeText(label, u + 4 * d * scale, w - 3 * d * scale); x.fillText(label, u + 4 * d * scale, w - 3 * d * scale); } });
     x.globalAlpha = 1;
   }
 }
 on('frame', draw); on('labels', draw); on('session', draw);
+on('palette', draw);
 window.addEventListener('resize', draw);

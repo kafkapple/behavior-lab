@@ -5,6 +5,9 @@ from __future__ import annotations
 
 from itertools import combinations
 from pathlib import Path
+import threading
+import time
+import uuid
 
 import numpy as np
 from scipy import stats as sps
@@ -13,6 +16,8 @@ import core
 import stats
 
 MIN_FRAMES = 30   # an animal needs this many frames in a cluster for its mean to count
+JOBS: dict[str, dict] = {}
+_LOCK = threading.Lock()
 ANGLES = {        # vertex in the middle; all three nodes exist in the 11-node skeleton
     "head": ("nose", "neck", "tailstart"), "forelimbL": ("forelegL", "neck", "tailstart"), "forelimbR": ("forelegR", "neck", "tailstart"),
     "hindlimbL": ("hindlegL", "tailstart", "neck"), "hindlimbR": ("hindlegR", "tailstart", "neck"),
@@ -48,12 +53,17 @@ def welch(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return t, p
 
 
-def group_dek(root: Path, proj: dict, level: str = "super", sl: int | None = None, correct: bool = True) -> dict:
+def group_dek(root: Path, proj: dict, level: str = "super", sl: int | None = None, correct: bool = True, progress=None) -> dict:
     key = "super" if level == "super" else "sub"
     groups = {g: s for g, s in proj.get("groups", {}).items() if s}
     if len(groups) < 2:
         raise ValueError("need at least two non-empty groups")
+    fits = {core.load(root, rel)["fit_id"] for sessions in groups.values() for rel in sessions}
+    if len(fits) != 1 or None in fits:
+        raise ValueError("DEK requires labels from one fit so cluster IDs are comparable")
     tabs = {}
+    total = sum(map(len, groups.values()))
+    done = 0
     for g, sess in groups.items():
         tabs[g] = []
         for r in sess:
@@ -61,6 +71,9 @@ def group_dek(root: Path, proj: dict, level: str = "super", sl: int | None = Non
             if s[key] is None:
                 raise ValueError(f"no labels in {r}: run SUBTLE first")
             tabs[g].append(animal_table(s, key, sl))
+            done += 1
+            if progress:
+                progress(done, total, r)
     cols = tabs[next(iter(tabs))][0][3]
     pairs = []
     for ga, gb in combinations(groups, 2):
@@ -86,3 +99,41 @@ def group_dek(root: Path, proj: dict, level: str = "super", sl: int | None = Non
         pairs.append({"groups": [ga, gb], "clusters": cl, "n": N, "t": T, "p": P, "p_adj": PA, "g": G, "skipped": skipped, "tests": len(flat),
                       "correction": "Benjamini-Hochberg over every cluster x feature cell of this pair" if correct else "none"})
     return {"columns": cols, "pairs": pairs, "min_frames": MIN_FRAMES, "unit": "animal (one session = one animal assumed)"}
+
+
+def start(root: Path, proj: dict, level: str = "super", sl: int | None = None, correct: bool = True) -> str:
+    job_id = uuid.uuid4().hex[:12]
+    with _LOCK:
+        completed = [old for old, job in JOBS.items() if job["done"]]
+        for old in completed[:-10]:
+            del JOBS[old]
+        JOBS[job_id] = {"stage": "Loading sessions", "pct": 0, "done": False, "error": None, "t0": time.time()}
+
+    def run():
+        try:
+            def update(done: int, total: int, rel: str):
+                with _LOCK:
+                    JOBS[job_id].update(stage=f"Kinematics {done}/{total}: {Path(rel).name}", pct=round(90 * done / total))
+            result = group_dek(root, proj, level, sl, correct, update)
+            with _LOCK:
+                JOBS[job_id].update(stage="Complete", pct=100, done=True, result=result)
+        except Exception as exc:
+            with _LOCK:
+                JOBS[job_id].update(stage="Failed", done=True, error=f"{type(exc).__name__}: {exc}")
+
+    threading.Thread(target=run, daemon=True).start()
+    return job_id
+
+
+def status(job_id: str) -> dict:
+    with _LOCK:
+        job = JOBS[job_id]
+        return {k: v for k, v in job.items() if k != "result"} | {"elapsed": round(time.time() - job["t0"], 1)}
+
+
+def result(job_id: str) -> dict:
+    with _LOCK:
+        job = JOBS[job_id]
+        if not job["done"] or job["error"]:
+            raise ValueError(job["error"] or "DEK is still running")
+        return job["result"]

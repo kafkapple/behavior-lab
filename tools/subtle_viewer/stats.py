@@ -73,7 +73,9 @@ def group_stats(root: Path, proj: dict, level: str = "super", sl: int | None = N
             a = np.array([sh.get(c, 0.0) for sh in shares[ga].values()])
             b = np.array([sh.get(c, 0.0) for sh in shares[gb].values()])
             p, method = perm_p(a, b)
-            rows.append({"cluster": c, "mean": {ga: float(a.mean()), gb: float(b.mean())}, "values": {ga: a.tolist(), gb: b.tolist()},
+            rows.append({"cluster": c, "mean": {ga: float(a.mean()), gb: float(b.mean())},
+                         "sd": {ga: float(a.std(ddof=1)) if len(a) > 1 else None, gb: float(b.std(ddof=1)) if len(b) > 1 else None},
+                         "values": {ga: a.tolist(), gb: b.tolist()},
                          "diff": float(a.mean() - b.mean()), "g": hedges_g(a, b), "p": p})
         padj = bh([r["p"] for r in rows]) if correct else [r["p"] for r in rows]
         for r, q in zip(rows, padj):

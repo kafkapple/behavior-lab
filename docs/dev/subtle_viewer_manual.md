@@ -20,7 +20,7 @@
 - The default 3D pose is the selected camera's view: the server fits a weak-perspective camera from the 2D keypoints to the 3D points (`core.cam_view`) and rotates the skeleton to it. The footer prints the camera; "free view" means no fit was possible.
 - Cluster map: wheel = zoom (around the cursor), drag = pan, click = jump to the nearest frame, double-click = reset.
 - Video: use **All cameras** or press 0 for every available camera; select a tile or press 1-5 for one camera. Only cameras with video appear.
-- Keypoints: the overlay scales down with smaller camera tiles. Green filled points and solid cluster-colored edges have higher confidence; low-confidence points are dim and edges dashed. **Conf %** shows the per-point detector confidence. Key `k` toggles all keypoints.
+- Keypoints: the overlay scales down with smaller camera tiles. **View settings → Color scheme** defaults to the BS AVATAR body-part palette in both 2D video and 3D skeleton. Each joint has a fixed anatomical color; an edge takes its destination joint's color, matching the BS overlay. Thus an edge color change along the skeleton describes body-part identity, not a transition, motion magnitude, or confidence. **Legacy cluster edges** restores the old overlay: green 2D points and current-cluster-colored edges/3D skeleton. The separate Cluster ID badge retains the cluster color in either mode. Low-confidence points are dim and edges dashed. **Conf %** shows the per-point detector confidence. Key `k` toggles all keypoints.
 - Why an edge can disappear: the skeleton topology contains only predefined joint pairs, and the viewer draws a pair only when both endpoints have usable 2D detections in that camera (`confidence > 0.05`). No line between two otherwise visible points can simply mean they are not a defined anatomical edge. Missing lines do not establish that the body part is absent. The 3D view may still show a filled point from earlier frames.
 - Timeline: one color per frame; click or drag to scrub, also while playing. A hatched region means no label exists there: labels cover only the frames that were fitted (frames/session). Map the session with a saved model to label all frames.
 
@@ -45,15 +45,17 @@
 - Frequency table: the sum must be 100 and all sessions must come from one fit; otherwise the badge turns red.
 
 ## Statistics
-- Stats tab, `Compare groups`: for each pair of groups, the share of each cluster per animal, exact permutation p of the mean difference, Hedges g, Benjamini-Hochberg adjusted p, and stars (* below .05, ** below .01, *** below .001, on the adjusted p). One dot = one animal.
+- Stats tab, `Compare groups`: for each pair of groups, the share of each cluster per animal, exact permutation p of the mean difference, Hedges g, Benjamini-Hochberg adjusted p, and stars (* below .05, ** below .01, *** below .001, on the adjusted p). One dot = one animal; bars = mean ± sample SD, clipped to the 0–100% share axis. These error bars describe animal variation, not a confidence interval.
 - The page prints the smallest possible p for the group sizes; with 3 vs 5 animals it is 0.0357, so ** and *** cannot appear.
 - Demo (8 animals, cort 3 vs veh 5, level L4, first 3,000 frames): adjusted p 0.77 to 1.0, no star. Groups are provisional (folder names).
-- DEK tab, `Compute DEK`: same steps as the Justin app, with our 11-node layout by node name.
+- DEK tab, `Compute DEK`: load a saved project with two groups and labels from one fit, select the desired `super` level (or `sub`), and press the button. The progress bar shows which session is being converted to kinematic features; the page remains usable. The operation has the same steps as the Justin app, with our 11-node layout by node name.
   - Frames are centered like `avatar_preprocess`, then the public `subtle.Kinematics` gives 84 features: speed, edge and angle terms, each as value (n=0), first (n=1) and second (n=2) time derivative.
   - Per animal and cluster the features are averaged; an animal needs at least 30 frames in a cluster. Welch t per cell (scipy `ttest_ind`, same call as the app), Benjamini-Hochberg over all cells of a pair, Hedges g.
   - Heatmap: rows = clusters, cell = signed t (orange = first group higher, blue = second), `*` on adjusted p; hover shows p, adjusted p, g. Pick type (vertex, edge, angle), derivative and pair above the table.
   - Demo (cort 3 vs veh 5, level L4, 420 cells): smallest adjusted p 0.38, no star. Shuffling the 8 animals over all 56 splits gave 4.6 percent raw p below 0.05, as expected for no effect.
   - Not excluded: frames whose 3D points were copied from earlier frames (the viewer's loader reads no per-frame flag). Speed terms of such frames are zero, so read speed differences with care.
+  - `tools/subtle_viewer/sample_report.py <data-root> --project cort_vs_veh --level 8` writes a descriptive CSV, PNG and provenance bundle under `outputs/subtle/`. This computes on existing mapped sidecars; it does not refit SUBTLE.
+  - Full eight-session CORT example, fit `9fc3c01d`, super L8, 95,991 frames: nine share tests had no BH-adjusted p below .05 (minimum .0804). DEK tested 756 cells and four had adjusted p below .05 (minimum .0191): cluster 0 `E0:neck-earR`, `V1:earR`; cluster 2 `E0:neck-earR`, `E0:tailstart-neck`. These are exploratory signals in folder-defined provisional groups, with possible copied-3D-frame artifacts. They are not a treatment conclusion. The saved bundle's `summary.json` records the exact data and code state.
 
 ## Level sweep and saved results
 - Question it answers: which number of superclusters (level) shows a group difference, without fooling ourselves by trying many levels.
