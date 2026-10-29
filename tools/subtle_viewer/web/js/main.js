@@ -120,6 +120,12 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
 document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { document.querySelector(`#tabs button[data-t="${b.dataset.go}"]`).click(); const section = document.querySelector(`#left [data-go="${b.dataset.go}"]`)?.closest('details'); if (section) section.open = true; });
 
 // A fixed, real AVATAR toy clip: inference runs on eren; this page stays responsive while it runs.
+$('topen').onclick = async () => {
+  const meta = sessionIndex.find(s => s.path === 'tutorial/cort1_toy.json.gz');
+  if (!meta) return toast('Toy output is not in this data root. Press Predict keypoints again.');
+  await open_(meta.path, meta, null, 0);
+  $('tutorial').textContent = 'Completed toy opened: inspect video, Conf %, and 3D skeleton. Then create a project and follow Discover & map.';
+};
 $('tstart').onclick = async () => {
   $('tstart').disabled = true;
   try { const {job} = await api('tutorial_start', {});

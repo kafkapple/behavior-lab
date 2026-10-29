@@ -66,6 +66,8 @@ if (mode === 'smoke') {
   check('two-group tutorial opens animal share plot', await until(`document.querySelectorAll('.share-plot').length > 0`, 30000));
   await js(`document.querySelector('#tabs button[data-t="dek"]').click(); ${$('dkgo')}.click()`);
   check('DEK background job completes with result', await until(`${$('dkprogress')}.value === 100 && ${$('dek')}.querySelector('table')`, 60000));
+  await js(`${$('topen')}.click()`);
+  check('completed 300-frame toy opens', await until(`${$('vtitle')}.textContent.includes('cort1_toy') && +${$('fr')}.max === 299`, 20000));
   await js(`${$('shutdown')}.click()`); check('Stop server responds', await until(`${$('toast')}.textContent.includes('Server stopped')`, 5000));
 } else if (mode === 'keys') {
   await until(`document.querySelectorAll('.lrow').length > 0`);
