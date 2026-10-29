@@ -6,9 +6,8 @@ from itertools import combinations
 from math import comb
 from pathlib import Path
 
-import numpy as np
-
 import core
+import numpy as np
 
 STARS = ((0.001, "***"), (0.01, "**"), (0.05, "*"))
 
@@ -63,6 +62,8 @@ def group_stats(root: Path, proj: dict, level: str = "super", sl: int | None = N
     if len(groups) < 2:
         raise ValueError("need at least two non-empty groups")
     fits = {core.load(root, r)["fit_id"] for s in groups.values() for r in s}
+    if len(fits) != 1 or None in fits:
+        raise ValueError("group statistics require labels from one fit so cluster IDs are comparable")
     shares = {g: animal_shares(root, s, key, sl) for g, s in groups.items()}
     names = list(groups)
     pairs = []

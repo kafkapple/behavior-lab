@@ -49,6 +49,8 @@ if (mode === 'smoke') {
   await until(`document.querySelectorAll('#docnav button').length > 0`);
   await js(`document.querySelector('#docnav [data-d="subtle_transition_dib_tpi_survey.md"]').click()`);
   check('source survey opens in Help', await until(`${$('doctext')}.textContent.includes('DIB (Deterministic')`));
+  await js(`document.querySelector('#docnav [data-d="subtle_original_parity.md"]').click()`);
+  check('original app parity opens in Help', await until(`${$('doctext')}.textContent.includes('Original SUBTLE web app')`));
   await js(`document.querySelector('#tabs button[data-t="view"]').click()`);
   check('BS body palette is default', await js(`${$('kpal')}.value === 'body' && ${$('kpallegend')}.textContent.includes('nose1')`));
   await js(`${$('kpal')}.value = 'cluster'; ${$('kpal')}.dispatchEvent(new Event('change'))`);
@@ -81,6 +83,7 @@ if (mode === 'smoke') {
   await js(`${$('shutdown')}.click()`); check('Stop server responds', await until(`${$('toast')}.textContent.includes('Server stopped')`, 5000));
 } else if (mode === 'g3') {
   check('G3 source opens', await until(`+${$('fr')}.max > 5000`, 30000));
+  check('CORT-only inference is disabled in G3 root', await js(`${$('tstart')}.disabled`));
   check('embedded legacy labels appear', await js(`${$('cur')}.textContent.startsWith('cluster ')`));
   await js(`${$('g3review')}.click()`);
   check('source inspection project loads from tutorial', await until(`${$('pn')}.value === 'g3_juhee_source_review' && document.querySelectorAll('.grpbox').length === 1`, 30000));
@@ -95,6 +98,16 @@ if (mode === 'smoke') {
   check('train-map project loads', await js(`${$('pn')}.value === 'cort_trainmap_demo'`));
   check('saved model appears with fit ID', await until(`${$('ml')}.textContent.includes('3d203e49')`, 30000));
   check('held-out session is fully mapped', await js(`fetch('/api/session?path=cort%2Fcort3_full_sleap_1423.json.gz&stride=100').then(r=>r.json()).then(s=>s.mapped===true && s.fit_id==='3d203e49' && s.sub.length===120)`));
+  await js(`${$('shutdown')}.click()`);
+} else if (mode === 'legacy') {
+  check('original CSV demo opens', await until(`+${$('fr')}.max === 12082`, 30000));
+  check('CSV labels and embedding render', await js(`${$('cur')}.textContent.startsWith('cluster ') && !!document.querySelector('#annotations #anncat') && ${$('mp')}.width > 100`));
+  check('matching MP4 is paired', await until(`document.querySelector('.tile video')?.readyState >= 2`, 15000));
+  check('source CSV/video length mismatch is visible', await js(`${$('vwarn')}.textContent.includes('83 frames')`));
+  await js(`document.querySelector('#tabs button[data-t="clu"]').click(); document.querySelector('.ann-values input').click()`);
+  check('human annotation filters replay', await js(`document.querySelector('.ann-values input').checked && ${$('anncur')}.textContent.includes('human_annotation')`));
+  await js(`${$('anncolor')}.click()`);
+  check('annotation color mode is selectable', await js(`${$('anncolor')}.checked`));
   await js(`${$('shutdown')}.click()`);
 } else if (mode === 'keys') {
   await until(`document.querySelectorAll('.lrow').length > 0`);

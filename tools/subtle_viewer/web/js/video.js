@@ -18,9 +18,15 @@ function mk(cam, path) {
   $('vtiles').appendChild(d);
   const t = {cam, d, v: d.firstChild, c: d.children[1], KP: null};
   t.v.src = '/video?path=' + encodeURIComponent(path); t.v.onseeked = t.v.onloadeddata = draw;
-  t.v.onloadedmetadata = () => { if (Math.abs(t.v.videoWidth / t.v.videoHeight - CELL_ASPECT[cam]) > .02) $('vwarn').textContent = `cam_${cam + 1}: aspect ${(t.v.videoWidth / t.v.videoHeight).toFixed(2)} ≠ rig cell`; draw(); };
+  t.v.onloadedmetadata = () => {
+    if (st.cur.path.endsWith('.csv')) {
+      const delta = Math.round(t.v.duration * FPS()) - st.S.n;
+      if (Math.abs(delta) > 2) $('vwarn').textContent = `CSV/video length differs by ${Math.abs(delta)} frames; inspect alignment`;
+    } else if (Math.abs(t.v.videoWidth / t.v.videoHeight - CELL_ASPECT[cam]) > .02) $('vwarn').textContent = `cam_${cam + 1}: aspect ${(t.v.videoWidth / t.v.videoHeight).toFixed(2)} ≠ rig cell`;
+    draw();
+  };
   d.onclick = () => setCam(cam);                                     // click a tile in the grid = pick that camera
-  api(`kp2d?path=${encodeURIComponent(st.cur.path)}&cam=${cam}`).then(r => { t.KP = r.kp; draw(); }).catch(e => toast(e.message));
+  if (!st.cur.path.endsWith('.csv')) api(`kp2d?path=${encodeURIComponent(st.cur.path)}&cam=${cam}`).then(r => { t.KP = r.kp; draw(); }).catch(e => toast(e.message));
   return t;
 }
 

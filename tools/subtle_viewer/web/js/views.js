@@ -45,9 +45,11 @@ function drawMap() {
   if (!S || !S.emb) { x.fillStyle = '#888'; x.font = '12px sans-serif'; x.fillText('no embedding: run SUBTLE', 10, 40); return; }
   if (!eb) { let a = 1e9, b = -1e9, d = 1e9, e = -1e9; for (const p of S.emb) { a = Math.min(a, p[0]); b = Math.max(b, p[0]); d = Math.min(d, p[1]); e = Math.max(e, p[1]); }
     eb = {cx: (a + b) / 2, cy: (d + e) / 2, rx: Math.max(1e-9, (b - a) / 2), ry: Math.max(1e-9, (e - d) / 2)}; }
-  const key = [W, H, M.zoom, M.px, M.py, $('lvl').value, $('sl').value, [...st.F].join('-'), S.emb.length].join();
+  const key = [W, H, M.zoom, M.px, M.py, $('lvl').value, $('sl').value, [...st.F].join('-'), [...st.A].join('-'), st.ACat, st.AColor, S.emb.length].join();
   if (!cache || cache.key !== key) { const o = document.createElement('canvas'); o.width = W; o.height = H; const q = o.getContext('2d');
-    for (let i = 0; i < S.emb.length; i++) { const [u, v] = xy(S.emb[i], c); q.globalAlpha = inF(i) ? 1 : .08; q.fillStyle = color(lid(i)); q.fillRect(u - 1, v - 1, 2.5, 2.5); }
+    const ann = S.annotations?.[st.ACat], categories = st.AColor && ann ? [...new Set(ann)].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true})) : null;
+    const annId = categories ? new Map(categories.map((v, i) => [v, i])) : null;
+    for (let i = 0; i < S.emb.length; i++) { const [u, v] = xy(S.emb[i], c); q.globalAlpha = inF(i) ? 1 : .08; q.fillStyle = annId ? color(annId.get(ann[i])) : color(lid(i)); q.fillRect(u - 1, v - 1, 2.5, 2.5); }
     cache = {key, o}; }
   x.drawImage(cache.o, 0, 0);
   const [u, v] = xy(S.emb[Math.min(st.fr, S.emb.length - 1)], c); x.strokeStyle = fg(); x.lineWidth = 2; x.beginPath(); x.arc(u, v, 8, 0, 7); x.stroke();

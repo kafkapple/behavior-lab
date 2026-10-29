@@ -25,12 +25,13 @@
   </section>
   <aside id="right">
     <div class="panel-heading"><h3 id="paneltitle">Project</h3><button id="panelcompact" type="button" title="Return to compact panel" style="display:none">↘ Compact</button></div><div id="tabs"><button data-t="proj" class="on">Project</button><button data-t="tut">Video tutorial</button><button data-t="an">Discover &amp; map</button><button data-t="clu">Clusters</button><button data-t="freq">Frequency</button><button data-t="trans">Transitions</button><button data-t="stat">Stats</button><button data-t="dek">DEK</button><button data-t="qual">Quality</button><button data-t="view">View settings</button><button data-t="help">Help</button><button data-t="log">Log</button></div>
-    <div class="tabpage" id="t_clu"><div class="mut">IDs are arbitrary within each fit; names are saved per fit and level.</div><div id="legend"></div></div>
+    <div class="tabpage" id="t_clu"><div class="mut">IDs are arbitrary within each fit; names are saved per fit and level.</div><div id="legend"></div><div id="annotations"></div></div>
     <div class="tabpage on" id="t_proj"><div class="mut">1. Set a name. 2. Open sessions on the left and add each to a group. 3. Save before comparing.</div><div class="mut" id="dataroot"></div>
       <div class="action-group"><input id="pn" placeholder="project name" style="flex:1;min-width:0"><button id="ps" class="action-primary">Save project</button></div>
       <div style="display:flex;gap:6px;margin-bottom:6px"><select id="pl" style="flex:1;min-width:0"></select><button id="pld">Load</button></div>
       <div style="display:flex;gap:6px;margin-bottom:6px"><input id="gn" placeholder="group name" style="flex:1;min-width:0"><button id="ga" title="add the open session to this group">+ add open session</button></div>
       <textarea id="pdesc" rows="2" placeholder="project description (design, cohort, dosing)" style="width:100%;margin-bottom:6px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px"></textarea>
+      <details class="method-guide"><summary>Project provenance · original SUBTLE fields</summary><label>Organization <input id="porganization" placeholder="lab or organization"></label><label>Principal investigator <input id="pinvestigator" placeholder="name"></label><label>Contact <input id="pcontact" placeholder="email or note"></label><label>Purpose of research <textarea id="ppurpose" rows="2" placeholder="research aim"></textarea></label><p class="mut">Stored only in this local project file. The original site's public/verified visibility and account access controls do not apply here.</p></details>
       <div id="groups"></div><div id="projsaved" class="mut">Project not saved</div></div>
     <div class="tabpage" id="t_tut"><p>Start with a real 300-frame CORT video clip. On this Mac, eren runs the verified SLEAP 1423 checkpoint and AVATAR triangulation; the resulting video, five camera views, keypoints and 3D skeleton are saved under this data root.</p>
       <div class="action-group"><button id="topen" class="action-primary">Open completed 300-frame toy</button><button id="tstart">Predict keypoints again</button></div><progress id="tpg" value="0" max="100" style="display:none"></progress><div id="tutorial" class="mut"></div>
@@ -76,7 +77,7 @@
 </div>
 <div id="dock">
   <div class="row"><button id="play">▶</button><input id="fr" type="range" min="0" max="0" value="0" style="flex:1">
-    <span id="fi" class="mut">0/0</span><label class="mut">fps <input id="fps" type="number" value="20" style="width:48px"></label><span id="cur" class="mut"></span></div>
+    <span id="fi" class="mut">0/0</span><label class="mut">fps <input id="fps" type="number" value="20" style="width:48px"></label><span id="cur" class="mut"></span><span id="anncur" class="mut"></span></div>
   <canvas id="tl" width="1200" height="22"></canvas>
   <div id="keys" class="mut">Space play · ←/→ 1 · ↑/↓ 10 · , . 1 · +/- zoom · Enter reset view · 1-5 camera · 0 all cameras · k keypoints · l clusters · h hide panels · ? manuals · Esc clear filter</div>
 </div>

@@ -25,8 +25,8 @@ import model  # noqa: E402
 import quality  # noqa: E402
 import results  # noqa: E402
 import stability  # noqa: E402
-import sweep  # noqa: E402
 import stats  # noqa: E402
+import sweep  # noqa: E402
 import tutorial  # noqa: E402
 
 HERE = Path(__file__).parent
@@ -82,7 +82,8 @@ def _routes(root: Path):
                 "xyz": [[[round(float(v), 1) for v in j] for j in f] for f in xyz.tolist()],
                 "sub": pick("sub"), "super": pick("super"), "emb": pick("emb"), "fit_id": s["fit_id"],
                 "model": s["model"], "mapped": s["mapped"], "mapped_at": s["mapped_at"],
-                "method": s["method"], "fit_created": s["fit_created"]}
+                "method": s["method"], "fit_created": s["fit_created"],
+                "annotations": {k: v[::stride] for k, v in s["annotations"].items()}}
 
     def kp2d(q):
         s, cam = core.load(root, q["path"][0]), int(q["cam"][0])

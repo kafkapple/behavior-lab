@@ -1,5 +1,7 @@
 # SUBTLE Lite Viewer PRD (261023)
 
+> Historical implementation plan. The current source-verified comparison with the original web app is [subtle_original_parity.md](subtle_original_parity.md); this PRD's status rows and non-goals record the earlier scope and should not be read as current feature status.
+
 ## 1. Goal
 - Local web viewer for SUBTLE results: load `*.json.gz`, play 3D skeleton, run SUBTLE, compare groups.
 - Does not copy Justin's Meteor app. Reuses `behavior_lab.models.discovery.SUBTLE` and the file format only.

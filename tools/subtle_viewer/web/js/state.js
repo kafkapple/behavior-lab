@@ -1,6 +1,6 @@
 // Shared state, tiny event bus, cluster labels and filter. Every view reads from here; none talks to another view.
 export const $ = id => document.getElementById(id);
-export const st = {S: null, cur: null, fr: 0, F: new Set(), KP: null, camNow: null, proj: {name: '', groups: {}, meta: {}}, names: {}};
+export const st = {S: null, cur: null, fr: 0, F: new Set(), A: new Set(), ACat: '', AColor: false, KP: null, camNow: null, proj: {name: '', groups: {}, meta: {}}, names: {}};
 export const nkey = id => `${st.S.fit_id}|${$('lvl').value}${$('lvl').value === 'super' && $('sl').style.display === '' ? ':' + $('sl').value : ''}|${id}`;
 export const cname = id => st.S && st.names[nkey(id)] || '';
 const H = {};
@@ -34,7 +34,7 @@ export function relabel() {
   S.L = Array.isArray(raw[0]) ? raw.map(r => r[Math.min(r.length - 1, Math.max(0, +$('sl').value || 0))]) : raw;
 }
 export const lid = i => st.S && st.S.L && st.S.L[i] != null ? st.S.L[i] : null;
-export const inF = i => !st.F.size || st.F.has(lid(i));
+export const inF = i => (!st.F.size || st.F.has(lid(i))) && (!st.A.size || st.A.has(st.S?.annotations?.[st.ACat]?.[i]));
 export const nextIn = i => { const n = st.S.xyz.length; for (let d = 0; d < n; d++) { const j = (i + d) % n; if (inF(j)) return j; } return i; };
 export const nextBout = i => { const n = st.S.xyz.length;
   for (let d = 1; d <= n; d++) { const j = (i + d) % n; if (inF(j) && (j === 0 || !inF(j - 1) || lid(j) !== lid(j - 1))) return j; } return i; };

@@ -14,9 +14,8 @@ import time
 import uuid
 from pathlib import Path
 
-import cv2
-
 import core
+import cv2
 
 REMOTE = Path("/home/data/kafkapple/avatar_subtle_261004/SUBTLE_gpu")
 SOURCE = Path("/home/data/kafkapple/avatar_gslrm/raw_full/20231205_CORT_drinking_28d/cort1.mp4")
@@ -84,6 +83,8 @@ def _split_cameras(video: Path, dest: Path):
 
 
 def start(root: Path) -> str:
+    if not (root / "cort" / "cort1_full_sleap_1423.json.gz").is_file():
+        raise ValueError("the CORT toy inference belongs to a CORT data root; run subtle without arguments")
     if any(not j["done"] for j in JOBS.values()):
         raise ValueError("tutorial inference is already running")
     job_id = uuid.uuid4().hex[:10]

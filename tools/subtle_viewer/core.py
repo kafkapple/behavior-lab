@@ -4,12 +4,13 @@ No web code here, so every function can be asserted in selftest.py.
 """
 from __future__ import annotations
 
+import csv
 import gzip
 import json
-import os
-import subprocess
 import logging
+import os
 import re
+import subprocess
 import threading
 import time
 import uuid
@@ -40,7 +41,8 @@ def safe(root: Path, rel: str) -> Path:
 
 
 def stem_of(p: Path) -> str:
-    return STEM_SUFFIX.sub("", p.name.removesuffix(".gz").removesuffix(".json"))
+    name = p.name.removesuffix(".gz").removesuffix(".json").removesuffix(".csv")
+    return STEM_SUFFIX.sub("", name.removesuffix("_merged"))
 
 
 def scan(root: Path, progress=None) -> list[dict]:
@@ -55,12 +57,16 @@ def scan(root: Path, progress=None) -> list[dict]:
         videos = [folder / f for f in files if f.lower().endswith(".mp4")]
         all_videos.extend(videos)
         n_vids += len(videos)
-        for f in sorted(x for x in files if x.endswith(".json.gz")):
+        for f in sorted(x for x in files if x.endswith((".json.gz", ".csv"))):
             p = folder / f
+            if f.endswith(".csv"):
+                with p.open("rb") as header:
+                    if not header.readline(32).lstrip(b"\xef\xbb\xbf").startswith(b"avatar_subtle,"):
+                        continue
             stem = stem_of(p)
-            side = p.with_name(f.removesuffix(".json.gz") + SIDE)
+            side = _side(p)
             out.append({"path": str(p.relative_to(root)), "mb": round(p.stat().st_size / 1e6, 2), "stem": stem,
-                        "video": None, "cams": {}, "subtle": side.exists()})
+                        "video": None, "cams": {}, "subtle": side.exists() or f.endswith(".csv")})
         if progress:
             progress({"dirs": n_dirs, "sessions": len(out), "videos": n_vids, "path": str(rel_dir)})
     out.sort(key=lambda s: s["path"])
@@ -82,12 +88,54 @@ def scan(root: Path, progress=None) -> list[dict]:
         s["video"] = str(v.relative_to(root)) if v else None
         s["cams"] = {c: str(pick(camera[(match_stem, c)]).relative_to(root))
                      for c in range(5) if (match_stem, c) in camera}
+        if s["path"].endswith(".csv") and v and not s["cams"]:
+            s["cams"] = {0: s["video"]}
     log.info("scan %s: %d sessions, %d videos, %d dirs", root, len(out), n_vids, n_dirs)
     return out
 
 
 def _side(p: Path) -> Path:
-    return p.with_name(p.name.removesuffix(".json.gz") + SIDE)
+    return p.with_name(p.name.removesuffix(".json.gz").removesuffix(".csv") + SIDE)
+
+
+def _load_legacy_csv(p: Path) -> dict:
+    """Read the original homepage's merged CSV for local visualization; its fit provenance stays unknown."""
+    with p.open(newline="", encoding="utf-8-sig") as f:
+        reader = csv.reader(f)
+        head = next(reader)
+        if not head or head[0] != "avatar_subtle":
+            raise ValueError("legacy CSV must start with avatar_subtle")
+        node_count = 0
+        while head[1 + 3 * node_count:4 + 3 * node_count] == [f"x{node_count + 1}", f"y{node_count + 1}", f"z{node_count + 1}"]:
+            node_count += 1
+        if not node_count or head[1 + 3 * node_count:3 + 3 * node_count] != ["z1", "z2"]:
+            raise ValueError("legacy CSV needs x/y/z node triples followed by z1,z2 embedding")
+        rows = [r for r in reader if r]
+    n = len(rows)
+    if any(len(r) != len(head) for r in rows):
+        raise ValueError("legacy CSV row width differs from header")
+    xyz = np.asarray([[float(v) for v in r[1:1 + 3 * node_count]] for r in rows], dtype=np.float32).reshape(n, node_count, 3)
+    emb_start = 1 + 3 * node_count
+    emb = np.asarray([[float(v) for v in r[emb_start:emb_start + 2]] for r in rows], dtype=np.float32)
+    labels = {name: [r[j] for r in rows] for j, name in enumerate(head[emb_start + 2:], emb_start + 2)}
+    def numeric(name):
+        values = labels.get(name)
+        return [int(v) for v in values] if values and all(v.lstrip("-").isdigit() for v in values) else None
+    edges = [(0, 1), (3, 1), (3, 2), (8, 2), (2, 4), (2, 5), (3, 6), (3, 7)] if node_count == 9 else []
+    return {"nodes": [f"point{i + 1}" for i in range(node_count)], "edges": edges, "xyz": xyz,
+            "sub": numeric("subtle_sub_clusters"), "super": numeric("subtle_super_clusters"), "emb": emb.tolist(),
+            "annotations": {k: v for k, v in labels.items() if k not in {"subtle_sub_clusters", "subtle_super_clusters"}},
+            "fit_id": None, "model": None, "mapped": False, "mapped_at": None, "method": "legacy CSV", "fit_created": None, "kp": None}
+
+
+def _apply_sidecar(p: Path, s: dict) -> None:
+    if not _side(p).exists():
+        return
+    sd = json.loads(_side(p).read_text())
+    s["sub"], s["super"], s["fit_id"] = sd.get("subcluster"), sd.get("supercluster"), sd.get("fit_id")
+    s["emb"] = sd.get("embedding")
+    s.update({"model": sd.get("model"), "mapped": sd.get("mapped", False), "mapped_at": sd.get("mapped_at"),
+              "method": sd.get("method") or sd.get("clustering"), "fit_created": sd.get("created")})
 
 
 def _kp_array(d: dict, n: int) -> np.ndarray | None:
@@ -120,6 +168,13 @@ def load(root: Path, rel: str) -> dict:
         _CACHE.move_to_end(key)
         return _CACHE[key]
     t0 = time.time()
+    if p.suffix.lower() == ".csv":
+        s = _load_legacy_csv(p)
+        _apply_sidecar(p, s)
+        _CACHE[key] = s
+        while len(_CACHE) > CACHE_MAX:
+            _CACHE.popitem(last=False)
+        return s
     with gzip.open(p, "rt", encoding="utf-8") as f:
         d = json.load(f)
     sk = d.get("skeleton3d") or {}
@@ -128,16 +183,11 @@ def load(root: Path, rel: str) -> dict:
     s = {"nodes": d.get("node", {}).get("id", []), "edges": d.get("node", {}).get("line", []),
          "xyz": xyz, "sub": None, "super": None, "fit_id": None, "emb": None, "model": None,
          "mapped": False, "mapped_at": None, "method": None, "fit_created": None,
-         "kp": _kp_array(d, len(frames))}
+         "kp": _kp_array(d, len(frames)), "annotations": {k: list(map(str, v)) for k, v in (d.get("labels") or {}).items() if isinstance(v, list) and len(v) == len(frames)}}
     emb = d.get("subtle") or {}
     s["sub"], s["super"] = emb.get("subcluster"), emb.get("supercluster")
     s["emb"] = emb.get("embedding")
-    if _side(p).exists():
-        sd = json.loads(_side(p).read_text())
-        s["sub"], s["super"], s["fit_id"] = sd.get("subcluster"), sd.get("supercluster"), sd.get("fit_id")
-        s["emb"] = sd.get("embedding")
-        s.update({"model": sd.get("model"), "mapped": sd.get("mapped", False), "mapped_at": sd.get("mapped_at"),
-                  "method": sd.get("method") or sd.get("clustering"), "fit_created": sd.get("created")})
+    _apply_sidecar(p, s)
     del d  # raw dict can be 40 MB+; keep only arrays
     _CACHE[key] = s
     while len(_CACHE) > CACHE_MAX:
@@ -175,7 +225,7 @@ def clean_meta(proj: dict) -> dict:
     """R6 metadata: description, a note per group, animal/condition/date per session. Strings only, <=200 chars; sessions must be in a group."""
     m, member = proj.get("meta") or {}, {r for s in proj.get("groups", {}).values() for r in s}
     txt = lambda v: str(v or "").strip()[:200]  # noqa: E731
-    return {"description": txt(m.get("description")),
+    return {k: txt(m.get(k)) for k in ("description", "organization", "investigator", "contact", "purpose")} | {
             "group_notes": {g: txt(n) for g, n in (m.get("group_notes") or {}).items() if g in proj.get("groups", {}) and txt(n)},
             "sessions": {r: {k: txt(v.get(k)) for k in META_FIELDS} for r, v in (m.get("sessions") or {}).items() if r in member}}
 

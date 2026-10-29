@@ -21,9 +21,10 @@ export function requireProject() {
 }
 export async function refreshProjects() { $('pl').innerHTML = (await api('projects')).map(n => `<option>${n}</option>`).join(''); }
 // meta (PRD R6): st.proj.meta = {description, group_notes: {group: text}, sessions: {path: {animal, condition, date}}}; the server cleans it on save
-const M = () => (st.proj.meta = Object.assign({description: '', group_notes: {}, sessions: {}}, st.proj.meta));
+const M = () => (st.proj.meta = Object.assign({description: '', organization: '', investigator: '', contact: '', purpose: '', group_notes: {}, sessions: {}}, st.proj.meta));
 export function renderGroups() {
   const g = st.proj.groups, m = M(); $('pdesc').value = m.description || '';
+  for (const k of ['organization', 'investigator', 'contact', 'purpose']) $('p' + k).value = m[k] || '';
   $('groups').innerHTML = Object.entries(g).map(([n, l]) => `<div class="grpbox"><b>${n}</b> <span class="mut">(${l.length})</span> <button data-del="${n}">×</button>` +
     `<input class="gnote" data-g="${n}" placeholder="group note" value="${(m.group_notes[n] || '').replace(/"/g, '&quot;')}">` +
     l.map(p => { const s = m.sessions[p] || {}, f = k => `<input class="sm" data-s="${p}" data-k="${k}" placeholder="${k === 'condition' ? 'cond.' : k}" title="${k}" value="${(s[k] || '').replace(/"/g, '&quot;')}">`;
@@ -34,6 +35,7 @@ export function renderGroups() {
   if (st.proj.name) showStability().catch(() => { $('stabres').innerHTML = ''; });      // last saved seed-stability result, if any
 }
 $('pdesc').oninput = () => { M().description = $('pdesc').value; };
+for (const k of ['organization', 'investigator', 'contact', 'purpose']) $('p' + k).oninput = () => { M()[k] = $('p' + k).value; };
 $('ga').onclick = () => { const n = $('gn').value.trim(); if (!n || !st.cur) return toast('group name + open session needed');
   const g = (st.proj.groups[n] ??= []); if (!g.includes(st.cur.path)) g.push(st.cur.path); renderGroups(); freq(); };
 $('pn').oninput = () => { $('projsaved').textContent = 'Unsaved project name'; };

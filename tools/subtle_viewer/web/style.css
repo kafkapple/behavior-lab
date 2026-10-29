@@ -15,6 +15,7 @@ button:disabled{opacity:.5;cursor:default}
 .action-danger{color:var(--bad);border-color:var(--bad)}
 .action-danger:hover{background:var(--bad);color:#101318}
 .method-guide{border:1px solid var(--line);border-radius:6px;padding:5px 7px;margin:8px 0}.method-guide summary{cursor:pointer}.method-guide table{margin-top:6px;font-size:var(--fs-m)}
+#t_proj .method-guide label{display:block;margin:7px 0}#t_proj .method-guide input,#t_proj .method-guide textarea{display:block;width:100%;margin-top:2px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 7px;font:inherit}
 .kp-palette-legend{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:12px 0}.kp-palette-legend span{display:flex;gap:5px;align-items:center;font-size:var(--fs-m)}.kp-palette-legend i{width:10px;height:10px;border-radius:50%;flex:none}
 .cluster-badge{margin-left:auto;border:1px solid;border-radius:999px;padding:1px 6px;white-space:nowrap;background:#111c;font-weight:700}
 .mut{color:var(--mut);font-size:var(--fs-m)}.ok{color:var(--ok)}.bad{color:var(--bad)}
@@ -60,6 +61,7 @@ body.hide #left,body.hide #right{display:none}body.hide #main{grid-template-colu
 #keys{margin-top:2px;font-size:var(--fs-s)}
 .lrow{display:grid;grid-template-columns:18px 34px 1fr 48px;gap:4px;align-items:center;padding:1px 2px;border-radius:4px;cursor:pointer}
 .lrow.on{outline:1px solid var(--acc)}.lrow input{padding:0 4px;min-width:0;width:100%}
+.ann-values{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}.ann-values label{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:6px;padding:3px 6px}.ann-values input{width:auto;margin:0}
 .dots{position:relative;height:12px;min-width:90px;background:linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat}
 .dots i{position:absolute;top:2px;width:8px;height:8px;border-radius:50%;margin-left:-4px}
 .share-plot{min-width:155px}.share-track{display:flex;align-items:center;gap:3px;height:17px}.share-group{font-size:9px;width:27px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.share-axis{position:relative;flex:1;height:14px;margin:0 5px;background:linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat}.share-sd{position:absolute;top:6px;height:3px;opacity:.8}.share-mean{position:absolute;top:2px;height:11px;width:2px}.share-dot{position:absolute;top:4px;width:5px;height:5px;border-radius:50%;border:1px solid var(--bg);transform:translateX(-50%)}

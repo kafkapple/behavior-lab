@@ -20,6 +20,7 @@ async function init() {
   } while (!status.done);
   if (status.error) throw new Error(`Session scan failed: ${status.error}`);
   const L = status.items; sessionIndex = L; $('root').textContent = `${L.length} sessions · ${R.path}`;
+  if (!L.some(s => s.path === 'cort/cort1_full_sleap_1423.json.gz')) { $('tstart').disabled = true; $('tstart').title = 'The CORT toy runs only under a CORT data root (run subtle with no arguments).'; }
   $('scanprogress').remove();
   $('list').innerHTML = L.map(s => `<div class="sess" data-p="${s.path}"><b>${s.stem}</b> <span class="mut">${s.mb} MB${Object.keys(s.cams).length ? ' · ' + Object.keys(s.cams).length + ' cam' : ''}${s.subtle ? ' · SUBTLE' : ''}</span></div>`).join('') || 'no *.json.gz under the root';
   document.querySelectorAll('.sess').forEach(e => e.onclick = () => open_(e.dataset.p, L.find(x => x.path === e.dataset.p)));
@@ -35,7 +36,7 @@ async function init() {
 }
 async function open_(p, meta, cam, frame) {
   toast('loading ' + p); st.cur = {path: p, ...meta}; st.S = await api('session?path=' + encodeURIComponent(p));
-  st.fr = Math.min(frame || 0, st.S.xyz.length - 1); st.F = new Set(); $('fr').max = st.S.xyz.length - 1;
+  st.fr = Math.min(frame || 0, st.S.xyz.length - 1); st.F = new Set(); st.A = new Set(); st.ACat = ''; $('fr').max = st.S.xyz.length - 1;
   const cams = meta.cams || {}, sel = $('camsel');
   sel.innerHTML = Object.keys(cams).map(c => `<option value="${c}">cam_${+c + 1}</option>`).join('') || '<option value="">no camera</option>';
   if (cam != null && cams[cam]) sel.value = cam;
@@ -67,6 +68,7 @@ $('sl').onchange = () => { relabel(); emit('labels'); emit('frame'); };
 // ---- slider and per-frame readout
 on('frame', () => { const S = st.S; if (!S) return; $('fr').value = st.fr; $('fi').textContent = `${st.fr * S.stride}/${S.n - 1}`;
   const id = S.L && S.L[st.fr]; $('cur').textContent = id == null ? 'no cluster labels (run SUBTLE)' : `cluster ${id}`;
+  $('anncur').textContent = st.ACat && S.annotations?.[st.ACat] ? `${st.ACat}: ${S.annotations[st.ACat][st.fr]}` : '';
   $('clusterbadge').textContent = id == null ? 'No cluster label' : `Cluster ${id}`;
   $('clusterbadge').style.borderColor = id == null ? 'var(--line)' : color(id);
   $('clusterbadge').style.color = id == null ? 'var(--mut)' : color(id); });
