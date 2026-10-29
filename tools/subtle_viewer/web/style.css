@@ -28,6 +28,9 @@ button:disabled{opacity:.5;cursor:default}
 #main{display:grid;grid-template-columns:200px minmax(0,1fr) 320px;min-height:0}
 @media(max-width:1100px){#main{grid-template-columns:160px minmax(0,1fr) 285px}}
 #left,#right{background:var(--panel);overflow:auto;padding:8px;min-height:0}
+.panel-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.panel-heading h3{margin:0}
+#right.wide{position:fixed;z-index:20;top:48px;right:8px;bottom:54px;width:min(900px,calc(100vw - 185px));border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 48px #0009}
+@media(max-width:700px){#right.wide{left:8px;right:8px;top:8px;bottom:8px;width:auto}}
 #left{border-right:1px solid var(--line)}#right{border-left:1px solid var(--line);display:flex;flex-direction:column}
 #left details{border:1px solid var(--line);border-radius:6px;margin:5px 0;padding:5px}
 #left summary{cursor:pointer;font-weight:600}
@@ -60,6 +63,12 @@ body.hide #left,body.hide #right{display:none}body.hide #main{grid-template-colu
 .dots{position:relative;height:12px;min-width:90px;background:linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat}
 .dots i{position:absolute;top:2px;width:8px;height:8px;border-radius:50%;margin-left:-4px}
 .share-plot{min-width:155px}.share-track{display:flex;align-items:center;gap:3px;height:17px}.share-group{font-size:9px;width:27px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.share-axis{position:relative;flex:1;height:14px;margin:0 5px;background:linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat}.share-sd{position:absolute;top:6px;height:3px;opacity:.8}.share-mean{position:absolute;top:2px;height:11px;width:2px}.share-dot{position:absolute;top:4px;width:5px;height:5px;border-radius:50%;border:1px solid var(--bg);transform:translateX(-50%)}
+.stat-card{border:1px solid var(--line);border-radius:8px;padding:9px;margin:9px 0;background:var(--bg)}.stat-card.sig,.dek-cell.sig{border-color:#e8bf55;box-shadow:inset 0 0 0 1px #e8bf55}
+.stat-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:600}.sig-mark{color:#f1c96a;font-weight:800}.stat-meta{margin-top:5px;font-size:var(--fs-m);color:var(--mut)}
+.stat-card .share-plot{margin:7px 0 2px;min-width:320px}.stat-card .share-track{display:grid;grid-template-columns:74px minmax(0,1fr) 112px;align-items:center;gap:8px;height:34px}.stat-card .share-group{font-size:var(--fs-m);width:auto}.stat-card .share-axis{height:30px;margin:0}.stat-card .share-sd{top:14px}.stat-card .share-mean{top:5px;height:20px}.stat-card .share-dot{top:var(--dot-y);width:7px;height:7px}
+.share-value{text-align:right;font-variant-numeric:tabular-nums;font-size:var(--fs-m)}.share-scale{display:flex;justify-content:space-between;margin:0 112px 0 82px;color:var(--mut);font-size:var(--fs-s)}
+.dek-table-wrap{overflow:auto;max-width:100%;margin-top:8px}.dek-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:2px}.dek-table th,.dek-table td{min-width:55px;text-align:center;padding:5px;white-space:nowrap}.dek-table th:first-child,.dek-table td:first-child{position:sticky;left:0;background:var(--panel);z-index:1;min-width:110px}.dek-cell.sig{font-weight:800}.dek-hits{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}.dek-hits button{border-color:#e8bf55;color:#f1c96a}
+#qual{overflow-x:auto}#qual table{min-width:680px}
 #vnone{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut)}
 @media(max-width:700px){#stage{grid-template-columns:1fr;grid-template-rows:repeat(3,minmax(220px,1fr));grid-template-areas:"video" "skel" "map"}}
 @media(max-width:700px){#main{display:flex;flex-direction:column;overflow:auto}#left,#right{display:block;flex:none;max-height:260px}#stage{min-height:720px}}
@@ -79,6 +88,7 @@ progress{width:100%;height:8px}
 #docnav{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 10px}
 #docnav button{white-space:normal;text-align:left}
 #doctext{min-width:0;overflow-wrap:anywhere}
+#doctext table{display:block;max-width:100%;overflow-x:auto}
 #doctext pre{overflow:auto}
 .transition-matrix{overflow:auto;margin:8px 0}.transition-matrix table{width:auto;min-width:100%;font-variant-numeric:tabular-nums}.transition-matrix td{text-align:right;min-width:38px}
 #doctext h1,#doctext h2,#doctext h3{margin:.8em 0 .3em;text-transform:none;color:var(--fg);font-size:var(--fs-xl)}

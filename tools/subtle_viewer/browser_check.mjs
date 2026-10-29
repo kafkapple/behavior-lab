@@ -2,7 +2,7 @@
 // keys, timeline drag, cluster names, Train and Map buttons. usage: node browser_check.mjs <keys|train> <base url> [chrome path]
 // keys mode needs a session and a saved project in the url: <base>/#open=<session path>&cam=1&frame=600&project=<name> (Sweep n refuses without a project)
 import {spawn} from 'node:child_process';
-import {mkdtempSync, readFileSync} from 'node:fs';
+import {mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -64,11 +64,38 @@ if (mode === 'smoke') {
   await js(`${$('play')}.click()`);
   await js(`${$('tdemo')}.click()`);
   check('two-group tutorial opens animal share plot', await until(`document.querySelectorAll('.share-plot').length > 0`, 30000));
+  check('statistics open in a readable wide panel', await js(`${$('right')}.getBoundingClientRect().width >= 700 && document.querySelectorAll('.stat-card').length === 9`));
+  if (process.env.SUBTLE_SCREENSHOT_DIR) { const shot = await send('Page.captureScreenshot', {format: 'png'}); writeFileSync(join(process.env.SUBTLE_SCREENSHOT_DIR, 'stats_screen.png'), Buffer.from(shot.result.data, 'base64'));
+    const data = await js(`(async()=>{const m=await import('/web/js/export.js');const r=await fetch('/api/stats?name=cort_vs_veh&level=super&sl=8').then(x=>x.json());return m.statsPng(r).toDataURL()})()`);
+    writeFileSync(join(process.env.SUBTLE_SCREENSHOT_DIR, 'stats_export.png'), Buffer.from(data.split(',')[1], 'base64')); }
   await js(`document.querySelector('#tabs button[data-t="dek"]').click(); ${$('dkgo')}.click()`);
   check('DEK background job completes with result', await until(`${$('dkprogress')}.value === 100 && ${$('dek')}.querySelector('table')`, 60000));
+  check('significant DEK cells have jump links', await js(`document.querySelectorAll('.dek-hits button').length === 4`));
+  await js(`document.querySelector('.dek-hits button').click()`);
+  check('jump link switches to its feature view', await js(`${$('dktype')}.value === 'E' && ${$('dkn')}.value === '0' && document.querySelectorAll('.dek-cell.sig').length === 3`));
+  if (process.env.SUBTLE_SCREENSHOT_DIR) { const shot = await send('Page.captureScreenshot', {format: 'png'}); writeFileSync(join(process.env.SUBTLE_SCREENSHOT_DIR, 'dek_screen.png'), Buffer.from(shot.result.data, 'base64'));
+    const data = await js(`(()=>{const old=HTMLCanvasElement.prototype.toBlob;HTMLCanvasElement.prototype.toBlob=function(cb){window.__dekExport=this;return old.call(this,cb)};${$('dkpng')}.click();return window.__dekExport.toDataURL()})()`);
+    writeFileSync(join(process.env.SUBTLE_SCREENSHOT_DIR, 'dek_export.png'), Buffer.from(data.split(',')[1], 'base64')); }
   await js(`${$('topen')}.click()`);
   check('completed 300-frame toy opens', await until(`${$('vtitle')}.textContent.includes('cort1_toy') && +${$('fr')}.max === 299`, 20000));
   await js(`${$('shutdown')}.click()`); check('Stop server responds', await until(`${$('toast')}.textContent.includes('Server stopped')`, 5000));
+} else if (mode === 'g3') {
+  check('G3 source opens', await until(`+${$('fr')}.max > 5000`, 30000));
+  check('embedded legacy labels appear', await js(`${$('cur')}.textContent.startsWith('cluster ')`));
+  await js(`${$('g3review')}.click()`);
+  check('source inspection project loads from tutorial', await until(`${$('pn')}.value === 'g3_juhee_source_review' && document.querySelectorAll('.grpbox').length === 1`, 30000));
+  check('G3 M1 cam1 proxy is paired', await until(`document.querySelectorAll('.tile').length === 1 && ${$('camsel')}.value === '0'`, 30000));
+  check('G3 cam1 H.264 decodes', await until(`document.querySelector('.tile video').readyState >= 2 && document.querySelector('.tile video').videoWidth === 480`, 30000));
+  check('embedded map coordinates are available', await js(`fetch('/api/session?path=derived%2Fsubtle_by_juhee%2F260529-baseline-G3-M1.json.gz&stride=100').then(r=>r.json()).then(s=>s.emb?.length>50 && s.fit_id===null)`));
+  check('G3 eight-session quality appears', await until(`${$('qual')}.querySelectorAll('tr').length >= 9`, 30000));
+  if (process.env.SUBTLE_SCREENSHOT_DIR) { await js(`${$('panelcompact')}.click()`); const shot = await send('Page.captureScreenshot', {format: 'png'}); writeFileSync(join(process.env.SUBTLE_SCREENSHOT_DIR, 'g3_screen.png'), Buffer.from(shot.result.data, 'base64')); }
+  await js(`${$('shutdown')}.click()`);
+} else if (mode === 'model') {
+  check('saved-model source opens', await until(`+${$('fr')}.max > 0`, 30000));
+  check('train-map project loads', await js(`${$('pn')}.value === 'cort_trainmap_demo'`));
+  check('saved model appears with fit ID', await until(`${$('ml')}.textContent.includes('3d203e49')`, 30000));
+  check('held-out session is fully mapped', await js(`fetch('/api/session?path=cort%2Fcort3_full_sleap_1423.json.gz&stride=100').then(r=>r.json()).then(s=>s.mapped===true && s.fit_id==='3d203e49' && s.sub.length===120)`));
+  await js(`${$('shutdown')}.click()`);
 } else if (mode === 'keys') {
   await until(`document.querySelectorAll('.lrow').length > 0`);
   const f0 = await frame(); check('session opened at frame 600', f0 === 600, `(fi=${f0})`);
@@ -130,7 +157,7 @@ if (mode === 'smoke') {
   await js(`${$('swdrop')}.value = ''; ${$('swexcl')}.checked = false; ${$('swgo')}.click()`); await sleep(2500);
   // PNG exports: capture the download and check the PNG signature
   await js(`window.__dl = []; HTMLAnchorElement.prototype.click = function () { fetch(this.href).then(r => r.blob()).then(async b => window.__dl.push({name: this.download, size: b.size, magic: [...new Uint8Array(await b.slice(0, 4).arrayBuffer())].join()})); }`);
-  await js(`${$('stgo')}.click()`); await until(`!!document.querySelector('#stat table')`, 30000); await js(`${$('stpng')}.click()`);
+  await js(`${$('stgo')}.click()`); await until(`!!document.querySelector('#stat .stat-card')`, 30000); await js(`${$('stpng')}.click()`);
   check('Stats PNG downloaded', await until(`window.__dl.some(d => d.name === 'group_stats.png' && d.magic === '137,80,78,71' && d.size > 4000)`, 8000), JSON.stringify(await js('window.__dl')));
   await js(`${$('dkgo')}.click()`); await until(`!!document.querySelector('#dek table')`, 60000); await js(`${$('dkpng')}.click()`);
   check('DEK PNG downloaded', await until(`window.__dl.some(d => d.name === 'dek.png' && d.magic === '137,80,78,71' && d.size > 4000)`, 8000), JSON.stringify(await js('window.__dl')));

@@ -131,6 +131,7 @@ def load(root: Path, rel: str) -> dict:
          "kp": _kp_array(d, len(frames))}
     emb = d.get("subtle") or {}
     s["sub"], s["super"] = emb.get("subcluster"), emb.get("supercluster")
+    s["emb"] = emb.get("embedding")
     if _side(p).exists():
         sd = json.loads(_side(p).read_text())
         s["sub"], s["super"], s["fit_id"] = sd.get("subcluster"), sd.get("supercluster"), sd.get("fit_id")

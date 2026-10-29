@@ -27,6 +27,7 @@ async function init() {
   const h = new URLSearchParams(location.hash.slice(1));              // deep link: #open=<path>&cam=1&frame=600
   const m = h.get('open') && L.find(x => x.path === h.get('open'));
   if (m) await open_(m.path, m, h.get('cam'), +h.get('frame') || 0);
+  else if (L.length) await open_(L[0].path, L[0]);
   if (m && h.get('all')) await setAll();                              // #all=1: every camera tile
   if (h.get('project')) { st.proj = await api('project?name=' + encodeURIComponent(h.get('project'))); $('pn').value = st.proj.name; renderGroups(); }   // #project=<name>
   if (h.get('run')) $({stat: 'stgo', dek: 'dkgo'}[h.get('run')]).click();                   // #run=stat|dek: compute right away (checks)
@@ -116,7 +117,10 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   document.querySelectorAll('.tabpage').forEach(x => x.classList.toggle('on', x.id === 't_' + b.dataset.t));
   document.querySelectorAll('[data-go]').forEach(x => x.classList.toggle('on', x.dataset.go === b.dataset.t));
   $('paneltitle').textContent = b.textContent;
+  $('right').classList.toggle('wide', ['stat', 'dek', 'qual'].includes(b.dataset.t));
+  $('panelcompact').style.display = ['stat', 'dek', 'qual'].includes(b.dataset.t) ? '' : 'none';
 });
+$('panelcompact').onclick = () => { $('right').classList.remove('wide'); $('panelcompact').style.display = 'none'; };
 document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { document.querySelector(`#tabs button[data-t="${b.dataset.go}"]`).click(); const section = document.querySelector(`#left [data-go="${b.dataset.go}"]`)?.closest('details'); if (section) section.open = true; });
 
 // A fixed, real AVATAR toy clip: inference runs on eren; this page stays responsive while it runs.
@@ -152,6 +156,15 @@ $('tdemo').onclick = async () => {
     $('tdemostatus').textContent = 'Project loaded. Compare groups is running in Stats. Open DEK next to calculate kinematic differences.';
   } catch (e) { $('tdemostatus').textContent = e.message; }
   finally { $('tdemo').disabled = false; }
+};
+$('g3review').onclick = async () => {
+  try {
+    const p = await api('project?name=g3_juhee_source_review');
+    st.proj = p; $('pn').value = p.name; $('projsaved').textContent = `Loaded: ${p.name}`; renderGroups();
+    const meta = sessionIndex.find(s => s.path === p.groups.unassigned[0]);
+    if (meta) await open_(meta.path, meta, null, 0);
+    document.querySelector('#tabs button[data-t="qual"]').click(); $('qgo').click();
+  } catch (e) { toast(e.message); }
 };
 
 // ---- manuals: docs/dev/subtle_*.md through a small markdown reader

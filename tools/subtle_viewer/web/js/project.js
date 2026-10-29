@@ -90,16 +90,12 @@ $('stgo').onclick = async () => {
   renderStats(); };
 function renderStats() {
   const R = lastStats; if (!R) return;
-  $('stat').innerHTML = `<div class="${R.one_fit ? 'ok' : 'bad'}">${R.one_fit ? 'all sessions from one fit' : 'sessions are NOT from one fit: ids are not comparable'}</div><div class="mut">unit: ${R.unit}. Groups come from the project (folder names unless you set them): provisional.</div>` +
-    R.pairs.map(P => { const [ga, gb] = P.groups;
-      return `<h3 style="margin-top:10px">${ga} (n=${P.n[ga]}) vs ${gb} (n=${P.n[gb]})</h3><div class="mut">${P.method}; smallest possible p = ${P.min_p.toFixed(4)}; ${P.correction}</div>` +
-      (P.min_p >= .05 ? '<div class="bad">smallest possible p ≥ 0.05: no star is reachable with these group sizes</div>' : '') +
-      '<table><tr><th>cluster</th><th>% mean ± SD</th><th>animals and SD bars (0–100%)</th><th>g</th><th>p adj</th></tr>' +
-      P.tests.map(t => { const nm = cname(t.cluster);
-        const track = (g, c) => { const lo = Math.max(0, t.mean[g] - (t.sd[g] || 0)), hi = Math.min(100, t.mean[g] + (t.sd[g] || 0));
-          return `<div class="share-track" title="${g}: mean ${t.mean[g].toFixed(1)}%, SD ${t.sd[g]?.toFixed(1) ?? 'n/a'}%; one dot per animal"><span class="share-group" style="color:${c}">${g}</span><span class="share-axis"><i class="share-sd" style="left:${lo}%;width:${hi - lo}%;background:${c}"></i><i class="share-mean" style="left:${t.mean[g]}%;background:${c}"></i>${t.values[g].map(v => `<i class="share-dot" style="left:${v}%;background:${c}"></i>`).join('')}</span></div>`; };
-        return `<tr><td>${t.cluster}${nm ? ' ' + nm : ''}</td><td>${t.mean[ga].toFixed(1)} ± ${t.sd[ga]?.toFixed(1) ?? '–'}<br>${t.mean[gb].toFixed(1)} ± ${t.sd[gb]?.toFixed(1) ?? '–'}</td><td><div class="share-plot">${track(ga, '#5ac8fa')}${track(gb, '#ff9f0a')}</div></td>` +
-          `<td>${t.g == null ? '–' : t.g.toFixed(2)}</td><td title="raw p ${t.p.toFixed(4)}">${t.p_adj.toFixed(3)} <b class="${t.stars === 'ns' ? 'mut' : 'ok'}">${t.stars}</b></td></tr>`; }).join('') + '</table><div class="mut">Bars = mean ± sample SD, clipped to 0–100%; dots = individual animals. ' + ga + ' blue, ' + gb + ' orange. Error bars describe spread, not a confidence interval.</div>'; }).join('');
+  $('stat').innerHTML = `<div class="${R.one_fit ? 'ok' : 'bad'}">${R.one_fit ? 'All sessions use one fit.' : 'Fit IDs differ or are unknown: cluster IDs cannot be compared.'}</div><p class="mut">Dots = individual animals; bar = mean ± sample SD. The error bar shows spread, not a confidence interval. Folder-derived groups are provisional.</p>` +
+    R.pairs.map(P => { const [ga, gb] = P.groups, nSig = P.tests.filter(t => t.p_adj < .05).length;
+      const track = (t, g, c) => { const lo = Math.max(0, t.mean[g] - (t.sd[g] || 0)), hi = Math.min(100, t.mean[g] + (t.sd[g] || 0));
+        return `<div class="share-track" title="${g}: each dot is one animal"><span class="share-group" style="color:${c}">${g}</span><span class="share-axis"><i class="share-sd" style="left:${lo}%;width:${hi - lo}%;background:${c}"></i><i class="share-mean" style="left:${t.mean[g]}%;background:${c}"></i>${t.values[g].map((v, i) => `<i class="share-dot" style="left:${Math.max(1, Math.min(99, v))}%;--dot-y:${5 + (i % 3) * 7}px;background:${c}"></i>`).join('')}</span><span class="share-value">${t.mean[g].toFixed(1)} ± ${t.sd[g]?.toFixed(1) ?? '–'}%</span></div>`; };
+      return `<h3>${ga} (n=${P.n[ga]}) vs ${gb} (n=${P.n[gb]})</h3><p class="mut">${nSig}/${P.tests.length} clusters with selected p&lt;.05 · ${P.method} · ${P.correction} · smallest possible raw p ${P.min_p.toFixed(4)}.</p>` +
+        P.tests.map(t => `<article class="stat-card ${t.p_adj < .05 ? 'sig' : ''}"><div class="stat-card-head"><span><span style="color:${color(t.cluster)}">■</span> Cluster ${t.cluster}${cname(t.cluster) ? ' · ' + cname(t.cluster) : ''}</span><span class="${t.p_adj < .05 ? 'sig-mark' : 'mut'}">${t.p_adj < .05 ? t.stars + ' ' : ''}${P.correction === 'none' ? 'p' : 'pBH'}=${t.p_adj.toFixed(3)}</span></div><div class="share-plot">${track(t, ga, '#5ac8fa')}${track(t, gb, '#ff9f0a')}<div class="share-scale"><span>0%</span><span>25</span><span>50</span><span>75</span><span>100%</span></div></div><div class="stat-meta">Hedges g ${t.g == null ? '–' : t.g.toFixed(2)} · raw p ${t.p.toFixed(4)} · ${t.p_adj < .05 ? 'highlighted under selected test' : 'not significant under selected test'}</div></article>`).join(''); }).join('');
 }
 $('stcsv').onclick = () => { if (!lastStats) return toast('run Compare groups first');
   const rows = [['group_a', 'group_b', 'cluster', 'mean_a', 'sd_a', 'mean_b', 'sd_b', 'diff', 'hedges_g', 'p', 'p_adj', 'stars', 'method']];
@@ -115,7 +111,7 @@ $('dkgo').onclick = async () => {
   try {
     await api('save_project', st.proj);
     const {job} = await api('dek_start', {name: st.proj.name, level: $('lvl').value,
-      sl: $('sl').style.display === '' && $('lvl').value === 'super' ? +$('sl').value : null, correct: $('stbh').checked});
+      sl: $('sl').style.display === '' && $('lvl').value === 'super' ? +$('sl').value : null, correct: true});
     let s;
     do {
       s = await api('dek_job?id=' + job); $('dkprogress').value = s.pct;
@@ -135,12 +131,15 @@ function renderDek() {
   const R = lastDek; if (!R) return; const P = R.pairs[+$('dkpair').value || 0], ty = $('dktype').value, n = $('dkn').value;
   const idx = R.columns.map((c, i) => [c, i]).filter(([c]) => c[0] === ty && c[1] === n), T = P.t.flat().filter(v => v != null), mx = Math.max(2, ...T.map(Math.abs));
   const cell = (r, [c, j]) => { const t = P.t[r][j], q = P.p_adj[r][j]; if (t == null) return '<td class="mut">–</td>';
-    const a = Math.min(1, Math.abs(t) / mx), col = t > 0 ? `rgba(255,159,10,${a})` : `rgba(90,200,250,${a})`;
-    return `<td style="background:${col};text-align:center" title="${c} cluster ${P.clusters[r]}: t=${t.toFixed(2)}, p=${P.p[r][j].toExponential(2)}, p_adj=${q.toExponential(2)}, g=${P.g[r][j] == null ? '–' : P.g[r][j].toFixed(2)}">${t.toFixed(1)}<b>${sig(q)}</b></td>`; };
-  $('dek').innerHTML = `<div class="mut">${P.groups[0]} (orange, t>0) vs ${P.groups[1]} (blue); ${P.tests} cells; ${P.correction}; animals need ≥${R.min_frames} frames in a cluster; ${R.unit}. Groups are provisional.</div>` +
+    const a = Math.min(.7, Math.abs(t) / mx * .7), col = t > 0 ? `rgba(255,159,10,${a})` : `rgba(90,200,250,${a})`;
+    return `<td class="dek-cell ${q < .05 ? 'sig' : ''}" style="background:${col}" title="${c} cluster ${P.clusters[r]}: t=${t.toFixed(2)}, p=${P.p[r][j].toExponential(2)}, p_adj=${q.toExponential(2)}, g=${P.g[r][j] == null ? '–' : P.g[r][j].toFixed(2)}">${t.toFixed(1)} ${q < .05 ? '<span class="sig-mark">' + sig(q) + '</span>' : ''}</td>`; };
+  const hits = P.clusters.flatMap((cl, r) => R.columns.flatMap((c, j) => P.p_adj[r][j] != null && P.p_adj[r][j] < .05 ? [{cl, c, q: P.p_adj[r][j]}] : []));
+  $('dek').innerHTML = `<div class="mut">${P.groups[0]} (orange, t>0) vs ${P.groups[1]} (blue); ${P.tests} cells; ${P.correction}. Correction is within this selected level, not across levels. Animals need ≥${R.min_frames} frames in a cluster; ${R.unit}. Groups are provisional.</div>` +
+    `<div class="dek-hits">${hits.length ? hits.map(h => `<button data-ht="${h.c[0]}" data-hn="${h.c[1]}" title="p adjusted ${h.q.toFixed(4)}">* cluster ${h.cl} · ${h.c}</button>`).join('') : '<span class="mut">No corrected p&lt;.05 cells</span>'}</div>` +
     (P.skipped.length ? `<div class="bad">clusters skipped (fewer than 2 animals in a group): ${P.skipped.map(s => s.cluster + ' (' + s.n.join('/') + ')').join(', ')}</div>` : '') +
-    '<table><tr><th>cluster (nA/nB)</th>' + idx.map(([c]) => `<th style="font-size:9px;writing-mode:vertical-rl">${c.split(':')[1]}</th>`).join('') + '</tr>' +
-    P.clusters.map((c, r) => `<tr><td><span style="color:${color(c)}">■</span> ${c} <span class="mut">${P.n[r].join('/')}</span></td>${idx.map(x => cell(r, x)).join('')}</tr>`).join('') + '</table>';
+    '<div class="dek-table-wrap"><table class="dek-table"><tr><th>cluster (nA/nB)</th>' + idx.map(([c]) => `<th title="${c}">${c.split(':')[1]}</th>`).join('') + '</tr>' +
+    P.clusters.map((c, r) => `<tr><td><span style="color:${color(c)}">■</span> ${c} <span class="mut">${P.n[r].join('/')}</span></td>${idx.map(x => cell(r, x)).join('')}</tr>`).join('') + '</table></div>';
+  $('dek').querySelectorAll('.dek-hits button').forEach(b => b.onclick = () => { $('dktype').value = b.dataset.ht; $('dkn').value = b.dataset.hn; renderDek(); });
 }
 $('dkcsv').onclick = () => { if (!lastDek) return toast('run Compute DEK first');
   const rows = [['group_a', 'group_b', 'cluster', 'feature', 't', 'p', 'p_adj', 'hedges_g']];
