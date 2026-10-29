@@ -5,10 +5,11 @@ import {$, st, on, emit, api, toast, FPS, fit, lid} from './state.js';
 import {color} from './colors.js';
 
 const CELL_ASPECT = {0: 1.2, 1: 1.2, 2: 1.0, 3: 1.2, 4: 1.2};      // cell w/h of the rig (core.CELLS)
-let tiles = [], showKp = true, all = false;
+let tiles = [], showKp = true, showConf = false, all = false;
 export const vids = () => tiles.map(t => t.v);
 export const videoOn = () => tiles.length > 0;
 export const toggleKp = () => { showKp = !showKp; draw(); return showKp; };
+export const toggleConf = () => { showConf = !showConf; draw(); return showConf; };
 export const camNow = () => st.camNow;
 
 function mk(cam, path) {
@@ -45,16 +46,20 @@ export function draw() {
     if (!v.paused && Math.abs(v.currentTime - tt / FPS()) > .3) v.currentTime = tt / FPS();   // scrub or filter jump while playing
     if (!showKp || !t.KP || !t.KP[tt]) continue;
     const W = o.width, H = o.height, sc = Math.min(W / v.videoWidth, H / v.videoHeight), vw = v.videoWidth * sc, vh = v.videoHeight * sc, ox = (W - vw) / 2, oy = (H - vh) / 2;
+    const scale = Math.max(.45, Math.min(1, Math.min(W, H) / d / 280));
     const a = t.KP[tt], hi = p => p[2] > .25, seen = p => p[2] > .05;                       // missing points are (0,0) with conf 0; conf below .05 is noise (a stray corner point drew a long bone)
     const pt = p => [ox + p[0] * vw, oy + p[1] * vh];
-    x.lineWidth = 2 * d; x.strokeStyle = color(lid(st.fr));
-    for (const [i, j] of S.edges) { if (!seen(a[i]) || !seen(a[j])) continue;
-      x.globalAlpha = hi(a[i]) && hi(a[j]) ? 1 : .45; x.setLineDash(hi(a[i]) && hi(a[j]) ? [] : [5 * d, 4 * d]);
+    x.lineCap = 'round'; x.lineJoin = 'round'; x.lineWidth = 1.25 * d * scale; x.strokeStyle = color(lid(st.fr));
+    for (const [i, j] of S.edges) { if (!a[i] || !a[j] || !seen(a[i]) || !seen(a[j])) continue;
+      x.globalAlpha = hi(a[i]) && hi(a[j]) ? .68 : .25; x.setLineDash(hi(a[i]) && hi(a[j]) ? [] : [3 * d * scale, 3 * d * scale]);
       x.beginPath(); x.moveTo(...pt(a[i])); x.lineTo(...pt(a[j])); x.stroke(); }
     x.setLineDash([]);
     for (const p of a) { if (!seen(p)) continue; const [u, w] = pt(p);
-      if (hi(p)) { x.globalAlpha = 1; x.fillStyle = '#2ecc71'; x.beginPath(); x.arc(u, w, 4 * d, 0, 7); x.fill(); }
-      else { x.globalAlpha = .6; x.strokeStyle = '#2ecc71'; x.lineWidth = 1.5 * d; x.beginPath(); x.arc(u, w, 4 * d, 0, 7); x.stroke(); } }
+      x.globalAlpha = hi(p) ? .84 : .48; x.fillStyle = '#7ee6b1'; x.strokeStyle = '#7ee6b1';
+      x.beginPath(); x.arc(u, w, 2.3 * d * scale, 0, 2 * Math.PI);
+      if (hi(p)) x.fill(); else { x.lineWidth = 1.1 * d * scale; x.stroke(); }
+      if (showConf) { x.globalAlpha = 1; x.font = `${Math.max(8, 10 * scale) * d}px ui-monospace,monospace`; x.lineWidth = 2 * d; x.strokeStyle = '#101318'; x.fillStyle = '#e8eaf0';
+        const label = String(Math.round(100 * p[2])); x.strokeText(label, u + 4 * d * scale, w - 3 * d * scale); x.fillText(label, u + 4 * d * scale, w - 3 * d * scale); } }
     x.globalAlpha = 1;
   }
 }

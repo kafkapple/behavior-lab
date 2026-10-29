@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import subprocess
 import logging
 import re
@@ -42,33 +43,46 @@ def stem_of(p: Path) -> str:
     return STEM_SUFFIX.sub("", p.name.removesuffix(".gz").removesuffix(".json"))
 
 
-def _token(stem: str) -> str | None:
-    m = re.match(r"([A-Za-z]+\d+)", stem)
-    return m.group(1) if m else None
-
-
-def scan(root: Path) -> list[dict]:
-    vids = [v for v in root.rglob("*.mp4") if not any(s.startswith(".") for s in v.relative_to(root).parts)]
-    videos = {}
-    for v in vids:
-        videos.setdefault(v.stem, v)
-    out = []
-    for p in sorted(root.rglob("*.json.gz")):
-        rel = p.relative_to(root)
-        if any(s.startswith(".") for s in rel.parts):
+def scan(root: Path, progress=None) -> list[dict]:
+    """Inventory sessions without traversing the tree twice or comparing every video to every session."""
+    out, all_videos = [], []
+    n_dirs = n_vids = 0
+    for base, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        folder = Path(base)
+        rel_dir = folder.relative_to(root)
+        n_dirs += 1
+        videos = [folder / f for f in files if f.lower().endswith(".mp4")]
+        all_videos.extend(videos)
+        n_vids += len(videos)
+        for f in sorted(x for x in files if x.endswith(".json.gz")):
+            p = folder / f
+            stem = stem_of(p)
+            side = p.with_name(f.removesuffix(".json.gz") + SIDE)
+            out.append({"path": str(p.relative_to(root)), "mb": round(p.stat().st_size / 1e6, 2), "stem": stem,
+                        "video": None, "cams": {}, "subtle": side.exists()})
+        if progress:
+            progress({"dirs": n_dirs, "sessions": len(out), "videos": n_vids, "path": str(rel_dir)})
+    out.sort(key=lambda s: s["path"])
+    direct, camera = {}, {}
+    for v in all_videos:
+        direct.setdefault(v.stem, []).append(v)
+        m = re.search(r"_cam_([1-5])$", v.stem)
+        if not m:
             continue
-        v = videos.get(stem_of(p))
-        tok, cams = _token(stem_of(p)), {}
-        if tok:  # per-camera videos: name holds the animal token as a whole word and `cam_N`
-            pat = re.compile(rf"(?<![A-Za-z0-9]){re.escape(tok)}(?!\d)")
-            for x in vids:
-                m = re.search(r"cam_(\d)", x.stem)
-                if m and pat.search(x.stem) and 1 <= int(m.group(1)) <= 5:
-                    cams[int(m.group(1)) - 1] = str(x.relative_to(root))
-        side = p.with_name(p.name.removesuffix(".json.gz") + SIDE)
-        out.append({"path": str(rel), "mb": round(p.stat().st_size / 1e6, 2), "stem": stem_of(p),
-                    "video": str(v.relative_to(root)) if v else None, "cams": cams, "subtle": side.exists()})
-    log.info("scan %s: %d sessions, %d videos", root, len(out), len(vids))
+        prefix = v.stem[:m.start()]
+        parts = prefix.split("_")
+        for i in range(len(parts)):
+            camera.setdefault(("_".join(parts[i:]), int(m.group(1)) - 1), []).append(v)
+    for s in out:
+        parent = (root / s["path"]).parent
+        match_stem = s["stem"].removesuffix("_full")
+        pick = lambda xs: next((v for v in xs if v.parent == parent), xs[0]) if xs else None  # noqa: E731
+        v = pick(direct.get(match_stem, []))
+        s["video"] = str(v.relative_to(root)) if v else None
+        s["cams"] = {c: str(pick(camera[(match_stem, c)]).relative_to(root))
+                     for c in range(5) if (match_stem, c) in camera}
+    log.info("scan %s: %d sessions, %d videos, %d dirs", root, len(out), n_vids, n_dirs)
     return out
 
 
@@ -112,7 +126,8 @@ def load(root: Path, rel: str) -> dict:
     frames = sorted(sk, key=int)
     xyz = np.array([sk[k] for k in frames], dtype=np.float32) if frames else np.zeros((0, 0, 3), np.float32)
     s = {"nodes": d.get("node", {}).get("id", []), "edges": d.get("node", {}).get("line", []),
-         "xyz": xyz, "sub": None, "super": None, "fit_id": None, "emb": None,
+         "xyz": xyz, "sub": None, "super": None, "fit_id": None, "emb": None, "model": None,
+         "mapped": False, "mapped_at": None, "method": None, "fit_created": None,
          "kp": _kp_array(d, len(frames))}
     emb = d.get("subtle") or {}
     s["sub"], s["super"] = emb.get("subcluster"), emb.get("supercluster")
@@ -120,6 +135,8 @@ def load(root: Path, rel: str) -> dict:
         sd = json.loads(_side(p).read_text())
         s["sub"], s["super"], s["fit_id"] = sd.get("subcluster"), sd.get("supercluster"), sd.get("fit_id")
         s["emb"] = sd.get("embedding")
+        s.update({"model": sd.get("model"), "mapped": sd.get("mapped", False), "mapped_at": sd.get("mapped_at"),
+                  "method": sd.get("method") or sd.get("clustering"), "fit_created": sd.get("created")})
     del d  # raw dict can be 40 MB+; keep only arrays
     _CACHE[key] = s
     while len(_CACHE) > CACHE_MAX:
@@ -166,8 +183,11 @@ def save_project(root: Path, proj: dict) -> str:
     name = proj.get("name", "")
     if not NAME_OK.match(name):
         raise ValueError("name: 1-64 chars of letters, digits, space, - _ .")
-    proj = {**proj, "meta": clean_meta(proj)}
-    (project_dir(root) / f"{name}.project.json").write_text(json.dumps(proj, ensure_ascii=False, indent=1))
+    path = project_dir(root) / f"{name}.project.json"
+    old = json.loads(path.read_text()) if path.exists() else {}
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    proj = {**proj, "meta": clean_meta(proj), "data_root": str(root), "created": old.get("created", now), "updated": now}
+    path.write_text(json.dumps(proj, ensure_ascii=False, indent=1))
     log.info("save project %s (%d groups)", name, len(proj.get("groups", {})))
     return name
 
@@ -226,7 +246,7 @@ def split_by_lengths(labels, lengths: list[int]) -> list[list]:
     return [np.asarray(labels[a:b]).tolist() for a, b in zip(cuts[:-1], cuts[1:])]
 
 
-def start_job(root: Path, paths: list[str], max_frames: int = 0, seed: int | None = None, clustering: str | None = None, method: str | None = None) -> str:
+def start_job(root: Path, paths: list[str], max_frames: int = 0, seed: int | None = None, clustering: str | None = None, method: str | None = None, params: dict | None = None) -> str:
     """One joint fit over ALL given sessions, so cluster ids mean the same thing in every session. method = cluster.METHODS id; clustering = SUBTLE name fallback."""
     j = {"id": uuid.uuid4().hex[:8], "paths": paths, "stage": "queued", "pct": 0, "t0": time.time(),
          "done": False, "error": None, "log": []}
@@ -238,11 +258,11 @@ def start_job(root: Path, paths: list[str], max_frames: int = 0, seed: int | Non
     method = method or cluster.method_of(model.clustering_of(clustering))
     if method not in cluster.METHODS:
         raise ValueError(f"method must be one of {cluster.METHODS}")
-    threading.Thread(target=_run_job, args=(root, j, max_frames, seed, method), daemon=True).start()
+    threading.Thread(target=_run_job, args=(root, j, max_frames, seed, method, params or {}), daemon=True).start()
     return j["id"]
 
 
-def _run_job(root: Path, j: dict, max_frames: int, seed: int | None, method: str) -> None:
+def _run_job(root: Path, j: dict, max_frames: int, seed: int | None, method: str, params: dict | None = None) -> None:
     try:
         j.update(stage="load", pct=10)
         seqs = []
@@ -253,14 +273,14 @@ def _run_job(root: Path, j: dict, max_frames: int, seed: int | None, method: str
             seqs.append(np.nan_to_num(xyz))  # ponytail: zero-fill; interpolate if NaN share is large
         j.update(stage=f"joint fit on {len(seqs)} sessions ({method})", pct=30)
         import cluster
-        r = cluster.run(method, seqs, {"seed": seed})
+        r = cluster.run(method, seqs, {"seed": seed, **(params or {})})
         clustering = method.split("/", 1)[1] if method.startswith("subtle/") else None  # sidecar: SUBTLE name or None
         j.update(stage="write", pct=90)
         fit_id, lengths = r["fit_id"], r["lengths"]  # same id on every session of this fit; frequency() requires one id per project
         for rel, a, b, e, n in zip(j["paths"], r["sub"] or [None] * len(seqs), r["labels"], r["embedding"] or [None] * len(seqs), lengths):
             _side(safe(root, rel)).write_text(json.dumps(
                 {"subcluster": a, "supercluster": b, "embedding": e, "n_frames": n, "fit_id": fit_id, "seed": seed, "clustering": clustering,
-                 "method": r["method"], "cwt_impl": r["cwt_impl"], "fit_sessions": j["paths"]}))
+                 "method": r["method"], "parameters": params or {}, "cwt_impl": r["cwt_impl"], "fit_sessions": j["paths"], "created": time.strftime("%Y-%m-%d %H:%M:%S")}))
         _CACHE.clear()  # sidecars changed
         j.update(stage="done", pct=100)
         _job_log(j, f"fit {fit_id}: clusters {r['n_clusters']}, frames {sum(lengths)}, {time.time() - j['t0']:.0f}s")

@@ -8,6 +8,8 @@ import logging
 import mimetypes
 import re
 import sys
+import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -25,6 +27,7 @@ import results  # noqa: E402
 import stability  # noqa: E402
 import sweep  # noqa: E402
 import stats  # noqa: E402
+import tutorial  # noqa: E402
 
 HERE = Path(__file__).parent
 LOGBUF: collections.deque = collections.deque(maxlen=300)  # debug panel reads this; bounded, no leak
@@ -36,6 +39,40 @@ class _Buf(logging.Handler):
 
 
 def _routes(root: Path):
+    scan_state = {"done": False, "dirs": 0, "sessions": 0, "videos": 0, "path": ".", "error": None, "items": []}
+    scan_lock = threading.Lock()
+
+    def scan_start():
+        with scan_lock:
+            if scan_state.get("running") or scan_state["done"]:
+                return {"started": False}
+            scan_state["running"] = True
+            scan_state["t0"] = time.monotonic()
+
+        def run():
+            try:
+                def update(s):
+                    with scan_lock:
+                        scan_state.update(s)
+                items = core.scan(root, update)
+                with scan_lock:
+                    scan_state["items"] = items
+            except Exception as e:
+                logging.getLogger("subtle_viewer").exception("session scan")
+                with scan_lock:
+                    scan_state["error"] = f"{type(e).__name__}: {e}"
+            finally:
+                with scan_lock:
+                    scan_state["done"] = True
+                    scan_state["running"] = False
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"started": True}
+
+    def scan_status():
+        with scan_lock:
+            return {**scan_state, "elapsed": round(time.monotonic() - scan_state["t0"], 1) if "t0" in scan_state else 0}
+
     def session(q):
         s = core.load(root, q["path"][0])
         stride = max(1, int(q.get("stride", ["1"])[0]))
@@ -43,7 +80,9 @@ def _routes(root: Path):
         pick = lambda k: None if s[k] is None else s[k][::stride]  # noqa: E731
         return {"nodes": s["nodes"], "edges": s["edges"], "stride": stride, "n": int(len(s["xyz"])),
                 "xyz": [[[round(float(v), 1) for v in j] for j in f] for f in xyz.tolist()],
-                "sub": pick("sub"), "super": pick("super"), "emb": pick("emb"), "fit_id": s["fit_id"]}
+                "sub": pick("sub"), "super": pick("super"), "emb": pick("emb"), "fit_id": s["fit_id"],
+                "model": s["model"], "mapped": s["mapped"], "mapped_at": s["mapped_at"],
+                "method": s["method"], "fit_created": s["fit_created"]}
 
     def kp2d(q):
         s, cam = core.load(root, q["path"][0]), int(q["cam"][0])
@@ -79,6 +118,7 @@ def _routes(root: Path):
     return {
         "camview": lambda q, b: camview(q),
         "stats": lambda q, b: stats.group_stats(root, proj_of(q), q.get("level", ["super"])[0], sl(q), q.get("correct", ["1"])[0] == "1"),
+        "transitions": lambda q, b: stats.transition_summary(root, proj_of(q), q.get("level", ["super"])[0], sl(q)),
         "dek": lambda q, b: dek.group_dek(root, proj_of(q), q.get("level", ["super"])[0], sl(q), q.get("correct", ["1"])[0] == "1"),
         "names": lambda q, b: stats.names_all(root),
         "set_name": lambda q, b: stats.names_set(root, b["key"], b["name"]),
@@ -90,12 +130,17 @@ def _routes(root: Path):
         "export_latest": lambda q, b: {"dir": (core.results_dir(root, q["name"][0]) / "latest.txt").read_text()},
         "models": lambda q, b: model.list_models(root),
         "methods": lambda q, b: {"methods": list(cluster.METHODS), "default": cluster.METHODS[0]},
+        "tutorial_start": lambda q, b: {"job": tutorial.start(root)},
+        "tutorial_status": lambda q, b: tutorial.status(q["id"][0]),
         "train": lambda q, b: {"job": model.start_train(root, b["name"], b["paths"], int(b.get("max_frames", 0)), b.get("seed"), subtle_only(b))},
         "map": lambda q, b: {"job": model.start_map(root, b["name"], b["paths"])},
         "docs": lambda q, b: sorted(p.name for p in docs.glob("subtle_*.md")),
         "doc": lambda q, b: doc(q),
         "kp2d": lambda q, b: kp2d(q),
         "sessions": lambda q, b: core.scan(root),
+        "scan_start": lambda q, b: scan_start(),
+        "scan_status": lambda q, b: scan_status(),
+        "root": lambda q, b: {"path": str(root)},
         "session": lambda q, b: session(q),
         "projects": lambda q, b: core.list_projects(root),
         "project": lambda q, b: core.load_project(root, q["name"][0]),
@@ -103,7 +148,7 @@ def _routes(root: Path):
         "frequency": lambda q, b: core.frequency(root, core.load_project(root, q["name"][0]),
                                                   q.get("level", ["super"])[0],
                                                   int(q["sl"][0]) if "sl" in q else None),
-        "analyze": lambda q, b: {"job": core.start_job(root, b["paths"], int(b.get("max_frames", 0)), b.get("seed"), b.get("clustering"), b.get("method"))},
+        "analyze": lambda q, b: {"job": core.start_job(root, b["paths"], int(b.get("max_frames", 0)), b.get("seed"), b.get("clustering"), b.get("method"), b.get("params"))},
         "job": lambda q, b: {k: v for k, v in core.JOBS[q["id"][0]].items()} | {
             "elapsed": round(__import__("time").time() - core.JOBS[q["id"][0]]["t0"], 1)},
         "log": lambda q, b: list(LOGBUF),
@@ -166,6 +211,9 @@ def make_handler(root: Path):
                     self.wfile.write(data)
                 elif u.path == "/video":
                     self._video(q["path"][0])
+                elif u.path == "/api/shutdown" and self.command == "POST":
+                    self._json({"stopping": True})
+                    threading.Thread(target=self.server.shutdown, daemon=True).start()
                 elif u.path.startswith("/api/") and u.path[5:] in routes:
                     self._json(routes[u.path[5:]](q, body))
                 else:
@@ -195,6 +243,8 @@ def main():
     a = ap.parse_args()
     core.RESULTS_BASE = a.results_dir.resolve()
     root = Path(a.root).expanduser().resolve()
+    if not root.is_dir():
+        ap.error(f"data root is not a directory: {root}")
     h = _Buf()
     h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s", "%H:%M:%S"))
     logging.basicConfig(level=logging.INFO, handlers=[h, logging.StreamHandler()])

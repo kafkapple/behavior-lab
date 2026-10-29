@@ -105,7 +105,7 @@ def _train(root: Path, j: dict, name: str, paths: list[str], max_frames: int, se
     mid = uuid.uuid4().hex[:8]
     for rel, a, b, e, n in zip(paths, core.split_by_lengths(sub, lengths), core.split_by_lengths(sup, lengths),
                                core.split_by_lengths(np.round(emb, 3), lengths), lengths):
-        _write(root, rel, {"subcluster": a, "supercluster": b, "embedding": e}, {"n_frames": n, "fit_id": mid, "seed": seed, "clustering": clustering, "cwt_impl": CWT_IMPL, "model": name})
+        _write(root, rel, {"subcluster": a, "supercluster": b, "embedding": e}, {"n_frames": n, "fit_id": mid, "seed": seed, "clustering": clustering, "cwt_impl": CWT_IMPL, "model": name, "created": time.strftime("%Y-%m-%d %H:%M:%S")})
     levels = [len(np.unique(sup[:, k])) for k in range(sup.shape[1])] if sup.ndim == 2 else [len(np.unique(sup))]
     (d / "model.json").write_text(json.dumps({"id": mid, "name": name, "seed": seed, "clustering": clustering, "cwt_impl": CWT_IMPL, "train_paths": paths, "frames": lengths,
         "max_frames": max_frames, "n_sub": int(len(np.unique(sub))), "levels": levels, "created": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=1))
@@ -121,6 +121,7 @@ def start_map(root: Path, name: str, paths: list[str]) -> str:
 def _map(root: Path, j: dict, name: str, paths: list[str]) -> None:
     d = mdir(root, name)
     meta = json.loads((d / "model.json").read_text())
+    mapped_at = time.strftime("%Y-%m-%d %H:%M:%S")
     for i, rel in enumerate(paths):
         j.update(stage=f"map {i + 1}/{len(paths)}: {rel}", pct=5 + int(90 * i / len(paths)))
         before = core.load(root, rel)
@@ -133,10 +134,12 @@ def _map(root: Path, j: dict, name: str, paths: list[str]) -> None:
         sub = np.asarray(r["subclusters"])
         _write(root, rel, {"subcluster": sub.tolist(), "supercluster": np.asarray(r["superclusters"]).tolist(),
                            "embedding": np.round(r["embeddings"], 3).tolist()},
-               {"n_frames": len(sub), "fit_id": meta["id"], "seed": meta["seed"], "clustering": meta.get("clustering"), "cwt_impl": meta.get("cwt_impl"), "model": name, "mapped": True})
+               {"n_frames": len(sub), "fit_id": meta["id"], "seed": meta["seed"], "clustering": meta.get("clustering"), "cwt_impl": meta.get("cwt_impl"), "model": name, "mapped": True, "mapped_at": mapped_at})
         if old is not None:
             n = min(len(old), len(sub))
             core._job_log(j, f"{rel}: mapped labels equal training labels on {100 * float((np.asarray(old)[:n] == sub[:n]).mean()):.1f}% of the {n} trained frames")
         core._CACHE.clear()
+    meta.setdefault("maps", []).append({"at": mapped_at, "paths": paths})
+    (d / "model.json").write_text(json.dumps(meta, indent=1))
     j.update(stage="done", pct=100)
     core._job_log(j, f"mapped {len(paths)} sessions with {name}, {time.time() - j['t0']:.0f}s")

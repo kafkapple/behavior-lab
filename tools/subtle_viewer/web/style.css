@@ -8,6 +8,13 @@ a{color:var(--acc)}
 #wrap{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100vh}
 button,select,input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
 button{cursor:pointer}button:hover,button.on{border-color:var(--acc);color:var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+.action-group{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:7px 0}
+.action-primary{background:var(--acc);border-color:var(--acc);color:#071016;font-weight:600}
+.action-primary:hover{filter:brightness(1.12);color:#071016}
+.action-danger{color:var(--bad);border-color:var(--bad)}
+.action-danger:hover{background:var(--bad);color:#101318}
+.method-guide{border:1px solid var(--line);border-radius:6px;padding:5px 7px;margin:8px 0}.method-guide summary{cursor:pointer}.method-guide table{margin-top:6px;font-size:var(--fs-m)}
 .mut{color:var(--mut);font-size:var(--fs-m)}.ok{color:var(--ok)}.bad{color:var(--bad)}
 /* toolbar: four labelled groups, one place per control */
 #top{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
@@ -17,9 +24,17 @@ button{cursor:pointer}button:hover,button.on{border-color:var(--acc);color:var(-
 #toast{margin-left:auto}
 /* three columns: sessions | stage | project; panels collapse below 1100px */
 #main{display:grid;grid-template-columns:200px minmax(0,1fr) 320px;min-height:0}
-@media(max-width:1100px){#main{grid-template-columns:minmax(0,1fr)}#left,#right{display:none}}
+@media(max-width:1100px){#main{grid-template-columns:160px minmax(0,1fr) 285px}}
 #left,#right{background:var(--panel);overflow:auto;padding:8px;min-height:0}
 #left{border-right:1px solid var(--line)}#right{border-left:1px solid var(--line);display:flex;flex-direction:column}
+#left details{border:1px solid var(--line);border-radius:6px;margin:5px 0;padding:5px}
+#left summary{cursor:pointer;font-weight:600}
+#left details>button{display:block;width:100%;text-align:left;margin:5px 0}
+#left details>button.on{background:var(--bg)}
+#left details>button.action-danger{margin-top:12px}
+#dataroot{overflow-wrap:anywhere;margin:6px 0}#projsaved{margin-top:8px}
+.needs-save{outline:3px solid #ff9f0a;outline-offset:2px;animation:attention 1s ease-in-out 2}
+@keyframes attention{50%{box-shadow:0 0 0 7px #ff9f0a44}}
 h3{margin:0 0 6px;font-size:var(--fs-m);color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
 .sess{padding:4px 6px;border-radius:6px;cursor:pointer;word-break:break-all}.sess:hover,.sess.on{outline:1px solid var(--acc)}
 /* stage: video (tall) | skeleton over map; every pane fills its cell */
@@ -27,6 +42,8 @@ h3{margin:0 0 6px;font-size:var(--fs-m);color:var(--mut);text-transform:uppercas
 .pane{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--bg);overflow:hidden;min-width:0;min-height:0}
 .pane>header{position:absolute;left:0;right:0;top:0;z-index:2;display:flex;gap:8px;align-items:center;padding:3px 8px;background:#0008;font-size:var(--fs-m);color:var(--mut);pointer-events:none}
 .pane>header *{pointer-events:auto}
+#pvideo>header{flex-wrap:wrap;align-content:flex-start}
+#pvideo>header button{background:#111a;border-color:#ffffff55;color:#e8eaf0}
 .pane canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 #pvideo{grid-area:video}#pskel{grid-area:skel}#pmap{grid-area:map}
 #vtiles{position:absolute;inset:0;display:grid;gap:2px;grid-template-columns:1fr}
@@ -42,6 +59,7 @@ body.hide #left,body.hide #right{display:none}body.hide #main{grid-template-colu
 .dots i{position:absolute;top:2px;width:8px;height:8px;border-radius:50%;margin-left:-4px}
 #vnone{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut)}
 @media(max-width:700px){#stage{grid-template-columns:1fr;grid-template-rows:repeat(3,minmax(220px,1fr));grid-template-areas:"video" "skel" "map"}}
+@media(max-width:700px){#main{display:flex;flex-direction:column;overflow:auto}#left,#right{display:block;flex:none;max-height:260px}#stage{min-height:720px}}
 /* dock: playback, timeline, legend */
 #dock{padding:6px 10px;background:var(--panel);border-top:1px solid var(--line)}
 #dock .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:3px 0}
@@ -49,11 +67,17 @@ body.hide #left,body.hide #right{display:none}body.hide #main{grid-template-colu
 .chip{display:inline-block;border:2px solid;border-radius:12px;padding:0 8px;margin:1px 2px;cursor:pointer;opacity:.6;font-size:var(--fs-m)}
 .chip.on{background:var(--bg);font-weight:600;opacity:1}
 /* right panel tabs */
-#tabs{display:flex;gap:4px;margin-bottom:8px}#tabs button{flex:1}.tabpage{display:none;min-height:0;overflow:auto;flex:1}.tabpage.on{display:block}
+#tabs{display:none}.tabpage{display:none;min-height:0;overflow:auto;flex:1}.tabpage.on{display:block}
 table{border-collapse:collapse;width:100%}td,th{padding:2px 4px;text-align:left;border-bottom:1px solid var(--line)}
 pre{margin:0;font:var(--fs-s)/1.4 ui-monospace,monospace;white-space:pre-wrap}
 progress{width:100%;height:8px}
-#docview{display:none;position:fixed;inset:5% 10%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto;z-index:10;box-shadow:0 8px 40px #0008}
+#scanprogress{padding:6px;margin-bottom:8px;border:1px solid var(--line);border-radius:6px;overflow-wrap:anywhere}
+#scanprogress progress{height:8px}
+#docnav{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 10px}
+#docnav button{white-space:normal;text-align:left}
+#doctext{min-width:0;overflow-wrap:anywhere}
+#doctext pre{overflow:auto}
+.transition-matrix{overflow:auto;margin:8px 0}.transition-matrix table{width:auto;min-width:100%;font-variant-numeric:tabular-nums}.transition-matrix td{text-align:right;min-width:38px}
 #doctext h1,#doctext h2,#doctext h3{margin:.8em 0 .3em;text-transform:none;color:var(--fg);font-size:var(--fs-xl)}
 #doctext code{background:var(--panel);padding:0 4px;border-radius:4px}#doctext pre{background:var(--panel);padding:8px;border-radius:6px}
 

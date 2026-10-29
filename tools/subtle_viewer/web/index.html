@@ -7,40 +7,59 @@
   <div class="grp"><span class="glabel">Clusters</span>
     <select id="lvl" title="cluster level"><option value="super">super</option><option value="sub">sub</option></select>
     <select id="sl" title="supercluster level = number of clusters (DIB solution), see subtle_theory"></select></div>
-  <div class="grp"><span class="glabel">Fit</span>
-    <label class="mut">frames/session <input id="mf" type="number" value="3000" style="width:64px" title="0 = all"></label>
-    <label class="mut">seed <input id="seed" type="number" value="0" style="width:50px" title="0 = reproducible; empty = random (PCA consensus uses 0)"></label><label class="mut" title="list from /api/methods; Train and Seed stability run SUBTLE only; UMAP is always computed for the map">clustering <select id="clu"></select></label>
-    <button id="an" title="one joint fit (chosen method) on every session of the project, so cluster ids are comparable">Run clustering on project</button></div>
-  <div class="grp"><span class="glabel">Help</span><span id="docs"></span></div>
   <span id="toast" class="mut"></span>
 </div>
 <div id="main">
-  <aside id="left"><h3>Sessions</h3><div id="list" class="mut">loading…</div></aside>
+  <aside id="left"><h3>Workflow</h3>
+    <details open><summary>1 · Data &amp; project</summary><button data-go="proj">Set up project</button><div id="scanprogress" role="status" aria-live="polite"><progress></progress><div id="scanmsg" class="mut">Starting session scan…</div></div><div id="list" class="mut"></div></details>
+    <details><summary>2 · Keypoints</summary><button data-go="tut">Video tutorial</button><button data-go="qual">Check 3D quality</button></details>
+    <details><summary>3 · Discover &amp; map</summary><button data-go="an">Choose method / Train / Map</button><button data-go="clu">Inspect clusters</button></details>
+    <details><summary>4 · Compare</summary><button data-go="freq">Frequency</button><button data-go="trans">Transitions</button><button data-go="stat">Group statistics</button><button data-go="dek">DEK</button></details>
+    <details><summary>5 · Reference</summary><button data-go="help">Help &amp; theory</button><button data-go="log">Job log</button><button id="shutdown" class="action-danger">Stop server</button></details></aside>
   <section id="stage">
-    <div class="pane" id="pvideo"><header><span id="vtitle">video + 2D keypoints</span><span class="mut">keys 1-5 camera · 0 all · k keypoints</span>
-      <select id="camsel"></select><span id="vwarn" class="bad"></span></header>
+    <div class="pane" id="pvideo"><header><span id="vtitle">video + 2D keypoints</span><button id="allcam" type="button" title="show all available cameras (0)">▦ All cameras</button><button id="confbtn" type="button" title="show point confidence as percent">Conf %</button>
+      <select id="camsel" title="one camera (1–5)"></select><span id="vwarn" class="bad"></span></header>
       <div id="vnone">no per-camera video for this session</div><div id="vtiles" data-n="1"></div></div>
     <div class="pane" id="pskel"><header>3D skeleton · wheel zoom · drag rotate · shift/right-drag pan · double-click reset</header><canvas id="cv"></canvas></div>
     <div class="pane" id="pmap"><header>cluster map · wheel zoom · drag pan · click = jump<label class="mut" style="margin-left:auto" title="as in the Justin app: the current frame and the next N-1 frames as linked dots">trace <select id="trace"><option>1</option><option>2</option><option>4</option><option>10</option></select></label></header><canvas id="mp"></canvas></div>
   </section>
   <aside id="right">
-    <div id="tabs"><button data-t="clu" class="on">Clusters</button><button data-t="proj">Project</button><button data-t="freq">Frequency</button><button data-t="stat">Stats</button><button data-t="dek">DEK</button><button data-t="qual">Quality</button><button data-t="log">Log</button></div>
-    <div class="tabpage on" id="t_clu"><div id="legend"></div></div>
-    <div class="tabpage" id="t_proj">
-      <div style="display:flex;gap:6px;margin-bottom:6px"><input id="pn" placeholder="project name" style="flex:1;min-width:0"><button id="ps">Save</button></div>
+    <h3 id="paneltitle">Project</h3><div id="tabs"><button data-t="proj" class="on">Project</button><button data-t="tut">Video tutorial</button><button data-t="an">Discover &amp; map</button><button data-t="clu">Clusters</button><button data-t="freq">Frequency</button><button data-t="trans">Transitions</button><button data-t="stat">Stats</button><button data-t="dek">DEK</button><button data-t="qual">Quality</button><button data-t="help">Help</button><button data-t="log">Log</button></div>
+    <div class="tabpage" id="t_clu"><div class="mut">IDs are arbitrary within each fit; names are saved per fit and level.</div><div id="legend"></div></div>
+    <div class="tabpage on" id="t_proj"><div class="mut">1. Set a name. 2. Open sessions on the left and add each to a group. 3. Save before comparing.</div><div class="mut" id="dataroot"></div>
+      <div class="action-group"><input id="pn" placeholder="project name" style="flex:1;min-width:0"><button id="ps" class="action-primary">Save project</button></div>
       <div style="display:flex;gap:6px;margin-bottom:6px"><select id="pl" style="flex:1;min-width:0"></select><button id="pld">Load</button></div>
       <div style="display:flex;gap:6px;margin-bottom:6px"><input id="gn" placeholder="group name" style="flex:1;min-width:0"><button id="ga" title="add the open session to this group">+ add open session</button></div>
       <textarea id="pdesc" rows="2" placeholder="project description (design, cohort, dosing)" style="width:100%;margin-bottom:6px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px"></textarea>
-      <div id="groups"></div>
-      <h3 style="margin-top:10px">Model</h3><div style="display:flex;gap:6px;margin-bottom:6px"><input id="mn" placeholder="model name" style="flex:1;min-width:0"><button id="mt" title="train on all project sessions and save">Train</button></div>
-      <div style="display:flex;gap:6px;margin-bottom:6px"><select id="ml" style="flex:1;min-width:0"></select><button id="mm" title="label every frame of all project sessions with this model">Map</button></div><div id="job" class="mut" style="margin-top:8px"></div><progress id="pg" value="0" max="100" style="display:none"></progress></div>
+      <div id="groups"></div><div id="projsaved" class="mut">Project not saved</div></div>
+    <div class="tabpage" id="t_tut"><p>Start with a real 300-frame CORT video clip. On this Mac, eren runs the verified SLEAP 1423 checkpoint and AVATAR triangulation; the resulting video, five camera views, keypoints and 3D skeleton are saved under this data root.</p>
+      <div class="action-group"><button id="tstart" class="action-primary">1 · Predict keypoints from video</button></div><progress id="tpg" value="0" max="100" style="display:none"></progress><div id="tutorial" class="mut"></div>
+      <p>2 · Open <code>tutorial/cort1_toy.json.gz</code> in Sessions. Check the video overlay, Conf %, and 3D pose. This is a small workflow exercise, not a cohort result.</p>
+      <p>3 · Add the toy session to a project, Save, then open Discover &amp; map. Explore clusters or Train &amp; save a SUBTLE model. Map applies the saved model to project sessions; inspect the cluster map, Transitions, and group statistics. Statistical group comparison needs independent animals in at least two verified groups.</p>
+      <div class="action-group"><button data-go="proj">Project setup →</button><button data-go="an">Discover &amp; map →</button><button data-go="trans">Transitions →</button><button data-go="stat">Group statistics →</button></div>
+      <p class="mut">A short clip may not contain enough diverse behavior for DIB. For meaningful mapping and group comparisons, use the eight CORT sessions or verified G3 recordings. The Mac runs the viewer and uv environment; GPU inference uses eren over SSH.</p></div>
+    <div class="tabpage" id="t_an"><p class="mut">Explore clusters fits the selected project once and writes labels. Train saves a reusable SUBTLE model; Map applies it to every frame of the current project sessions.</p>
+      <label>Method <select id="clu"></select></label><div id="methodopts"></div>
+      <details class="method-guide"><summary>Compare discovery methods</summary><table><tr><th>Method</th><th>What it labels</th><th>Settings here</th></tr>
+        <tr><td>SUBTLE</td><td>fine subclusters + DIB hierarchy</td><td>seed, frames, clustering path</td></tr>
+        <tr><td>B-SOiD</td><td>10 fps bins; -1 = noise</td><td>UMAP neighbors, HDBSCAN min size</td></tr>
+        <tr><td>Keypoint-MoSeq</td><td>temporal syllables</td><td>Separate uv environment; this viewer does not run its fit yet</td></tr></table>
+        <p class="mut">These methods produce different label spaces. Compare bout structure, transition patterns and label agreement on the same sessions; cluster numbers alone do not rank methods.</p></details>
+      <div class="row"><label>frames/session <input id="mf" type="number" min="0" value="3000" style="width:68px" title="0 = all"></label><label>seed <input id="seed" type="number" value="0" style="width:60px" title="empty = random"></label></div>
+      <div class="action-group"><button id="an" title="joint fit; no reusable model saved">Explore clusters</button></div>
+      <h3 style="margin-top:12px">Saved SUBTLE model</h3><div class="action-group"><input id="mn" placeholder="model name" style="flex:1;min-width:0"><button id="mt" class="action-primary" title="train on project sessions and save model">Train &amp; save</button></div>
+      <div style="display:flex;gap:6px;margin-bottom:6px"><select id="ml" style="flex:1;min-width:0"></select><button id="mm" title="apply saved model to all frames of current project sessions">Map new sessions</button></div><div id="modelinfo" class="mut"></div>
+      <div id="job" class="mut" style="margin-top:8px"></div><progress id="pg" value="0" max="100" style="display:none"></progress></div>
     <div class="tabpage" id="t_freq"><div>Σ check <span id="sumbadge"></span></div><div id="freq" class="mut">save a project with groups first</div></div>
-    <div class="tabpage" id="t_stat"><div style="display:flex;gap:6px;margin-bottom:6px"><button id="stgo">Compare groups</button><label class="mut"><input type="checkbox" id="stbh" checked style="width:auto"> BH correction</label><button id="stcsv">CSV</button><button id="stpng">PNG</button><select id="swcrit" title="how to rank the levels; each criterion is judged against its own permutation null, so choosing the best level is corrected"><option value="omnibus">omnibus (pseudo-F)</option><option value="maxt">max |t|</option><option value="nsig">n clusters p&lt;.05</option><option value="meanp">mean p</option></select><label class="mut" title="sensitivity: leave frames with a copied 3D node out of every share"><input type="checkbox" id="swexcl" style="width:auto"> excl. copied</label><input id="swdrop" placeholder="drop e.g. veh4,veh5" style="width:120px" title="sensitivity: leave these animals out"><button id="swgo" title="sweep every supercluster level, correct for choosing the best one, recommend n">Sweep n</button><button id="swexp" title="save csv, json, figure and video clips of the flagged clusters">Export results</button><button id="stab" title="refit with seeds 0, 1, 2 and compare (about 100 s per seed for 8 animals)">Seed stability</button></div><div id="sweepres"></div><div id="stabres"></div><div id="stat" class="mut">save a project with two or more groups, then press Compare groups</div></div>
+    <div class="tabpage" id="t_trans"><button id="trgo">Compute transitions</button><div id="trans" class="mut">Save a project and label its sessions first.</div></div>
+    <div class="tabpage" id="t_stat"><h3>Group comparison</h3><div class="action-group"><button id="stgo" class="action-primary">Compare groups</button><label class="mut"><input type="checkbox" id="stbh" checked style="width:auto"> BH correction</label><button id="stcsv">CSV</button><button id="stpng">PNG</button></div>
+      <h3>Level sensitivity</h3><div class="action-group"><select id="swcrit" title="rank levels against their own permutation null"><option value="omnibus">omnibus (pseudo-F)</option><option value="maxt">max |t|</option><option value="nsig">n clusters p&lt;.05</option><option value="meanp">mean p</option></select><label class="mut" title="leave frames with a copied 3D node out of every share"><input type="checkbox" id="swexcl" style="width:auto"> excl. copied</label><input id="swdrop" placeholder="drop e.g. veh4,veh5" style="width:120px" title="leave these animals out"><button id="swgo" title="sweep every supercluster level with selection correction">Sweep n</button><button id="stab" title="refit with seeds 0, 1, 2">Seed stability</button><button id="swexp" title="save csv, json, figure and video clips">Export results</button></div><div id="sweepres"></div><div id="stabres"></div><div id="stat" class="mut">save a project with two or more groups, then press Compare groups</div></div>
     <div class="tabpage" id="t_dek"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"><button id="dkgo" title="kinematic features per animal and cluster, group A vs B">Compute DEK</button>
       <select id="dktype"><option value="V">vertex speed</option><option value="E">edge</option><option value="A">angle</option></select>
       <select id="dkn"><option value="0">n=0 value</option><option value="1" selected>n=1 1st derivative</option><option value="2">n=2 2nd derivative</option></select>
       <select id="dkpair"></select><button id="dkcsv">CSV</button><button id="dkpng">PNG</button></div><div id="dek" class="mut">save a project with two or more groups, then press Compute DEK</div></div>
     <div class="tabpage" id="t_qual"><div style="margin-bottom:6px"><button id="qgo" title="label-free consistency checks of the 3D skeleton per session; no ground truth exists yet">Compute quality</button></div><div id="qual" class="mut">no ground truth yet: these are consistency checks, not accuracy</div></div>
+    <div class="tabpage" id="t_help"><nav id="docnav" aria-label="Help modules"></nav><article id="doctext"></article></div>
     <div class="tabpage" id="t_log"><pre id="log"></pre></div>
   </aside>
 </div>
@@ -51,6 +70,5 @@
   <div id="keys" class="mut">Space play · ←/→ 1 · ↑/↓ 10 · , . 1 · +/- zoom · Enter reset view · 1-5 camera · 0 all cameras · k keypoints · l clusters · h hide panels · ? manuals · Esc clear filter</div>
 </div>
 </div>
-<div id="docview"><button id="docx" style="float:right">close</button><div id="doctext"></div></div>
 <script type="module" src="/web/js/main.js"></script>
 </body></html>

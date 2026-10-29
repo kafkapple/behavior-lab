@@ -13,12 +13,19 @@ export const toast = m => { $('toast').textContent = m; setTimeout(() => $('toas
 
 // ---- labels: the chosen cluster level as one id per frame (st.S.L)
 export function fillLevels() {
-  const raw = st.S && st.S.super, sel = $('sl');
+  const raw = st.S && st.S.super, sel = $('sl'), level = $('lvl');
+  if (st.S) {
+    const previous = level.value;
+    level.innerHTML = [['super', raw && Array.isArray(raw[0]) ? 'DIB hierarchy' : 'Clusters'], ['sub', 'Fine clusters']]
+      .filter(([key]) => st.S[key]?.length).map(([key, name]) => `<option value="${key}">${name}</option>`).join('');
+    level.value = [...level.options].some(o => o.value === previous) ? previous : level.options[0]?.value || '';
+  }
   if ($('lvl').value !== 'super' || !raw || !raw.length || !Array.isArray(raw[0])) { sel.style.display = 'none'; return; }
   const nl = raw[0].length, cnt = [...Array(nl)].map((_, j) => new Set(raw.map(r => r[j])).size);
+  const previousLevel = sel.value;
   sel.style.display = '';
   sel.innerHTML = cnt.map((n, j) => `<option value="${j}">L${j}: ${n} clusters</option>`).join('');
-  sel.value = cnt.indexOf(Math.max(...cnt));                      // wrapper default: the level with the most clusters
+  sel.value = [...sel.options].some(o => o.value === previousLevel) ? previousLevel : cnt.indexOf(Math.max(...cnt));
 }
 export function relabel() {
   const S = st.S; if (!S) return;

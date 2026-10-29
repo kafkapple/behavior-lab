@@ -41,7 +41,23 @@ await send('Runtime.enable'); await send('Page.enable');
 await send('Page.navigate', {url: base});
 await until(`!!${$('fi')} && ${$('fi')}.textContent.includes('/')`);
 
-if (mode === 'keys') {
+if (mode === 'smoke') {
+  check('session opens', await until(`+${$('fr')}.max > 0`, 30000));
+  check('workflow menu and tutorial', await js(`!!document.querySelector('#left [data-go="tut"]') && !!${$('tstart')}`));
+  await js(`document.querySelector('#left [data-go="help"]').click()`);
+  check('Help opens on right', await js(`${$('t_help')}.classList.contains('on')`));
+  await until(`document.querySelectorAll('#docnav button').length > 0`);
+  await js(`document.querySelector('#docnav [data-d="subtle_transition_dib_tpi_survey.md"]').click()`);
+  check('source survey opens in Help', await until(`${$('doctext')}.textContent.includes('DIB (Deterministic')`));
+  await js(`${$('confbtn')}.click()`); check('confidence toggle active', await js(`${$('confbtn')}.getAttribute('aria-pressed') === 'true'`));
+  await js(`${$('allcam')}.click()`); check('All cameras button shows five', await until(`document.querySelectorAll('.tile').length === 5`));
+  const f0 = await frame(); await js(`${$('play')}.click()`); await sleep(1200);
+  check('multi-camera playback advances', await frame() !== f0, `(frame ${f0} -> ${await frame()})`);
+  await js(`${$('camsel')}.value = '2'; ${$('camsel')}.dispatchEvent(new Event('change'))`); await sleep(1200);
+  check('camera change keeps playback running', await js(`${$('play')}.textContent === '⏸' && document.querySelectorAll('.tile').length === 1`));
+  await js(`${$('play')}.click()`);
+  await js(`${$('shutdown')}.click()`); check('Stop server responds', await until(`${$('toast')}.textContent.includes('Server stopped')`, 5000));
+} else if (mode === 'keys') {
   await until(`document.querySelectorAll('.lrow').length > 0`);
   const f0 = await frame(); check('session opened at frame 600', f0 === 600, `(fi=${f0})`);
   await key('ArrowRight'); check('ArrowRight = +1', await frame() === f0 + 1);

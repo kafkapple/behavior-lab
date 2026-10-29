@@ -3,6 +3,7 @@
 What each SUBTLE stage does, where randomness enters, and how to read cluster levels.
 - Code facts: the read-only copy under `~/dev/external/subtle_ref/SUBTLE_storage/engine/subtle/`.
 - Stage input and output: `subtle_pipeline_io.md`. Viewer use: `subtle_viewer_manual.md`.
+- Focused source survey and transition-matrix definitions: [transitions, DIB, and TPI](subtle_transition_dib_tpi_survey.md).
 
 ## 1. Four steps of one SUBTLE fit
 - Input: 3D skeleton per frame (11 joints x 3), centered by the global mean (`avatar_preprocess`).

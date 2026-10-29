@@ -33,7 +33,11 @@ def _subtle(sessions: list[np.ndarray], params: dict, clustering: str) -> dict:
 
 def _bsoid(sessions: list[np.ndarray], params: dict) -> dict:
     """BSOiD.fit on the list (features never span two sessions), then 10 fps bins -> frames per session (rule in the module docstring)."""
-    res = BSOiD(fps=FPS, random_state=params.get("seed")).fit(list(sessions))
+    neighbors = int(params.get("n_neighbors", 60))
+    minimum = int(params.get("min_cluster_size", 30))
+    if not 3 <= neighbors <= 500 or not 2 <= minimum <= 10_000:
+        raise ValueError("B-SOiD parameters out of range")
+    res = BSOiD(fps=FPS, random_state=params.get("seed"), n_neighbors=neighbors, min_cluster_size=minimum).fit(list(sessions))
     bin_size, labels, emb, i = max(1, FPS // 10), [], [], 0
     for s, nb in zip(sessions, res["segment_bins"]):
         lab, e, i = res["labels"][i:i + nb], res["embedding_2d"][i:i + nb], i + nb

@@ -55,6 +55,7 @@ moseq = [
 ]
 moseq-fallback = ["hmmlearn>=0.3"]
 subtle = ["subtle"]
+subtle-viewer = ["subtle", "umap-learn>=0.5", "hdbscan>=0.8", "opencv-python-headless>=4.8"]
 vame = ["vame-py>=0.14; python_version >= '3.12'"]
 # pyskl removed from extras (261001): not on PyPI, git source pins mmcv-full 1.5.0 which does not build; install separately if needed
 # Benchmark

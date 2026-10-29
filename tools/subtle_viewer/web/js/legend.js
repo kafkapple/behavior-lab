@@ -9,7 +9,7 @@ export function legend() {
   const el = $('legend'), S = st.S, L = S && S.L; if (!L) { el.innerHTML = '<span class="mut">no cluster labels: run SUBTLE (Project tab)</span>'; return; }
   const c = new Map(); for (const v of L) c.set(v, (c.get(v) || 0) + 1); const n = L.length;
   const lv = $('lvl').value === 'super' && $('sl').style.display === '' ? ` · ${$('sl').selectedOptions[0].textContent}` : '';
-  el.innerHTML = `<div class="mut">${$('lvl').value}${lv} · fit ${S.fit_id || 'none (ids are not comparable)'}${S.fit_id ? '' : ''}</div>` +
+  el.innerHTML = `<div class="mut">${$('lvl').value}${lv} · fit ${S.fit_id || 'none (ids are not comparable)'} · ${S.method || 'source labels'}${S.model ? ' · model ' + S.model : ''}${S.mapped ? ' · mapped ' + S.mapped_at : S.fit_created ? ' · fit ' + S.fit_created : ''}</div>` +
     `<div style="margin:4px 0"><button id="fall">all</button> <button id="fnone">none</button> <button id="fnext" title="jump to the next run of the selected clusters">⏭ next bout</button> <span class="mut">${st.F.size ? st.F.size + ' selected: replay skips the rest' : 'click = filter · double-click = solo'}</span></div>` +
     [...c.entries()].sort((a, b) => a[0] - b[0]).map(([id, k]) =>
       `<div class="lrow${st.F.has(id) ? ' on' : ''}" data-id="${id}"><span style="color:${color(id)};font-size:14px">■</span><b>${id}${mark(id)}</b>` +

@@ -5,8 +5,20 @@ import {statsPng, dekPng} from './export.js';
 
 // clustering methods come from the server (cluster.METHODS); Train and Seed stability take SUBTLE only, the server says so
 const MNAME = {'subtle/umap_phenograph': 'UMAP + Phenograph (original SUBTLE, default)', 'subtle/pca_consensus': 'PCA consensus', 'bsoid/umap_hdbscan': 'B-SOiD (UMAP + HDBSCAN, 10 fps bins, -1 = noise)'};
-api('methods').then(M => { $('clu').innerHTML = M.methods.map(m => `<option value="${m}">${MNAME[m] || m}</option>`).join(''); $('clu').value = M.default; }).catch(e => toast(e.message));
-const cluArgs = () => { const m = $('clu').value; return m.startsWith('subtle/') ? {method: m, clustering: m.split('/')[1]} : {method: m}; };
+api('methods').then(M => { $('clu').innerHTML = M.methods.map(m => `<option value="${m}">${MNAME[m] || m}</option>`).join(''); $('clu').value = M.default; $('clu').onchange(); }).catch(e => toast(e.message));
+$('clu').onchange = () => { $('methodopts').innerHTML = $('clu').value.startsWith('bsoid/') ?
+  '<label>UMAP neighbors <input id="bneighbors" type="number" min="3" max="500" value="60" style="width:65px"></label> <label>HDBSCAN min cluster size <input id="bmin" type="number" min="2" max="10000" value="30" style="width:68px"></label>' :
+  '<div class="mut">SUBTLE: CWT → PCA → UMAP/Phenograph → optional DIB levels. Seed and frames are set below.</div>'; };
+const cluArgs = () => { const m = $('clu').value; return m.startsWith('subtle/') ? {method: m, clustering: m.split('/')[1]} :
+  {method: m, params: {n_neighbors: +$('bneighbors').value, min_cluster_size: +$('bmin').value}}; };
+export function requireProject() {
+  if (st.proj.name) return true;
+  document.querySelector('#tabs button[data-t="proj"]').click();
+  document.querySelector('[data-go="proj"]').closest('details').open = true;
+  $('ps').classList.add('needs-save'); $('pn').focus(); $('pn').scrollIntoView({block: 'center'});
+  toast('Name and Save the project here, then retry.');
+  return false;
+}
 export async function refreshProjects() { $('pl').innerHTML = (await api('projects')).map(n => `<option>${n}</option>`).join(''); }
 // meta (PRD R6): st.proj.meta = {description, group_notes: {group: text}, sessions: {path: {animal, condition, date}}}; the server cleans it on save
 const M = () => (st.proj.meta = Object.assign({description: '', group_notes: {}, sessions: {}}, st.proj.meta));
@@ -24,8 +36,9 @@ export function renderGroups() {
 $('pdesc').oninput = () => { M().description = $('pdesc').value; };
 $('ga').onclick = () => { const n = $('gn').value.trim(); if (!n || !st.cur) return toast('group name + open session needed');
   const g = (st.proj.groups[n] ??= []); if (!g.includes(st.cur.path)) g.push(st.cur.path); renderGroups(); freq(); };
-$('ps').onclick = async () => { st.proj.name = $('pn').value.trim(); try { await api('save_project', st.proj); toast('saved ' + st.proj.name); refreshProjects(); } catch (e) { toast(e.message); } };
-$('pld').onclick = async () => { st.proj = await api('project?name=' + encodeURIComponent($('pl').value)); $('pn').value = st.proj.name; renderGroups(); freq(); };
+$('pn').oninput = () => { $('projsaved').textContent = 'Unsaved project name'; };
+$('ps').onclick = async () => { const name = $('pn').value.trim(); try { await api('save_project', {...st.proj, name}); st.proj.name = name; $('ps').classList.remove('needs-save'); $('projsaved').textContent = `Saved: ${name}`; toast('saved ' + name); refreshProjects(); } catch (e) { toast(e.message); } };
+$('pld').onclick = async () => { st.proj = await api('project?name=' + encodeURIComponent($('pl').value)); $('pn').value = st.proj.name; $('projsaved').textContent = `Loaded: ${st.proj.name} · last saved ${st.proj.updated || 'unknown'}`; renderGroups(); freq(); };
 
 export async function freq() {
   const p = st.proj; if (!p.name && !Object.keys(p.groups).length) return;
@@ -43,7 +56,7 @@ export async function freq() {
 $('an').onclick = async () => {
   const paths = [...new Set(Object.values(st.proj.groups).flat())];
   if (!paths.length) return toast('add sessions to groups first (the fit covers all project sessions)');
-  const sd = $('seed').value; const {job} = await api('analyze', {paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd, method: $('clu').value}); poll(job);
+  const sd = $('seed').value; const {job} = await api('analyze', {paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd, ...cluArgs()}); poll(job);
 };
 async function poll(id, done) {
   const j = await api('job?id=' + id); $('pg').style.display = 'block'; $('pg').value = j.pct;
@@ -56,8 +69,13 @@ on('labels', freq);
 
 // ---- models: train once on the project sessions, save, then map any session (all frames) with the saved model
 const projPaths = () => [...new Set(Object.values(st.proj.groups).flat())];
-async function refreshModels() { try { $('ml').innerHTML = (await api('models')).map(m => `<option value="${m.name}">${m.name} · ${m.n_sub} sub · ${m.id}</option>`).join(''); } catch (e) { /* none yet */ } }
+let models = [];
+async function refreshModels() { try { models = await api('models'); $('ml').innerHTML = models.map(m => `<option value="${m.name}">${m.name} · ${m.n_sub} sub · ${m.id}</option>`).join(''); showModel(); } catch (e) { $('modelinfo').textContent = e.message; } }
+function showModel() { const m = models.find(x => x.name === $('ml').value); $('modelinfo').textContent = m ?
+  `Fit ${m.id} · ${m.created} · seed ${m.seed} · trained on ${m.train_paths.length} sessions (${m.train_paths.join(', ')}) · ${m.frames.join(', ')} frames${m.maps?.length ? ' · last mapped ' + m.maps.at(-1).at + ': ' + m.maps.at(-1).paths.join(', ') : ''}` : 'No saved model in this data root.'; }
+$('ml').onchange = showModel;
 $('mt').onclick = async () => { const name = $('mn').value.trim(), paths = projPaths(); if (!name || !paths.length) return toast('model name + project sessions needed');
+  if (!$('clu').value.startsWith('subtle/')) return toast('Train & save supports SUBTLE methods; use Explore clusters for B-SOiD.');
   const sd = $('seed').value; const r = await api('train', {name, paths, max_frames: +$('mf').value, seed: sd === '' ? null : +sd, ...cluArgs()}).catch(e => toast(e.message)); if (r) poll(r.job); };
 $('mm').onclick = async () => { const name = $('ml').value, paths = projPaths(); if (!name || !paths.length) return toast('pick a model + add sessions to groups');
   const {job} = await api('map', {name, paths}); poll(job); };
@@ -66,7 +84,7 @@ on('reload', refreshModels); refreshModels();
 // ---- group statistics: share of each cluster per animal, exact permutation p, Hedges g, BH-adjusted stars
 let lastStats = null;
 $('stgo').onclick = async () => {
-  if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
+  if (!requireProject()) return; await api('save_project', st.proj);
   const sl = $('sl').style.display === '' && $('lvl').value === 'super' ? '&sl=' + $('sl').value : '';
   try { lastStats = await api(`stats?name=${encodeURIComponent(st.proj.name)}&level=${$('lvl').value}${sl}&correct=${$('stbh').checked ? 1 : 0}`); } catch (e) { $('stat').innerHTML = `<span class="bad">${e.message}</span>`; return; }
   renderStats(); };
@@ -89,7 +107,7 @@ $('stcsv').onclick = () => { if (!lastStats) return toast('run Compare groups fi
 // ---- DEK: per animal and cluster mean of kinematic features, Welch t per cell. Heatmap = signed t, stars on BH-adjusted p.
 let lastDek = null;
 $('dkgo').onclick = async () => {
-  if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
+  if (!requireProject()) return; await api('save_project', st.proj);
   const sl = $('sl').style.display === '' && $('lvl').value === 'super' ? '&sl=' + $('sl').value : '';
   $('dek').textContent = 'computing…';
   try { lastDek = await api(`dek?name=${encodeURIComponent(st.proj.name)}&level=${$('lvl').value}${sl}&correct=${$('stbh').checked ? 1 : 0}`); } catch (e) { $('dek').innerHTML = `<span class="bad">${e.message}</span>`; return; }
@@ -124,7 +142,7 @@ async function showStability() {
     (R.per_seed[s[0]].runs_sub ? '<table><tr><th>seed</th><th>labels</th><th>median run</th><th>mean run</th><th>1-frame runs</th></tr>' + s.flatMap(sd => [['sub', R.per_seed[sd].runs_sub], ['super ★', R.per_seed[sd].runs_super_default]].map(([n, x]) => `<tr><td>${sd}</td><td>${n}</td><td>${x.median_run.toFixed(1)}</td><td>${x.mean_run.toFixed(1)}</td><td>${(100 * x.frac_runs_len1).toFixed(1)}%</td></tr>`)).join('') + '</table><div class="mut">run = consecutive frames with one label, frames (20 fps)</div>' : '') +
     '<table><tr><th>seed</th><th>level</th><th>clusters</th><th>min p adj</th><th>n &lt; .05</th></tr>' + s.flatMap(sd => [['sub', R.per_seed[sd].sub], ...R.per_seed[sd].levels.map(l => ['L' + l.level + (l.level === R.per_seed[sd].default_level ? ' ★' : ''), l])].map(([n, l]) => `<tr><td>${sd}</td><td>${n}</td><td>${l.k}</td><td>${l.min_p_adj.toFixed(3)}</td><td>${l.n_sig}</td></tr>`)).join('') + '</table><div class="mut">★ = default level (most clusters)</div>';
 }
-$('stab').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
+$('stab').onclick = async () => { if (!requireProject()) return; await api('save_project', st.proj);
   const r = await api('stability', {name: st.proj.name, max_frames: +$('mf').value, seeds: [0, 1, 2], ...cluArgs()}).catch(e => toast(e.message)); if (!r) return; const {job} = r; $('stabres').innerHTML = '<span class="mut">running 3 fits: progress is in the Project tab and the log</span>'; poll(job, showStability); };
 
 // ---- level sweep: recommended n with the selection corrected (max-T), flagged clusters marked in the legend, results saved to a folder
@@ -142,14 +160,30 @@ function renderSweep() {
     st.flag = {level: r.level, sig: r.significant, expl: r.exploratory}; emit('labels'); toast(`level L${r.level}: ${r.k} clusters`); };
   $('swonly').onclick = () => { $('swuse').click(); const f = [...r.significant, ...r.exploratory]; if (!f.length) return toast('no flagged cluster: nothing to isolate'); st.F = new Set(f); emit('filter'); };
 }
-$('swgo').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
+$('swgo').onclick = async () => { if (!requireProject()) return; await api('save_project', st.proj);
   try { lastSweep = await api(`sweep?name=${encodeURIComponent(st.proj.name)}&criterion=${$('swcrit').value}&excl=${$('swexcl').checked ? 1 : 0}&drop=${encodeURIComponent($('swdrop').value.replace(/\s/g, ''))}`); } catch (e) { $('sweepres').innerHTML = `<span class="bad">${e.message}</span>`; return; } renderSweep(); };
-$('swexp').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj);
+$('swexp').onclick = async () => { if (!requireProject()) return; await api('save_project', st.proj);
   const {job} = await api('export', {name: st.proj.name, criterion: $('swcrit').value}); $('sweepres').insertAdjacentHTML('beforeend', '<div class="mut">exporting: progress is in the Project tab and the log</div>');
   poll(job, async () => { const d = (await api(`export_latest?name=${encodeURIComponent(st.proj.name)}`)).dir; $('sweepres').insertAdjacentHTML('beforeend', `<div class="ok">saved: <code id="swdirtxt">${d}</code></div>`); }); };
 
+// Descriptive exit-transition heatmaps. Each group cell is an animal-level mean; no frame-level p values.
+$('trgo').onclick = async () => {
+  if (!requireProject()) return;
+  await api('save_project', st.proj);
+  const sl = $('sl').style.display === '' && $('lvl').value === 'super' ? '&sl=' + $('sl').value : '';
+  let R; try { R = await api(`transitions?name=${encodeURIComponent(st.proj.name)}&level=${$('lvl').value}${sl}`); }
+  catch (e) { $('trans').textContent = e.message; return; }
+  const cell = v => v == null ? '<td class="mut">—</td>' : `<td style="background:rgba(90,200,250,${(.08 + .75 * v).toFixed(2)})">${(100 * v).toFixed(0)}%</td>`;
+  const table = (title, rows, support) => `<h3>${title}</h3><div class="transition-matrix"><table><tr><th>from ↓ / to →</th>${R.ids.map(id => `<th>${id}</th>`).join('')}<th>animals with exits</th></tr>` +
+    rows.map((row, i) => `<tr><th>${R.ids[i]}${cname(R.ids[i]) ? ' ' + cname(R.ids[i]) : ''}</th>${row.map(cell).join('')}<td>${support?.[i] ?? 'pooled'}</td></tr>`).join('') + '</table></div>';
+  const groups = Object.entries(R.groups);
+  $('trans').innerHTML = `<div class="mut">fit ${R.fit_id} · ${R.definition} Diagonal is excluded; retention below is P(same next frame). A blank row had no exits. Descriptive comparison only.</div>` +
+    table('All sessions, pooled transitions', R.overall.exit) + `<div class="mut">self-retention by cluster: ${R.ids.map((id, i) => `${id} ${(100 * R.overall.retention[i]).toFixed(0)}%`).join(' · ')}</div>` +
+    groups.map(([name, g]) => table(`${name} (${g.n_sessions} sessions)`, g.exit_mean, g.n_animals)).join('');
+};
+
 // ---- quality: label-free consistency checks of the 3D skeleton per session (no ground truth yet). ⚠ = more than 1.5x the median of all sessions.
-$('qgo').onclick = async () => { if (!st.proj.name) return toast('save the project first'); await api('save_project', st.proj); $('qual').textContent = 'computing…';
+$('qgo').onclick = async () => { if (!requireProject()) return; await api('save_project', st.proj); $('qual').textContent = 'computing…';
   let R; try { R = await api(`quality?name=${encodeURIComponent(st.proj.name)}`); } catch (e) { $('qual').innerHTML = `<span class="bad">${e.message}</span>`; return; }
   const cols = [['copied_frames', 'copied %', v => 100 * v, 1], ['jump_frames', 'jump %', v => 100 * v, 1], ['head_bone_cv', 'head CV', v => v, 3], ['tri_support', '≥2 cams', v => 100 * v, 1], ['reproj_px', 'resid px', v => { const a = v.filter(x => x != null); return a.reduce((s, x) => s + x, 0) / a.length; }, 1]];
   const med = c => { const a = R.rows.map(r => c[2](r[c[0]])).sort((x, y) => x - y); return a[a.length >> 1]; };

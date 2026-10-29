@@ -84,6 +84,50 @@ def group_stats(root: Path, proj: dict, level: str = "super", sl: int | None = N
     return {"pairs": pairs, "one_fit": len(fits) == 1 and None not in fits, "unit": "animal (one session = one animal assumed)"}
 
 
+def transition_summary(root: Path, proj: dict, level: str = "super", sl: int | None = None) -> dict:
+    """Adjacent-frame transitions within sessions; exit rows exclude self transitions like SUBTLE's TP."""
+    groups = {g: paths for g, paths in proj.get("groups", {}).items() if paths}
+    if not groups:
+        raise ValueError("add sessions to a project first")
+    key = "super" if level == "super" else "sub"
+    sessions = {rel: core.load(root, rel) for paths in groups.values() for rel in paths}
+    fits = {s["fit_id"] for s in sessions.values()}
+    if len(fits) != 1 or None in fits:
+        raise ValueError("sessions must have labels from one fit before transitions can be compared")
+    labels = {rel: core.pick_level(s[key], sl) for rel, s in sessions.items() if s[key] is not None}
+    if len(labels) != len(sessions):
+        raise ValueError("some sessions have no labels at this level")
+    ids = sorted({int(x) for lab in labels.values() for x in np.unique(lab)})
+    pos = {c: i for i, c in enumerate(ids)}
+    counts = {}
+    for rel, lab in labels.items():
+        m = np.zeros((len(ids), len(ids)), dtype=int)
+        for a, b in zip(lab[:-1], lab[1:]):
+            m[pos[int(a)], pos[int(b)]] += 1
+        counts[rel] = m
+
+    def rates(m):
+        exits = m.copy()
+        np.fill_diagonal(exits, 0)
+        den = exits.sum(axis=1)
+        return {"exit": np.divide(exits, den[:, None], out=np.zeros_like(exits, dtype=float), where=den[:, None] > 0).tolist(),
+                "retention": np.divide(m.diagonal(), m.sum(axis=1), out=np.zeros(len(ids)), where=m.sum(axis=1) > 0).tolist(),
+                "exits": den.tolist()}
+
+    all_counts = sum(counts.values(), np.zeros((len(ids), len(ids)), dtype=int))
+    by_group = {}
+    for name, paths in groups.items():
+        rs = [rates(counts[p]) for p in paths]
+        mean = []
+        for i in range(len(ids)):
+            eligible = [r["exit"][i] for r in rs if r["exits"][i] > 0]
+            mean.append(np.mean(eligible, axis=0).tolist() if eligible else [None] * len(ids))
+        by_group[name] = {"exit_mean": mean, "n_animals": [sum(r["exits"][i] > 0 for r in rs) for i in range(len(ids))],
+                          "n_sessions": len(paths)}
+    return {"ids": ids, "fit_id": next(iter(fits)), "overall": rates(all_counts), "groups": by_group,
+            "definition": "P(next=j | exit i), adjacent frames; self transitions removed. Group values are means of per-session probabilities."}
+
+
 def names_path(root: Path) -> Path:
     return core.project_dir(root) / "cluster_names.json"
 

@@ -1,7 +1,8 @@
 # SUBTLE Lite Viewer manual (261023)
 
 ## Start
-- Terminal: `subtle <folder> [--port N] [--no-open]` (default port 8777; the folder is scanned recursively).
+- Start with `subtle_workthrough.md` in Help for data → project → Train/Map. Help opens a module list; `?` opens it and Esc closes it.
+- Terminal: `subtle [folder] [--port N] [--no-open]` (default folder is local `data/subtle/cort28d/`, port 8777). The Sessions panel shows scan progress and the active root.
 - Deep link: `http://127.0.0.1:8777/#open=<path>&cam=<0-4>&frame=<n>` opens a session at a frame and camera.
 
 ## Files the viewer reads
@@ -11,33 +12,36 @@
 - Sidecar `<name>.subtle.json` next to the result file: cluster labels, embedding, `fit_id`, `seed`. The original file is never changed.
 
 ## Screen
-- One screen, no page scroll. Left: sessions. Center: video with 2D keypoints (tall), 3D skeleton, cluster map. Right: tabs Clusters, Project, Frequency, Stats, Log. Bottom: play, slider, timeline, key list.
-- Top toolbar: Clusters (level), Fit (frames, seed, Run), Help (manuals).
+- One screen, no page scroll. Left: five collapsible workflow sections and sessions. Center: video with 2D keypoints, 3D skeleton, cluster map. Right: the selected workflow module, including Help. Bottom: play, slider, timeline, key list.
+- Top toolbar: cluster level. The Discover & map module holds fitting controls.
 
 ## Views
 - 3D skeleton (follows the animal): wheel = zoom, drag = rotate, shift or right-drag = pan, double-click or Enter = back to the selected camera's view.
 - The default 3D pose is the selected camera's view: the server fits a weak-perspective camera from the 2D keypoints to the 3D points (`core.cam_view`) and rotates the skeleton to it. The footer prints the camera; "free view" means no fit was possible.
 - Cluster map: wheel = zoom (around the cursor), drag = pan, click = jump to the nearest frame, double-click = reset.
-- Video: pick the camera in the pane header or press 1-5; press 0 for all cameras with video at once (click a tile to select it). Only cameras whose video file sits next to the data appear.
-- Keypoints: green filled = conf above 0.25. Hollow green and dashed bones = low confidence, shown dim. Nothing is drawn only when the point is missing (x = y = 0, conf 0). Bones take the cluster color. Key `k` toggles the overlay.
-- Why a bone can disappear: it is drawn only when both end points exist in that camera's 2D track. The 3D view always draws every bone because the 3D track fills missing points from earlier frames.
+- Video: use **All cameras** or press 0 for every available camera; select a tile or press 1-5 for one camera. Only cameras with video appear.
+- Keypoints: the overlay scales down with smaller camera tiles. Green filled points and solid cluster-colored edges have higher confidence; low-confidence points are dim and edges dashed. **Conf %** shows the per-point detector confidence. Key `k` toggles all keypoints.
+- Why an edge can disappear: the skeleton topology contains only predefined joint pairs, and the viewer draws a pair only when both endpoints have usable 2D detections in that camera (`confidence > 0.05`). No line between two otherwise visible points can simply mean they are not a defined anatomical edge. Missing lines do not establish that the body part is absent. The 3D view may still show a filled point from earlier frames.
 - Timeline: one color per frame; click or drag to scrub, also while playing. A hatched region means no label exists there: labels cover only the frames that were fitted (frames/session). Map the session with a saved model to label all frames.
 
 ## Clusters
 - One id has one color in every view (Tableau palette). Ids mean something only inside one fit; the legend shows the `fit_id`.
+- For a sourced explanation of transition probabilities, DIB supercluster merging, and TPI, see [the focused survey](subtle_transition_dib_tpi_survey.md).
 - `cluster` select: `sub` or `super`. For `super` the second select lists the levels (`L0: n clusters`); the default is the level with the most clusters. Why levels: `subtle_theory.md`.
 - Clusters tab (right): one row per id with color, name field and share. Click = filter, double-click = solo, `all`, `none`. With a filter, playback skips other clusters and `next bout` jumps to the next run.
 - Names: type in the name field; it is saved per fit and level in `<root>/.subtle_projects/cluster_names.json` and shown in the Stats tab.
 
 ## Project metadata
-- Project tab: a description box, a note per group, and animal, cond.(ition), date per session. `Save` writes them into `<name>.project.json` under `meta`; the server keeps only these fields, 200 characters each.
+- Project module: a description box, a note per group, and animal, cond.(ition), date per session. `Save project` writes them into `<name>.project.json` under `meta`; the server keeps only these fields, 200 characters each. The save timestamp and data root are also recorded. If a comparison needs a saved project, the app opens this module and highlights the Save button.
 - Deep links for checks: `#open=<path>&cam=1&frame=600&all=1&project=<name>&tab=proj` (all = every camera tile; tab = clu, proj, freq, stat, log).
 
 ## Running SUBTLE
-- Add sessions to groups, then `Run SUBTLE jointly on all project sessions`. One fit covers all sessions, so ids are comparable.
+- Add sessions to groups, then choose **Explore clusters** in Discover & map. One fit covers all sessions, so IDs are comparable. **Train & save** creates a reusable SUBTLE model; **Map new sessions** applies it to project sessions.
 - Clustering: `UMAP + Phenograph` (original SUBTLE, default) or `PCA consensus` (5 Leiden runs in PCA space, merged, cluster count matched to the UMAP path; UMAP only for the map). A third entry `B-SOiD (UMAP + HDBSCAN)` labels 10 fps bins mapped back to frames, -1 = noise (grey); it serves Analyze only, Train and Seed stability run SUBTLE (the server says so). The list comes from `/api/methods`; the sidecar records `method` and `clustering`. PCA consensus is slower: all 95,991 demo frames took 2,884 s. Evidence and the hold rule: vault `_Notes/261024_SUBTLE_개선_연구계획`.
 - Set a seed (default 0) for a repeatable fit; empty = random. What the seed controls: `subtle_theory.md` section 4. Max frames limits the time (3,000 frames for 8 animals took about 100 s).
-- Model: `Train` fits the project sessions once and saves `<root>/.subtle_models/<name>/model.pkl` and `model.json`. `Map` loads a saved model and labels every frame of the project sessions with it; the log prints how many trained frames keep their label (about 85 to 88 percent in a 2-session test, because mapping classifies new points).
+- Model: `Train & save` fits the project sessions once and saves `<root>/.subtle_models/<name>/model.pkl` and `model.json` with source paths, method, seed and creation time. `Map new sessions` loads a saved model and labels every frame of the project sessions with it; mapped sidecars record model name and mapping time.
+- **Transitions** computes one-frame exit probabilities and self-retention per cluster. Group heatmaps are descriptive animal/session-level means with per-row support; see [survey and definitions](subtle_transition_dib_tpi_survey.md).
+- **Stop server** is under the left Reference section and closes the local HTTP server after responding to the button click.
 - Frequency table: the sum must be 100 and all sessions must come from one fit; otherwise the badge turns red.
 
 ## Statistics
