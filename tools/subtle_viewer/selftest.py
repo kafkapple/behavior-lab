@@ -87,6 +87,23 @@ def main():
     core.RESULTS_BASE = None  # results folder rules: default under the data root, overridable, commit hash recorded
     assert core.results_dir(Path("/d"), "p") == Path("/d/.subtle_results/p")
     core.RESULTS_BASE = Path("/o"); assert core.results_dir(Path("/d"), "p") == Path("/o/p"); core.RESULTS_BASE = None
+    import report_browser
+    with tempfile.TemporaryDirectory() as d4:
+        root = Path(d4) / "data"; root.mkdir()
+        out = Path(d4) / "results"; core.RESULTS_BASE = out
+        core.save_project(root, {"name": "p", "groups": {}})
+        run = out / "p" / "run1"; run.mkdir(parents=True)
+        (run / "README.md").write_text("checked result")
+        (run / "plot.png").write_bytes(b"png")
+        assert report_browser.list_reports(root, "p")[0]["files"] == ["README.md", "plot.png"]
+        assert report_browser.artifact(root, "p", "run1", "plot.png") == (run / "plot.png").resolve()
+        for project, run_name, file in (("p", "..", "plot.png"), ("other", "run1", "plot.png"), ("p", "run1", "../plot.png")):
+            try:
+                report_browser.artifact(root, project, run_name, file)
+                raise AssertionError("result path escaped project")
+            except ValueError:
+                pass
+        core.RESULTS_BASE = None
     assert core.code_commit() != ""
     import stats
     with tempfile.TemporaryDirectory() as dt:

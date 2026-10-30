@@ -7,6 +7,7 @@ import json
 import logging
 import mimetypes
 import re
+import shutil
 import sys
 import threading
 import time
@@ -23,6 +24,7 @@ import core  # noqa: E402
 import dek  # noqa: E402
 import model  # noqa: E402
 import quality  # noqa: E402
+import report_browser  # noqa: E402
 import results  # noqa: E402
 import stability  # noqa: E402
 import stats  # noqa: E402
@@ -130,6 +132,7 @@ def _routes(root: Path):
         "stability_result": lambda q, b: json.loads(stability.result_path(root, q["name"][0]).read_text()),
         "sweep": lambda q, b: sweep.project_sweep(root, proj_of(q), q.get("criterion", ["omnibus"])[0], q.get("excl", ["0"])[0] == "1", tuple(filter(None, q.get("drop", [""])[0].split(",")))),
         "quality": lambda q, b: quality.project_quality(root, proj_of(q)),
+        "reports": lambda q, b: report_browser.list_reports(root, q["name"][0]),
         "export": lambda q, b: {"job": results.start(root, b["name"], b.get("criterion", "omnibus"))},
         "export_latest": lambda q, b: {"dir": (core.results_dir(root, q["name"][0]) / "latest.txt").read_text()},
         "models": lambda q, b: model.list_models(root),
@@ -215,6 +218,15 @@ def make_handler(root: Path):
                     self.wfile.write(data)
                 elif u.path == "/video":
                     self._video(q["path"][0])
+                elif u.path == "/result":
+                    p = report_browser.artifact(root, q["project"][0], q["run"][0], q["file"][0])
+                    self.send_response(200)
+                    self.send_header("Content-Type", mimetypes.guess_type(p.name)[0] or "application/octet-stream")
+                    self.send_header("Content-Length", str(p.stat().st_size))
+                    self.send_header("X-Content-Type-Options", "nosniff")
+                    self.end_headers()
+                    with p.open("rb") as f:
+                        shutil.copyfileobj(f, self.wfile, 1 << 20)
                 elif u.path == "/api/shutdown" and self.command == "POST":
                     self._json({"stopping": True})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()

@@ -71,6 +71,13 @@ body.hide #left,body.hide #right{display:none}body.hide #main{grid-template-colu
 .share-value{text-align:right;font-variant-numeric:tabular-nums;font-size:var(--fs-m)}.share-scale{display:flex;justify-content:space-between;margin:0 112px 0 82px;color:var(--mut);font-size:var(--fs-s)}
 .dek-table-wrap{overflow:auto;max-width:100%;margin-top:8px}.dek-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:2px}.dek-table th,.dek-table td{min-width:55px;text-align:center;padding:5px;white-space:nowrap}.dek-table th:first-child,.dek-table td:first-child{position:sticky;left:0;background:var(--panel);z-index:1;min-width:110px}.dek-cell.sig{font-weight:800}.dek-hits{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}.dek-hits button{border-color:#e8bf55;color:#f1c96a}
 #qual{overflow-x:auto}#qual table{min-width:680px}
+.report-card{border:1px solid var(--line);border-radius:8px;padding:12px;margin:10px 0;background:var(--bg)}
+.report-card h3{color:var(--fg);font-size:var(--fs-l);text-transform:none}
+.report-note{font:var(--fs-m)/1.5 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--fg);margin:8px 0}
+.report-files{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.report-files a{border:1px solid var(--line);border-radius:6px;padding:3px 7px;overflow-wrap:anywhere}
+.report-figure{border-top:1px solid var(--line);margin-top:6px;padding-top:6px}.report-figure summary{cursor:pointer;color:var(--acc)}
+.report-card img{display:block;width:100%;height:auto;max-height:680px;object-fit:contain;margin:12px 0;border:1px solid var(--line);border-radius:6px}
 #vnone{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut)}
 @media(max-width:700px){#stage{grid-template-columns:1fr;grid-template-rows:repeat(3,minmax(220px,1fr));grid-template-areas:"video" "skel" "map"}}
 @media(max-width:700px){#main{display:flex;flex-direction:column;overflow:auto}#left,#right{display:block;flex:none;max-height:260px}#stage{min-height:720px}}

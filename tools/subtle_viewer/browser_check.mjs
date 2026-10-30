@@ -41,7 +41,18 @@ await send('Runtime.enable'); await send('Page.enable');
 await send('Page.navigate', {url: base});
 await until(`!!${$('fi')} && ${$('fi')}.textContent.includes('/')`);
 
-if (mode === 'smoke') {
+if (mode === 'reports') {
+  check('session opens', await until(`+${$('fr')}.max > 0`, 30000));
+  await js(`document.querySelector('#left [data-go="reports"]').click()`);
+  check('saved results panel opens', await js(`${$('t_reports')}.classList.contains('on')`));
+  check('project report list appears', await until(`document.querySelectorAll('.report-card').length > 0`));
+  check('report explanation appears', await js(`document.querySelector('.report-note')?.textContent.includes('# ')`));
+  check('saved PNG preview and CSV links appear', await js(`!!document.querySelector('.report-card img') && !!document.querySelector('.report-files a[href$="csv"]')`));
+  const image = await js(`fetch(document.querySelector('.report-card img').src).then(r => r.blob()).then(b => b.type === 'image/png' && b.size > 1000)`);
+  check('PNG artifact opens from app', image);
+  check('path traversal is rejected', await js(`fetch('/result?project=cort_vs_veh&run=..&file=README.md').then(r => r.status === 400)`));
+  await js(`${$('shutdown')}.click()`);
+} else if (mode === 'smoke') {
   check('session opens', await until(`+${$('fr')}.max > 0`, 30000));
   check('workflow menu and tutorial', await js(`!!document.querySelector('#left [data-go="tut"]') && !!${$('tstart')}`));
   await js(`document.querySelector('#left [data-go="help"]').click()`);
@@ -91,6 +102,8 @@ if (mode === 'smoke') {
   check('G3 cam1 H.264 decodes', await until(`document.querySelector('.tile video').readyState >= 2 && document.querySelector('.tile video').videoWidth === 480`, 30000));
   check('embedded map coordinates are available', await js(`fetch('/api/session?path=derived%2Fsubtle_by_juhee%2F260529-baseline-G3-M1.json.gz&stride=100').then(r=>r.json()).then(s=>s.emb?.length>50 && s.fit_id===null)`));
   check('G3 eight-session quality appears', await until(`${$('qual')}.querySelectorAll('tr').length >= 9`, 30000));
+  await js(`document.querySelector('#left [data-go="reports"]').click()`);
+  check('saved G3 quality report is visible', await until(`${$('reportlist')}.textContent.includes('G3 source inspection') && !!document.querySelector('.report-card img')`));
   if (process.env.SUBTLE_SCREENSHOT_DIR) { await js(`${$('panelcompact')}.click()`); const shot = await send('Page.captureScreenshot', {format: 'png'}); writeFileSync(join(process.env.SUBTLE_SCREENSHOT_DIR, 'g3_screen.png'), Buffer.from(shot.result.data, 'base64')); }
   await js(`${$('shutdown')}.click()`);
 } else if (mode === 'model') {
@@ -98,6 +111,8 @@ if (mode === 'smoke') {
   check('train-map project loads', await js(`${$('pn')}.value === 'cort_trainmap_demo'`));
   check('saved model appears with fit ID', await until(`${$('ml')}.textContent.includes('3d203e49')`, 30000));
   check('held-out session is fully mapped', await js(`fetch('/api/session?path=cort%2Fcort3_full_sleap_1423.json.gz&stride=100').then(r=>r.json()).then(s=>s.mapped===true && s.fit_id==='3d203e49' && s.sub.length===120)`));
+  await js(`document.querySelector('#left [data-go="reports"]').click()`);
+  check('saved train/map provenance is visible', await until(`${$('reportlist')}.textContent.includes('Saved SUBTLE model and held-out mapping')`));
   await js(`${$('shutdown')}.click()`);
 } else if (mode === 'legacy') {
   check('original CSV demo opens', await until(`+${$('fr')}.max === 12082`, 30000));

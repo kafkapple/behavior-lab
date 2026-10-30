@@ -2,6 +2,8 @@
 
 The viewer opens AVATAR `*.json.gz` with `skeleton3d` and optional `keypoint`/video, or the original app's `avatar_subtle` merged CSV beside a matching MP4. Its **Video tutorial** module makes a real 300-frame example from the CORT source video, using the SLEAP 1423 checkpoint on eren. The Mac hosts the viewer and saves outputs; SSH access to eren is required for this inference step. Other raw videos need the AVATAR upstream pipeline. The viewer never changes the source input; new labels go into `*.subtle.json` sidecars. For transitions, DIB and TPI, see [the focused survey](subtle_transition_dib_tpi_survey.md). For the original app's source-verified feature inventory, see [the parity check](subtle_original_parity.md).
 
+Already computed figures are in **Results & reference → Saved results**. The list follows the active data root: `subtle` shows the CORT comparison, `subtle g3` shows G3 consistency checks, and `subtle trainmap` shows the saved model and held-out mapping record. Select a project to see its explanation, figures, CSV and provenance JSON without rerunning analysis.
+
 ## 1. Pick a data root
 
 Run `subtle` for the local CORT28d demo (`data/subtle/cort28d/`, 8 sessions) or `subtle /absolute/path/to/dataset` for another root. The full root path appears beside “SUBTLE Lite”; the Sessions panel shows folders, sessions, videos and elapsed scan time. A source folder must contain `*.json.gz` below it. If the list is empty, check the displayed root and the file extension.
