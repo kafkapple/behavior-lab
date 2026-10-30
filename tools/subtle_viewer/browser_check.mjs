@@ -41,7 +41,23 @@ await send('Runtime.enable'); await send('Page.enable');
 await send('Page.navigate', {url: base});
 await until(`!!${$('fi')} && ${$('fi')}.textContent.includes('/')`);
 
-if (mode === 'reports') {
+if (mode === 'samples') {
+  check('default CORT session opens', await until(`+${$('fr')}.max > 0 && ${$('dataroot')}.textContent.includes('/cort28d')`, 30000));
+  check('sample chooser includes G3 and Train/Map', await js(`[...${$('dataset')}.options].some(o => o.value === 'g3_juhee') && [...${$('dataset')}.options].some(o => o.value === 'cort28d_trainmap_demo')`));
+  await js(`${$('guide')}.click()`);
+  check('full walkthrough opens inside Help', await until(`${$('t_help')}.classList.contains('on') && ${$('doctext')}.textContent.includes('SUBTLE walkthrough')`));
+  await js(`${$('dataset')}.value = 'g3_juhee'; ${$('dataset')}.dispatchEvent(new Event('change'))`); await sleep(1200);
+  check('G3 switches in same server', await until(`location.search.includes('dataset=g3_juhee') && ${$('dataroot')}.textContent.includes('/g3_juhee') && +${$('fr')}.max > 5000`, 30000));
+  await js(`${$('saved')}.click()`);
+  check('G3 saved quality result appears', await until(`${$('reportlist')}.textContent.includes('G3 source inspection') && !!document.querySelector('.report-card img')`));
+  await js(`${$('dataset')}.value = 'cort28d_trainmap_demo'; ${$('dataset')}.dispatchEvent(new Event('change'))`); await sleep(1200);
+  check('Train/Map switches in same server', await until(`location.search.includes('dataset=cort28d_trainmap_demo') && ${$('dataroot')}.textContent.includes('/cort28d_trainmap_demo') && +${$('fr')}.max > 0`, 30000));
+  await js(`${$('saved')}.click()`);
+  check('Train/Map provenance opens', await until(`${$('reportlist')}.textContent.includes('Saved SUBTLE model and held-out mapping')`));
+  await js(`${$('dataset')}.value = 'original_demo'; ${$('dataset')}.dispatchEvent(new Event('change'))`); await sleep(1200);
+  check('original CSV and video open in same server', await until(`location.search.includes('dataset=original_demo') && +${$('fr')}.max === 12082 && document.querySelector('.tile video')?.readyState >= 2`, 30000));
+  await js(`${$('shutdown')}.click()`);
+} else if (mode === 'reports') {
   check('session opens', await until(`+${$('fr')}.max > 0`, 30000));
   await js(`document.querySelector('#left [data-go="reports"]').click()`);
   check('saved results panel opens', await js(`${$('t_reports')}.classList.contains('on')`));

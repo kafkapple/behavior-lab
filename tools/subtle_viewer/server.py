@@ -162,8 +162,31 @@ def _routes(root: Path):
     }
 
 
+SAMPLE_LABELS = {
+    "cort28d": "CORT · 8세션 통계/DEK",
+    "g3_juhee": "G3 · 주희 박사님 데이터",
+    "cort28d_trainmap_demo": "Train/Map · 저장 모델 검증",
+    "original_demo": "원본 SUBTLE · CSV/영상",
+    "original_demo_fit": "원본 CSV · 학습/매핑 검증",
+}
+
+
+def sample_roots(root: Path) -> dict[str, Path]:
+    """Expose sibling examples only when launched from the known local sample folder."""
+    if root.name not in SAMPLE_LABELS or root.parent.name != "subtle":
+        return {"current": root}
+    return {name: path for name in SAMPLE_LABELS if (path := root.parent / name).is_dir()}
+
+
 def make_handler(root: Path):
-    routes = _routes(root)
+    samples = sample_roots(root)
+    routes = {name: _routes(path) for name, path in samples.items()}
+
+    def selected(q):
+        key = q.get("dataset", [next(name for name, path in samples.items() if path == root)])[0]
+        if key not in samples:
+            raise ValueError("unknown data sample")
+        return key, samples[key], routes[key]
 
     class H(BaseHTTPRequestHandler):
         def log_message(self, fmt, *a):
@@ -177,8 +200,8 @@ def make_handler(root: Path):
             self.end_headers()
             self.wfile.write(body)
 
-        def _video(self, rel):
-            p = core.safe(root, rel)
+        def _video(self, active_root, rel):
+            p = core.safe(active_root, rel)
             size, rng = p.stat().st_size, self.headers.get("Range")
             a, b = 0, size - 1
             if rng and rng.startswith("bytes="):
@@ -204,6 +227,7 @@ def make_handler(root: Path):
             u = urlparse(self.path)
             q = parse_qs(u.query)
             try:
+                key, active_root, active_routes = selected(q)
                 if u.path == "/" or u.path.startswith("/web/"):  # static page: web/index.html, web/style.css, web/js/*.js
                     rel = "index.html" if u.path == "/" else u.path[5:]
                     f = (HERE / "web" / rel).resolve()
@@ -217,9 +241,9 @@ def make_handler(root: Path):
                     self.end_headers()
                     self.wfile.write(data)
                 elif u.path == "/video":
-                    self._video(q["path"][0])
+                    self._video(active_root, q["path"][0])
                 elif u.path == "/result":
-                    p = report_browser.artifact(root, q["project"][0], q["run"][0], q["file"][0])
+                    p = report_browser.artifact(active_root, q["project"][0], q["run"][0], q["file"][0])
                     self.send_response(200)
                     self.send_header("Content-Type", mimetypes.guess_type(p.name)[0] or "application/octet-stream")
                     self.send_header("Content-Length", str(p.stat().st_size))
@@ -230,8 +254,10 @@ def make_handler(root: Path):
                 elif u.path == "/api/shutdown" and self.command == "POST":
                     self._json({"stopping": True})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
-                elif u.path.startswith("/api/") and u.path[5:] in routes:
-                    self._json(routes[u.path[5:]](q, body))
+                elif u.path == "/api/datasets":
+                    self._json({"active": key, "items": [{"id": name, "label": SAMPLE_LABELS.get(name, "Current data root")} for name in samples]})
+                elif u.path.startswith("/api/") and u.path[5:] in active_routes:
+                    self._json(active_routes[u.path[5:]](q, body))
                 else:
                     self._json({"error": "not found"}, 404)
             except (BrokenPipeError, ConnectionResetError):

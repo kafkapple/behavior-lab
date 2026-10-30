@@ -1,7 +1,7 @@
 // Camera tiles: one video + keypoint overlay per camera. Key 1-5 = one camera, key 0 = all cameras at once.
 // The video letterboxes (object-fit: contain), so points map into the visible picture, not the element box.
 // kp2d gives x, y in 0-1 of the camera cell (server: core.kp_cell). Low-confidence points are drawn dim, never dropped silently.
-import {$, st, on, emit, api, toast, FPS, fit, lid} from './state.js';
+import {$, st, on, emit, api, toast, FPS, fit, lid, dataQuery} from './state.js';
 import {pointColor, edgeColor} from './kp_palette.js';
 
 const CELL_ASPECT = {0: 1.2, 1: 1.2, 2: 1.0, 3: 1.2, 4: 1.2};      // cell w/h of the rig (core.CELLS)
@@ -17,7 +17,7 @@ function mk(cam, path) {
   d.innerHTML = `<video muted preload="auto"></video><canvas></canvas><span class="tag">cam_${cam + 1}</span>`;
   $('vtiles').appendChild(d);
   const t = {cam, d, v: d.firstChild, c: d.children[1], KP: null};
-  t.v.src = '/video?path=' + encodeURIComponent(path); t.v.onseeked = t.v.onloadeddata = draw;
+  t.v.src = '/video?path=' + encodeURIComponent(path) + dataQuery; t.v.onseeked = t.v.onloadeddata = draw;
   t.v.onloadedmetadata = () => {
     if (st.cur.path.endsWith('.csv')) {
       const delta = Math.round(t.v.duration * FPS()) - st.S.n;

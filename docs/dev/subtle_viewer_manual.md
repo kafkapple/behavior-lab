@@ -2,9 +2,10 @@
 
 ## Start
 - Start with `subtle_workthrough.md` in Help for data → project → Train/Map. Help opens a module list; `?` opens it and Esc closes it.
-- Terminal: `subtle [folder] [--port N] [--no-open]` (default folder is local `data/subtle/cort28d/`, port 8777). The Sessions panel shows scan progress and the active root.
+- Terminal: `subtle [folder] [--port N] [--no-open]` (default folder is local `data/subtle/cort28d/`, port 8777). Run `subtle` once, then use the top **Sample** selector for CORT, G3, saved-model Train/Map, and the original CSV examples. The Sessions panel shows scan progress and the active root.
+- **처음부터 따라하기** in the top bar opens the full in-app walkthrough in the wide Help panel; **저장 결과** opens the saved figures. The same walkthrough is in the right Help module list.
 - Deep link: `http://127.0.0.1:8777/#open=<path>&cam=<0-4>&frame=<n>` opens a session at a frame and camera.
-- **Saved results** in the left Results & reference section lists prior result bundles for projects in the active data root. It shows each README and PNG, with CSV/JSON downloads. It does not recompute statistics. Use `subtle` for the CORT L8 figures, `subtle g3` for the G3 quality figure, or `subtle trainmap` for the saved model and held-out mapping record.
+- **Saved results** in the left Results & reference section lists prior result bundles for projects in the active data root. It shows each README and PNG, with CSV/JSON downloads. It does not recompute statistics. Choose CORT, G3, or Train/Map in **Sample** to see their respective reports.
 
 ## Files the viewer reads
 - Result file: `*.json.gz` with `skeleton3d` (3D, 11 joints) and `keypoint` (2D per camera). No unzip needed.

@@ -7,7 +7,9 @@ const H = {};
 export const on = (e, f) => (H[e] ??= []).push(f);
 export const emit = e => (H[e] || []).forEach(f => f());      // events: session, frame, labels, filter, project
 export const FPS = () => +$('fps').value || 20;
-export const api = (p, b) => fetch('/api/' + p, b ? {method: 'POST', body: JSON.stringify(b)} : {})
+export const dataset = new URLSearchParams(location.search).get('dataset');
+export const dataQuery = dataset ? '&dataset=' + encodeURIComponent(dataset) : '';
+export const api = (p, b) => fetch('/api/' + p + (dataset ? (p.includes('?') ? '&' : '?') + 'dataset=' + encodeURIComponent(dataset) : ''), b ? {method: 'POST', body: JSON.stringify(b)} : {})
   .then(r => r.json()).then(j => { if (j && j.error) throw new Error(j.error); return j; });
 export const toast = m => { $('toast').textContent = m; setTimeout(() => $('toast').textContent = '', 4000); };
 

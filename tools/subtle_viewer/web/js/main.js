@@ -10,6 +10,9 @@ import {color} from './colors.js';
 let sessionIndex = [];
 
 async function init() {
+  const D = await api('datasets');
+  $('dataset').replaceChildren(...D.items.map(x => new Option(x.label, x.id)));
+  $('dataset').value = D.active;
   const R = await api('root'); $('root').textContent = R.path;
   $('dataroot').textContent = `Data root: ${R.path}`;
   await api('scan_start');
@@ -102,6 +105,9 @@ on('cam', () => { if (playing()) { stop(); toggle(); } });
 // ---- keyboard, same keys as the BS viewer: Space play, arrows step, +/- zoom, Enter reset view, h panels, ? manuals
 const step = d => { if (!st.S) return; st.fr = Math.max(0, Math.min(st.S.xyz.length - 1, st.fr + d)); emit('frame'); };
 const tab = t => document.querySelector(`#tabs button[data-t="${t}"]`).click();
+$('dataset').onchange = () => { location.href = '/?dataset=' + encodeURIComponent($('dataset').value); };
+$('guide').onclick = () => { tab('help'); $('docnav').querySelector('[data-d="subtle_workthrough.md"]')?.click(); };
+$('saved').onclick = () => tab('reports');
 document.addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'range') return;
   const k = e.key, cams = Object.keys((st.cur && st.cur.cams) || {});
@@ -120,8 +126,8 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   document.querySelectorAll('.tabpage').forEach(x => x.classList.toggle('on', x.id === 't_' + b.dataset.t));
   document.querySelectorAll('[data-go]').forEach(x => x.classList.toggle('on', x.dataset.go === b.dataset.t));
   $('paneltitle').textContent = b.textContent;
-  $('right').classList.toggle('wide', ['stat', 'dek', 'qual', 'reports'].includes(b.dataset.t));
-  $('panelcompact').style.display = ['stat', 'dek', 'qual', 'reports'].includes(b.dataset.t) ? '' : 'none';
+  $('right').classList.toggle('wide', ['stat', 'dek', 'qual', 'reports', 'help'].includes(b.dataset.t));
+  $('panelcompact').style.display = ['stat', 'dek', 'qual', 'reports', 'help'].includes(b.dataset.t) ? '' : 'none';
   if (b.dataset.t === 'reports') showReports();
 });
 $('panelcompact').onclick = () => { $('right').classList.remove('wide'); $('panelcompact').style.display = 'none'; };
@@ -191,7 +197,7 @@ function md(src) {
 async function initDocs() {
   const rank = n => { const i = ['subtle_workthrough.md', 'subtle_viewer_manual.md'].indexOf(n); return i < 0 ? 2 : i; };
   const N = (await api('docs')).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-  $('docnav').innerHTML = N.map(n => `<button type="button" data-d="${n}">${n.replace(/^subtle_|\.md$/g, '').replace(/_/g, ' ')}</button>`).join('');
+  $('docnav').innerHTML = N.map(n => `<button type="button" data-d="${n}">${n === 'subtle_workthrough.md' ? '처음부터 따라하기' : n.replace(/^subtle_|\.md$/g, '').replace(/_/g, ' ')}</button>`).join('');
   document.querySelectorAll('[data-d]').forEach(a => a.onclick = async () => { const d = await api('doc?name=' + a.dataset.d); $('doctext').innerHTML = md(d.text); document.querySelectorAll('[data-d]').forEach(x => x.classList.toggle('on', x === a)); });
   $('doctext').onclick = e => { const a = e.target.closest('[data-dlink]'); if (!a) return; e.preventDefault(); $('docnav').querySelector(`[data-d="${a.dataset.dlink}"]`)?.click(); };
   $('docnav').querySelector('button')?.click();

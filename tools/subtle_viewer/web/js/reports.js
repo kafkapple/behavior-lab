@@ -1,6 +1,6 @@
-import {$, st, api} from './state.js';
+import {$, st, api, dataQuery} from './state.js';
 
-const url = (project, run, file) => '/result?' + new URLSearchParams({project, run, file});
+const url = (project, run, file) => '/result?' + new URLSearchParams({project, run, file}) + dataQuery;
 
 export async function showReports() {
   const select = $('reportproject'), previous = select.value;
