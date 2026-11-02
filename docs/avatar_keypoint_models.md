@@ -23,11 +23,24 @@ plus `kp_model_selection` (status: plan). UNVERIFIED = read in a note, not confi
 | DLC SuperAnimal-Quadruped (HRNet-w32) | zero-shot, 150 images, WSL | nose 5.9 px from SLEAP; neck, ears, paws 12 to 26 px |
 | Anipose | 3D smoothing on SLEAP output, not a 2D detector | large jumps (> 20 mm) 2.7 -> 0.3 % |
 
+## Base training labels (SLEAP 1423 and 1500)
+
+- Source: `20260504_reorganize.pkg.slp`, justingpu2 `~/spkim/coding/sleap/training_job/20260504/`; Mac copy `~/data/avatar_subtle_sleap1423_261003/pkg/`
+- Content: 1500 labelled frames, 1 mouse, 11 keypoints, 34 source videos = AVATAR 450 + KHU 772 + JHL 278 (other-lab mice)
+- AVATAR 450 = `Baseline Ptd005 Fit` 383 (bot 73, side1 74, side2 73, side3 81, side4 82) + `260505 Sci 1` 67 (bot 55, side1 12)
+- The 5 views were labelled at different time points (0-1 shared frame numbers between views)
+- n=1423 model: train 1280 + val 142 = 1422 frames, identical to the pkg (frame number and 11 coordinates, tolerance 0.001 px)
+- AVATAR share of the n=1423 split = 438 (train 399, val 39); the other 78 frames (AVATAR 12) are only in the n=1500 model (train 1350 + val 150)
+- Open (no record found): how frames were selected (the pkg holds 932 SLEAP suggestions; 345 of the 383 `Baseline Ptd005 Fit` frames match them), why KHU and JHL are pooled, the recording dates
+- Known defect: about 200 frames have a visible ear point outside the body (14 % of ear points)
+- Overlay: 12 samples in `pkg_images/overlay/`; all 34 videos in `pkg_images/overlay_sheets/` (`scripts/pkg_overlay_sheets.py`)
+- Details: vault note `261013_AVATAR_sleap1423_pkg_recovery`
+
 ## Not run on AVATAR
 
 | Method | State |
 |---|---|
-| SLEAP retrain / fine-tune | planned after hand labels. Labels and weights are readable on justingpu1 `~/spkim/SUBTLE_gpu/model/SLEAP/260504.single_instance.n=1423-1/` (1280 train + 142 val labelled frames, 289 of them AVATAR). The embedded images (`20260504_reorganize.pkg.slp`) were not found there; source videos are `D:/spkim/data/AVATAR_split/*` (checked 2026-10-03) |
+| SLEAP retrain / fine-tune | planned after hand labels. Labels and weights are readable on justingpu1 `~/spkim/SUBTLE_gpu/model/SLEAP/260504.single_instance.n=1423-1/` (1280 train + 142 val labelled frames, 438 of them AVATAR; see "Base training labels"). The embedded images (`20260504_reorganize.pkg.slp`) were found on justingpu2 on 2026-10-13 |
 | Lightning Pose (+EKS) | planned; installed on justingpu1 (conda env `ltn-pose`, repo `~/spkim/coding/lightning-pose`, seen 2026-10-03, import not tested). Also installs and imports on WSL with `uv run --python 3.10 --with lightning-pose` (lightning_pose 2.4.2, torch 2.14.1+cu130, cuda True; training not run); multi-view LP has no context frames or unsupervised losses yet |
 | DANNCE / s-DANNCE | no AVATAR mention found; appear only as datasets and as "dropped to v0.3" in `kp_benchmark_v0.1.md` |
 | DeepLabCut own training | none on AVATAR; the DLC scripts here target MAMMAL / Li 2023 |
