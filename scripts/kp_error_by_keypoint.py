@@ -34,16 +34,11 @@ import sys
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pkg_groups import GROUPS, KEYS, group_of  # one definition of the environment groups
+from pkg_groups import GROUPS, KEYS, KP_COLORS, check_palette, group_of  # one definition of groups and palette
 
 MIN_N = 10  # per-keypoint matched n below this is not interpretable (reported, flagged)
 AVATAR_TAG = "AVATAR_split"
 DOMAINS = ("all", "avatar", "other")
-PALETTE_FALLBACK = {  # viewer anatomical colors (tools/subtle_viewer/web/keypoint_palette.json)
-    "nose1": "#ffff00", "neck1": "#ff00ff", "earL1": "#ffff00", "earR1": "#ffff00",
-    "forelegL1": "#0000ff", "forelegR1": "#00ff00", "tailstart1": "#ffa500",
-    "hindlegL1": "#00ffff", "hindlegR1": "#ff0000", "tail1": "#ffa500", "tailend1": "#ffa500",
-}
 
 
 # ---------------------------------------------------------------- SLEAP .slp reading (h5py)
@@ -275,6 +270,7 @@ def selftest() -> None:
     r2 = {(r["domain"], r["node"]): r for r in table("t", nodes, pair_errors(g2, g2, 2))}
     assert r2[("avatar_bot", "a")]["n_visible"] == 1 and r2[("khu_20250311", "a")]["n_visible"] == 1
     assert r2[("jhl_pted", "a")]["n_visible"] == 0
+    print(f"palette min RGB distance {check_palette():.0f}")
     print("selftest OK")
 
 
@@ -285,16 +281,13 @@ def main() -> None:
                     help="one GT/prediction pair; repeat for train, val, ...")
     ap.add_argument("--out", type=Path, help="output directory (created)")
     ap.add_argument("--figure-sets", nargs="+", help="set names to draw (default: all sets)")
-    ap.add_argument("--palette", type=Path, help="keypoint_palette.json (name -> [part, hex])")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     if a.selftest:
         return selftest()
     if not a.set or not a.out:
         ap.error("--set and --out are required (or --selftest)")
-    palette = dict(PALETTE_FALLBACK)
-    if a.palette:
-        palette.update({k: v[1] for k, v in json.loads(a.palette.read_text()).items()})
+    palette = KP_COLORS
     a.out.mkdir(parents=True, exist_ok=True)
 
     rows, panels, report = [], [], {}

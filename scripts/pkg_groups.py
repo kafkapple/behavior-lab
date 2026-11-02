@@ -23,3 +23,26 @@ def group_of(path: str) -> str:
         if re.search(rx, p):
             return key
     raise ValueError(f"no environment group for {path!r}")
+
+
+# One keypoint palette for every figure and note. Family = anatomy (warm head/neck, blue forelimb,
+# green hindlimb, purple tail); lightness = side (light = Left, dark = Right). The SUBTLE viewer palette
+# is not used: nose/ears share yellow and the 3 tail points share orange.
+KP_COLORS = {
+    "nose1": "#E63946", "neck1": "#FFB000", "earL1": "#FF6FB5", "earR1": "#B5179E",
+    "forelegL1": "#4EA8DE", "forelegR1": "#1D4ED8", "hindlegL1": "#6BCB77", "hindlegR1": "#1B7F3B",
+    "tailstart1": "#C77DFF", "tail1": "#7B2CBF", "tailend1": "#3C096C",
+}
+KP_FAMILY = {"nose1": "head", "neck1": "head", "earL1": "head", "earR1": "head",
+             "forelegL1": "forelimb", "forelegR1": "forelimb", "hindlegL1": "hindlimb",
+             "hindlegR1": "hindlimb", "tailstart1": "tail", "tail1": "tail", "tailend1": "tail"}
+
+
+def check_palette(min_dist: float = 60.0) -> float:
+    """Assert the 11 colours are pairwise distinct (RGB distance > min_dist); return the minimum."""
+    rgb = {k: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5)) for k, v in KP_COLORS.items()}
+    assert len(rgb) == 11 and set(rgb) == set(KP_FAMILY), sorted(rgb)
+    d = min((sum((a - b) ** 2 for a, b in zip(rgb[x], rgb[y])) ** 0.5, x, y)
+            for i, x in enumerate(rgb) for y in list(rgb)[i + 1:])
+    assert d[0] > min_dist, d
+    return d[0]

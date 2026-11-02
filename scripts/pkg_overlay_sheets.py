@@ -1,18 +1,17 @@
 """Overlay contact sheets of the SLEAP 1423/1500 base training labels, one sheet per source video.
 
     python -I scripts/pkg_overlay_sheets.py <pkg_images dir> [--per-sheet 16]
-    python scripts/pkg_overlay_sheets.py <pkg_images dir> --by-group [--per-sheet 12] [--palette keypoint_palette.json]
+    python scripts/pkg_overlay_sheets.py <pkg_images dir> --by-group [--per-sheet 12] 
 
 --by-group: one larger sheet per environment group (scripts/pkg_groups.py) -> <dir>/overlay_groups/<NN>_<group>.jpg,
-3 columns x 640 px tiles, viewer-palette filled dots with dark outline, legend bar. Counts per group are printed
+3 columns x 640 px tiles, KP_COLORS dots (white ring + dark outer ring), legend bar. Counts per group are printed
 (they must sum to the number of frames in the CSV).
 
 Reads <dir>/labels_long.csv (from extract_pkg_images.py) and <dir>/images; writes <dir>/overlay_sheets/<NN>_<name>.jpg.
 Frames are evenly spaced within each video, so a sheet shows the video's labels, not a hand-picked subset.
-Colour = keypoint (legend on each sheet), tile caption = split / frame. Missing points (NaN) are not drawn.
+Colour = keypoint, pkg_groups.KP_COLORS (legend on each sheet), tile caption = split / frame. Missing points (NaN) are not drawn.
 """
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -22,17 +21,10 @@ import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 
-from pkg_groups import GROUPS, KEYS, group_of
+from pkg_groups import GROUPS, KEYS, KP_COLORS, check_palette, group_of
 
-COLS = [(230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200), (245, 130, 48), (145, 30, 180),
-        (70, 240, 240), (240, 50, 230), (210, 245, 60), (128, 128, 0), (255, 255, 255)]
 TILE_W = 480
 G_TILE_W, G_COLS = 640, 3
-PALETTE = {  # viewer anatomical colours (tools/subtle_viewer/web/keypoint_palette.json)
-    "nose1": "#ffff00", "neck1": "#ff00ff", "earL1": "#ffff00", "earR1": "#ffff00",
-    "forelegL1": "#0000ff", "forelegR1": "#00ff00", "tailstart1": "#ffa500",
-    "hindlegL1": "#00ffff", "hindlegR1": "#ff0000", "tail1": "#ffa500", "tailend1": "#ffa500",
-}
 
 
 def sheet(g: pd.DataFrame, root: Path, kps: list[str], n: int) -> tuple[Image.Image, int, int]:
@@ -48,7 +40,7 @@ def sheet(g: pd.DataFrame, root: Path, kps: list[str], n: int) -> tuple[Image.Im
         expect += int(pts.x_px.notna().sum())
         for _, p in pts.iterrows():
             if pd.notna(p.x_px):
-                x, y, c = p.x_px * s, p.y_px * s, COLS[kps.index(p.keypoint)]
+                x, y, c = p.x_px * s, p.y_px * s, KP_COLORS[p.keypoint]
                 dr.ellipse([x - 4, y - 4, x + 4, y + 4], outline=c, width=2)
                 drawn += 1
         dr.rectangle([0, 0, TILE_W, 16], fill=(0, 0, 0))
@@ -64,10 +56,16 @@ def sheet(g: pd.DataFrame, root: Path, kps: list[str], n: int) -> tuple[Image.Im
     head = Path(g.source_video.iloc[0]).name + f"  frames {len(frames)}  "
     dr.text((3, 3), head, fill=(255, 255, 255))
     x = 3 + 6 * len(head)
-    for k, c in zip(kps, COLS):
-        dr.text((x, 3), k, fill=c)
+    for k in kps:
+        dr.text((x, 3), k, fill=KP_COLORS[k])
         x += 6 * len(k) + 8
     return out, drawn, expect
+
+
+def dot(dr: ImageDraw.ImageDraw, x: float, y: float, color: str, r: int = 8) -> None:
+    """Filled dot (r px at 640 px tile width) + white 2 px ring + thin dark outer ring: visible on dark and bright mice."""
+    for rr, c in ((r + 3, (20, 20, 20)), (r + 2, (255, 255, 255)), (r, color)):
+        dr.ellipse([x - rr, y - rr, x + rr, y + rr], fill=c)
 
 
 def group_sheet(g: pd.DataFrame, root: Path, kps: list[str], n: int, title: str, pal: dict) -> tuple[Image.Image, int, int]:
@@ -85,7 +83,7 @@ def group_sheet(g: pd.DataFrame, root: Path, kps: list[str], n: int, title: str,
         seen = {}
         for _, p in pts.iterrows():
             x, y = p.x_px * s, p.y_px * s
-            dr.ellipse([x - 7, y - 7, x + 7, y + 7], fill=pal[p.keypoint], outline=(20, 20, 20), width=2)
+            dot(dr, x, y, pal[p.keypoint])
             seen[p.keypoint] = (x, y)
         assert set(seen) == set(pts.keypoint) and all(
             np.allclose(seen[r.keypoint], (r.x_px * s, r.y_px * s)) for r in pts.itertuples()), f.image
@@ -104,9 +102,9 @@ def group_sheet(g: pd.DataFrame, root: Path, kps: list[str], n: int, title: str,
     dr.text((8, 4), f"{title}   frames {len(frames)} (showing {len(tiles)})", fill=(255, 255, 255), font=font)
     x = 8
     for k in kps:  # legend: filled dot + name
-        dr.ellipse([x, 38, x + 14, 52], fill=pal[k], outline=(20, 20, 20), width=2)
-        dr.text((x + 20, 36), k, fill=(255, 255, 255), font=small)
-        x += 20 + int(dr.textlength(k, font=small)) + 16
+        dot(dr, x + 10, 45, pal[k], 6)
+        dr.text((x + 24, 36), k, fill=(255, 255, 255), font=small)
+        x += 24 + int(dr.textlength(k, font=small)) + 16
     return out, drawn, expect
 
 
@@ -115,15 +113,13 @@ def main() -> None:
     ap.add_argument("root", type=Path)
     ap.add_argument("--per-sheet", type=int, default=None)
     ap.add_argument("--by-group", action="store_true", help="one sheet per environment group")
-    ap.add_argument("--palette", type=Path, help="keypoint_palette.json (name -> [part, hex])")
     a = ap.parse_args()
     d = pd.read_csv(a.root / "labels_long.csv", keep_default_na=False, na_values={"x_px": [""], "y_px": [""]})
     kps = list(dict.fromkeys(d.keypoint))
-    assert len(kps) == len(COLS), kps
+    assert set(kps) == set(KP_COLORS), kps
+    check_palette()
     if a.by_group:
-        pal = dict(PALETTE)
-        if a.palette:
-            pal.update({k: v[1] for k, v in json.loads(a.palette.read_text()).items()})
+        pal = KP_COLORS
         d["group"] = [group_of(v) for v in d.source_video]
         nfr = d.drop_duplicates("image").group.value_counts()
         assert nfr.sum() == d.image.nunique(), (nfr.sum(), d.image.nunique())
@@ -143,7 +139,7 @@ def main() -> None:
         assert drawn == expect, (src, drawn, expect)
         name = Path(src).parent.name + "_" + Path(src).stem
         im.save(out / f"{i:02d}_{name}.jpg", quality=85)
-    print(f"{i + 1} sheets -> {out}; keypoint colours: " + ", ".join(f"{k}={c}" for k, c in zip(kps, COLS)))
+    print(f"{i + 1} sheets -> {out}; keypoint colours = pkg_groups.KP_COLORS")
 
 
 if __name__ == "__main__":

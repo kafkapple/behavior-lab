@@ -13,7 +13,7 @@ IQR flag = Tukey fences (1.5 x IQR) on the pooled (camera, keypoint) sample, sam
 Confidence check: share of flagged steps whose lower confidence lies below the Q25 of all steps.
 
   uv run --with numpy --with pandas --with pyyaml --with matplotlib --with h5py python scripts/kp_jump_continuous.py \
-     --out OUT --palette keypoint_palette.json SESSION.json.gz ...
+     --out OUT SESSION.json.gz ...
   python scripts/kp_jump_continuous.py --selftest
 """
 from __future__ import annotations
@@ -29,7 +29,8 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "src"))
-from kp_error_by_keypoint import PALETTE_FALLBACK, draw_panel, iqr_mask, summarize  # noqa: E402
+from kp_error_by_keypoint import draw_panel, iqr_mask, summarize  # noqa: E402
+from pkg_groups import KP_COLORS  # noqa: E402
 
 NECK, TAILSTART = 1, 6
 
@@ -85,7 +86,6 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("sessions", nargs="*", type=Path)
     ap.add_argument("--out", type=Path)
-    ap.add_argument("--palette", type=Path)
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     if a.selftest:
@@ -96,9 +96,7 @@ def main() -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    palette = dict(PALETTE_FALLBACK)
-    if a.palette:
-        palette.update({k: v[1] for k, v in json.loads(a.palette.read_text()).items()})
+    palette = KP_COLORS
     a.out.mkdir(parents=True, exist_ok=True)
     pool: dict = {}  # (cam, kp) -> lists
     nodes, excl, n_frames = None, 0, 0
@@ -160,19 +158,22 @@ def main() -> None:
     with (a.out / "kp_jump_confidence.csv").open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(conf_rows[0])); w.writeheader()
         w.writerows({q: (round(x, 4) if isinstance(x, float) else x) for q, x in r.items()} for r in conf_rows)
-    fig, axes = plt.subplots(2, 5, figsize=(5.6 * 5, 9.2), sharey="row", layout="constrained", squeeze=False)
     rng = np.random.default_rng(0)
-    for ri, kind in enumerate(("speed", "accel")):
+    for kind in ("speed", "accel"):  # one figure per kind, 3 x 2 camera panels (readable at <= 1000 px)
+        fig, axes = plt.subplots(2, 3, figsize=(7.2 * 3, 4.6 * 2), sharey=True, layout="constrained", squeeze=False)
+        axes[1][2].axis("off")
         for c in range(5):
-            samp = [panels[(kind, c, k)][0] for k in range(len(nodes))]
-            stats = [panels[(kind, c, k)][1] for k in range(len(nodes))]
-            draw_panel(axes[ri][c], f"cam_{c + 1} · {kind}", nodes, samp, stats, palette, rng, compact=True,
+            ax = axes[c // 3][c % 3]
+            draw_panel(ax, f"cam_{c + 1} · {kind}", nodes, [panels[(kind, c, k)][0] for k in range(len(nodes))],
+                       [panels[(kind, c, k)][1] for k in range(len(nodes))], palette, rng, compact=True,
                        yticks=(0, 1, 10, 100, 1000), linear_width=1.0)
-        axes[ri][0].set_ylabel(f"{kind} (% body length / frame) · asinh")
-    fig.supxlabel(f"{len(a.sessions)} sessions, {n_frames} frames. Missing % = steps without two (speed) / three (accel) "
-                  "consecutive detections; amber % = IQR-flagged / valid. Box = Q25-Q75, line = median, dot = mean, "
-                  "bar = mean ± SD, whiskers = min-max.", fontsize=7)
-    fig.savefig(a.out / "kp_jump_scatter.png", dpi=300)
+        for r in range(2):
+            axes[r][0].set_ylabel(f"{kind} (% body length / frame) · asinh")
+        fig.supxlabel(f"{len(a.sessions)} sessions, {n_frames} frames. Missing % = steps without two (speed) / three (accel) "
+                      "consecutive detections; amber % = IQR-flagged / valid. Box = Q25-Q75, line = median, dot = mean, "
+                      "bar = mean ± SD, whiskers = min-max.", fontsize=7)
+        fig.savefig(a.out / f"kp_jump_{kind}.png", dpi=300)
+        plt.close(fig)
     (a.out / "kp_jump_report.json").write_text(json.dumps(dict(
         sessions=[p.name for p in a.sessions], frames=n_frames, detections_outside_cell_dropped=excl), indent=2))
     print("done", n_frames, "frames; outside-cell detections dropped:", excl)
