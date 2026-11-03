@@ -25,6 +25,8 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--device", choices=["cpu", "mps"], default="mps")
     ap.add_argument("--config", type=Path, default=None, help="server pose config; default = server default per algorithm")
+    ap.add_argument("--map-location", choices=["cpu"], default=None,
+                    help="default torch.load map_location (Deviation: CUDA-saved Lightning Pose checkpoints cannot be read on a Mac otherwise)")
     ap.add_argument("--server-code", type=Path, default=SERVER_CODE)
     a = ap.parse_args()
     if a.out.exists():
@@ -39,6 +41,11 @@ def main() -> None:
     link = work / a.video.name
     if not link.exists():
         link.symlink_to(a.video.resolve())
+
+    if a.map_location:  # driver-side only: the server code is not edited
+        import torch
+        _load = torch.load
+        torch.load = lambda *args, **kw: _load(*args, **{"map_location": a.map_location, **kw})
 
     sys.path.insert(0, str(a.server_code))
     import infer_pose_tools as tools  # noqa: E402  (server module, needs the path above)
