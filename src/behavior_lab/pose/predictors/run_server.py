@@ -2,10 +2,11 @@
 
 Same code path as the server: composite -> camera cells -> model -> normalized keypoint json.gz,
 followed by the server's default skeleton3d post-processing. Weights and server code are copies
-(see docs: vault note 261103_AVATAR_pose_models_server_vs_local).
+(vault note 261103_AVATAR_pose_models_server_vs_local). Run it by path with the interpreter that has the
+model's packages (pose_runtime for sleap/yolo, ~/data/subtle_models/_envs/lp for lightning_pose):
 
-    pose_runtime/.venv/bin/python scripts/pose_models_run.py --algorithm sleap \
-        --model ~/data/subtle_models/SLEAP_1423/<dir> --video <composite.mp4> --out <result.json.gz> --device mps
+    <python> src/behavior_lab/pose/predictors/run_server.py --preset sleap1423 --video <composite.mp4> --out <result.json.gz>
+    <python> src/behavior_lab/pose/predictors/run_server.py --algorithm yolo --model <pt> --config <cfg> --video ... --out ...
 """
 import argparse
 import gzip
@@ -15,12 +16,22 @@ import time
 from pathlib import Path
 
 SERVER_CODE = Path.home() / "data/subtle_outage_poc_261030/SUBTLE_gpu"
+MODELS = Path.home() / "data/subtle_models"
+# what was run for the note: name -> arguments (paths relative to MODELS). YOLO needs the 5-camera config, not the server default.
+PRESETS = {
+    "sleap1423": dict(algorithm="sleap", model="SLEAP_1423/260504.single_instance.n=1423-1", device="mps"),
+    "sleap1501single": dict(algorithm="sleap", model="SLEAP_1501_single/260718_101448.single_instance.n=1501", device="mps"),
+    "yolo": dict(algorithm="yolo", model="YOLO/20250124_m_527_AVATAR3D_KHU.pt", config="_configs/YOLO_AVATAR3D_config.json", device="mps"),
+    "lp_reorganize": dict(algorithm="lightning_pose", model="LightningPose/20260717_reorganize.lightning_pose_model.zip", device="mps", map_location="cpu"),
+    "lp_khu": dict(algorithm="lightning_pose", model="LightningPose/KHU_lightning_pose_model.zip", device="mps", map_location="cpu"),
+}
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--algorithm", choices=["sleap", "yolo", "lightning_pose"], required=True)
-    ap.add_argument("--model", type=Path, required=True)
+    ap.add_argument("--preset", choices=sorted(PRESETS), help="algorithm, model, config and device used in the note")
+    ap.add_argument("--algorithm", choices=["sleap", "yolo", "lightning_pose"])
+    ap.add_argument("--model", type=Path)
     ap.add_argument("--video", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--device", choices=["cpu", "mps"], default="mps")
@@ -29,6 +40,15 @@ def main() -> None:
                     help="default torch.load map_location (Deviation: CUDA-saved Lightning Pose checkpoints cannot be read on a Mac otherwise)")
     ap.add_argument("--server-code", type=Path, default=SERVER_CODE)
     a = ap.parse_args()
+    if a.preset:  # explicit flags win over the preset
+        pre = PRESETS[a.preset]
+        a.algorithm = a.algorithm or pre["algorithm"]
+        a.model = a.model or MODELS / pre["model"]
+        a.config = a.config or (MODELS / pre["config"] if "config" in pre else None)
+        a.map_location = a.map_location or pre.get("map_location")
+        a.device = pre["device"] if "--device" not in sys.argv else a.device
+    if not (a.algorithm and a.model):
+        ap.error("give --preset, or --algorithm and --model")
     if a.out.exists():
         ap.error(f"output exists, use a new path: {a.out}")
     for p in (a.model, a.video, a.server_code):
