@@ -43,10 +43,14 @@ def main() -> None:
     sys.path.insert(0, str(a.server_code))
     import infer_pose_tools as tools  # noqa: E402  (server module, needs the path above)
 
+    model = a.model
+    if a.algorithm == "lightning_pose" and model.suffix == ".zip":  # the server unpacks the zip first
+        model = tools.extract_lightning_pose_model_archive(model, a.out.parent / f".lp_{model.stem}")
+
     t0 = time.time()
     info = tools.run_tools_pose_inference(
         a.algorithm, input_video=link, output_path=a.out, device=a.device,
-        model_path=a.model, pose_config_path=a.config,
+        model_path=model, pose_config_path=a.config,
     )
     d = json.load(gzip.open(a.out))
     frames = len(d["keypoint"])

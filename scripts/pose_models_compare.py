@@ -27,9 +27,9 @@ from pkg_groups import KP_COLORS, MARKER_R_REL, check_palette  # noqa: E402
 W, H = 3600, 2000  # composite size (ffprobe 261103); json coordinates are normalized by it
 CELLS = [[0, 0, 1200, 1000], [1200, 0, 2400, 1000], [2400, 0, 3600, 1200], [0, 1000, 1200, 2000], [1200, 1000, 2400, 2000]]
 FRAME = 120  # fixed before looking at results: middle of the 240 frames
-SAME_NODES = ["server_sleap1423", "sleap1423_mps_r1", "sleap1423_mps_r2", "sleap1501_mps", "lp_reorganize_cpu", "lp_khu_cpu"]
+SAME_NODES = ["server_sleap1423", "sleap1423_mps_r1", "sleap1423_mps_r2", "sleap1501single_mps", "lp_reorganize_cpu", "lp_khu_cpu"]
 LABEL = {"server_sleap1423": "server SLEAP 1423-1", "sleap1423_mps_r1": "Mac SLEAP 1423-1 r1", "sleap1423_mps_r2": "Mac SLEAP 1423-1 r2",
-         "sleap1501_mps": "Mac SLEAP 1501", "lp_reorganize_cpu": "Mac LP reorganize", "lp_khu_cpu": "Mac LP KHU", "yolo_mps": "Mac YOLO KHU (9 pt)"}
+         "sleap1501single_mps": "Mac SLEAP 1501 single", "lp_reorganize_cpu": "Mac LP reorganize", "lp_khu_cpu": "Mac LP KHU", "yolo_mps": "Mac YOLO KHU (9 pt)"}
 
 
 def load(path: Path):
@@ -41,10 +41,13 @@ def load(path: Path):
             for k, (x, y, s) in nodes.items():
                 if not (x == 0 and y == 0):
                     a[int(f), int(c), int(k)] = (x * W, y * H, s)
-    if set(names) == set(KP_COLORS):  # node order differs between files: index by name
-        order = [names.index(n) for n in KP_COLORS]
-        names, a = list(KP_COLORS), a[:, :, order]
-    return names, a
+    own = set(names)
+    if own <= set(KP_COLORS):  # node order and count differ between files: index by name, NaN for nodes the model lacks
+        full = np.full((a.shape[0], 5, len(KP_COLORS), 3), np.nan)
+        for i, n in enumerate(names):
+            full[:, :, list(KP_COLORS).index(n)] = a[:, :, i]
+        names, a = list(KP_COLORS), full
+    return names, a, own
 
 
 def pair_stats(a, b):
@@ -68,7 +71,7 @@ def main() -> None:
     paths.update({p.name[:-8]: p for p in sorted(a.results.glob("*.json.gz"))})
     data = {k: load(p) for k, p in paths.items()}
     kp_names = list(KP_COLORS)
-    same = [k for k in SAME_NODES if k in data and data[k][0] == kp_names]
+    same = [k for k in SAME_NODES if k in data and data[k][0] == kp_names]  # models whose node names are a subset of the 11
     assert "server_sleap1423" in same, "server reference missing or node names differ"
     pairs = [("server_sleap1423", "sleap1423_mps_r1"), ("sleap1423_mps_r1", "sleap1423_mps_r2")]
     pairs += [p for p in itertools.combinations([k for k in same if k not in ("server_sleap1423", "sleap1423_mps_r2")], 2)]
@@ -79,6 +82,8 @@ def main() -> None:
         dist, only_x, only_y = pair_stats(data[x][1], data[y][1])
         dists[(x, y)] = dist
         for k, n in enumerate(kp_names):
+            if n not in data[x][2] or n not in data[y][2]:
+                continue  # node missing in one model: no pair, not a zero
             v = dist[..., k][~np.isnan(dist[..., k])]
             assert (v >= 0).all()
             q = np.percentile(v, [50, 90, 99]) if v.size else [np.nan] * 3
@@ -95,7 +100,7 @@ def main() -> None:
         d = dists[(x, y)]
         for k, n in enumerate(kp_names):
             v = d[..., k][~np.isnan(d[..., k])]
-            if v.size:
+            if v.size and n in data[x][2] and n in data[y][2]:
                 bp = ax.boxplot(v, positions=[k], widths=0.6, showfliers=True, patch_artist=True, flierprops=dict(markersize=2, alpha=0.4, markeredgecolor=KP_COLORS[n]),
                                 medianprops=dict(color="black"))
                 bp["boxes"][0].set(facecolor=KP_COLORS[n], alpha=0.85)
@@ -132,7 +137,7 @@ def main() -> None:
     keys = [k for k in paths if k in data]
     fig, axs = plt.subplots(len(keys), 5, figsize=(5 * 3.0, len(keys) * 2.6), squeeze=False)
     for r, key in enumerate(keys):
-        names, arr = data[key]
+        names, arr, _own = data[key]
         for c, (x0, y0, x1, y1) in enumerate(CELLS):
             ax = axs[r, c]
             ax.imshow(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2RGB))
@@ -158,7 +163,7 @@ def main() -> None:
         f.write("| model | " + " | ".join(kp_names) + " |\n|---|" + "---:|" * len(kp_names) + "\n")
         for key in same:
             arr = data[key][1]
-            f.write(f"| {LABEL[key]} | " + " | ".join(f"{100 * np.mean(~np.isnan(arr[..., k, 0])):.1f}" for k in range(len(kp_names))) + " |\n")
+            f.write(f"| {LABEL[key]} | " + " | ".join(f"{100 * np.mean(~np.isnan(arr[..., k, 0])):.1f}" if kp_names[k] in data[key][2] else "-" for k in range(len(kp_names))) + " |\n")
     # self-check: a result against itself is exactly zero
     s = data[same[0]][1]
     z, _, _ = pair_stats(s, s)
