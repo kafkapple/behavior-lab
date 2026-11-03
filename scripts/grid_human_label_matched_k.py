@@ -76,7 +76,7 @@ def main() -> None:
     hum = human_labels(ANNOTS / "adult_6112.csv")
     ctrl = scores(rng.integers(0, 5, size=len(hum)), hum)
     assert abs(ctrl["ami"]) < 0.01 and abs(ctrl["ami_na"]) < 0.01 and abs(ctrl["bacc"] - 0.25) < 0.1, ctrl
-    out: dict = {"control": ctrl, "rule": f">= {WINS} of 15 paired cells", "by_k": {}}
+    out: dict = {"cells": cells, "control": ctrl, "rule": f">= {WINS} of 15 paired cells", "by_k": {}}
     for k in KS:
         out["by_k"][str(k)] = {}
         for metric in ("ami", "ami_na", "bacc"):
