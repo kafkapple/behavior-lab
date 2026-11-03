@@ -1,8 +1,8 @@
 # Keypoint models on the AVATAR multiview data
 
-Status as of 2026-10-03. Scope: 2D keypoint predictors that were run, planned or only mentioned on AVATAR
+Status as of 2026-10-03, except the training package (obtained 2026-10-13, see "Base training labels"). Scope: 2D keypoint predictors that were run, planned or only mentioned on AVATAR
 (Justin lab multiview mouse data, 5 cameras). Numbers are copied from the source line; none were recomputed.
-Source of the comparison: vault `30_Projects/2609_IBS_Postdoc/_Agent/260929_AVATAR_SUBTLE_overlay_compare/260930_AVATAR_keypoint_model_comparison.html` section 4,
+Source of the comparison: vault `30_Projects/Behavior-Lab/_Agent/AVATAR/260929_AVATAR_SUBTLE_overlay_compare/260930_AVATAR_keypoint_model_comparison.html` (moved from `2609_IBS_Postdoc/_Agent/`) section 4,
 plus `kp_model_selection` (status: plan). UNVERIFIED = read in a note, not confirmed on the host.
 
 ## Protocol of every row below
@@ -51,7 +51,7 @@ plus `kp_model_selection` (status: plan). UNVERIFIED = read in a note, not confi
 ## Hand labels for training and for accuracy
 
 - Ground-truth template: 30 frames x 5 cameras x 11 keypoints = 1650 rows
-  (`gt_label_261002/labels_template.csv`: `frame,camera,image,image_w,image_h,keypoint,x_px,y_px,visible,note`). Labelling not started.
+  (`gt_label_261002/labels_template.csv`: `frame,camera,image,image_w,image_h,keypoint,x_px,y_px,visible,note`). Labelling not started as of 2026-10-03; current state = vault handoff `261011_Handoff_AVATAR_keypoint_mask_filter`.
 - Trainers read different files, so `behavior_lab.pose.labels` turns that one table into them:
 
 | Trainer | Function | File |
@@ -89,4 +89,4 @@ plus `kp_model_selection` (status: plan). UNVERIFIED = read in a note, not confi
 1. Hand-label the 150 images (human). Unlocks accuracy for every row above
 2. Score SLEAP 1423, SLEAP 1501 and SuperAnimal-Quadruped against those labels (same images, same metric)
 3. Install Lightning Pose on WSL and pilot on the labelled frames
-4. Retrain SLEAP only if access to the training package is obtained
+4. Retrain SLEAP only if access to the training package is obtained (condition met 2026-10-13, see "Base training labels"; the retrain decision is not recorded in this file)
