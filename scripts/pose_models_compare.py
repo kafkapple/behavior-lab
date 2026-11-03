@@ -16,6 +16,7 @@ from pathlib import Path
 
 import cv2
 import matplotlib
+import matplotlib.colors
 import numpy as np
 
 matplotlib.use("Agg")
@@ -59,64 +60,90 @@ def pair_stats(a, b):
     return dist, only_a, only_b
 
 
+BINS = [0, 1, 10, 100, np.inf]  # decades, descriptive only (no tolerance)
+BIN_LABEL = ["<= 1 px", "1-10 px", "10-100 px", "> 100 px"]
+BIN_COLOR = ["#d9e8f5", "#8fbfe3", "#3b82c4", "#b2182b"]
+
+
 def distance_figs(a, data, kp_names, pairs, dists, tags, title):
-    """Distance per keypoint (box) and per frame (heat map) for one group of pairs; axes shared inside the group."""
-    allv = np.concatenate([d[~np.isnan(d)] for d in dists.values()])
-    fig, axs = plt.subplots(len(pairs), 1, figsize=(11, 2.1 * len(pairs)), sharex=True, sharey=True, squeeze=False)
+    """Fig A: share of pairs per distance bin and keypoint (median in px on top). Fig B: keypoint x frame heat map."""
+    fig, axs = plt.subplots(len(pairs), 1, figsize=(11, 2.6 * len(pairs)), sharex=True, sharey=True, squeeze=False)
     for ax, (x, y) in zip(axs[:, 0], pairs):
         d = dists[(x, y)]
         for k, n in enumerate(kp_names):
             v = d[..., k][~np.isnan(d[..., k])]
-            if v.size and n in data[x][2] and n in data[y][2]:
-                bp = ax.boxplot(v, positions=[k], widths=0.6, showfliers=True, patch_artist=True, flierprops=dict(markersize=2, alpha=0.4, markeredgecolor=KP_COLORS[n]),
-                                medianprops=dict(color="black"))
-                bp["boxes"][0].set(facecolor=KP_COLORS[n], alpha=0.85)
-        ax.set_yscale("symlog", linthresh=1)
-        ax.set_ylim(0, allv.max() * 1.2)
+            if not (v.size and n in data[x][2] and n in data[y][2]):
+                ax.text(k, 50, "no\npair", ha="center", va="center", fontsize=7, color="gray")
+                continue
+            share = np.histogram(v, bins=BINS)[0] / v.size * 100
+            bottom = 0
+            for sh, col in zip(share, BIN_COLOR):
+                ax.bar(k, sh, bottom=bottom, color=col, width=0.72, edgecolor="white", linewidth=0.4)
+                bottom += sh
+            ax.text(k, 101.5, f"{np.median(v):.1f}", ha="center", va="bottom", fontsize=8)
+        ax.set_ylim(0, 112)
+        ax.set_ylabel("share of pairs (%)")
         ax.set_title(f"{LABEL[x]}  vs  {LABEL[y]}", fontsize=9, loc="left")
-        ax.set_ylabel("distance (px)")
     axs[-1, 0].set_xticks(range(len(kp_names)), kp_names, rotation=30, ha="right")
-    fig.suptitle(f"Fig. {tags[0]} · {title}: per-keypoint distance, all frames x 5 cameras (composite px, symlog y, shared axes)", fontsize=10)
-    fig.tight_layout()
+    axs[0, 0].legend(handles=[plt.Rectangle((0, 0), 1, 1, color=c) for c in BIN_COLOR], labels=BIN_LABEL, ncol=4, fontsize=8, loc="lower left", bbox_to_anchor=(0.0, 1.12), title="distance between the two results (bins are descriptive, not a tolerance)", title_fontsize=8, frameon=False)
+    fig.text(0.995, 0.005, "number above a bar = median distance (px)", ha="right", fontsize=8)
+    fig.suptitle(f"Fig. {tags[0]} · {title}: share of keypoint pairs per distance bin (all 240 frames x 5 cameras, composite px)", fontsize=10, y=0.995)
+    fig.tight_layout(rect=(0, 0.02, 1, 0.97))
     fig.savefig(a.out / f"fig{tags[0]}_distance_by_keypoint.png", dpi=110)
     plt.close(fig)
 
-    vmax = float(np.nanpercentile(allv, 99))
-    fig, axs = plt.subplots(len(pairs), 1, figsize=(11, 1.9 * len(pairs)), sharex=True, squeeze=False)
+    vmax = float(max(np.nanmax(d) for d in dists.values()))
+    norm = matplotlib.colors.SymLogNorm(linthresh=1, vmin=0, vmax=vmax)
+    fig, axs = plt.subplots(len(pairs), 1, figsize=(11, 2.3 * len(pairs)), sharex=True, squeeze=False, constrained_layout=True)
     for ax, (x, y) in zip(axs[:, 0], pairs):
         m = np.nanmax(np.where(np.isnan(dists[(x, y)]), -1, dists[(x, y)]), axis=1).T  # (node, frame), -1 = no pair
-        im = ax.imshow(np.ma.masked_less(m, 0), aspect="auto", cmap="magma", vmin=0, vmax=vmax, interpolation="nearest")
-        ax.set_yticks(range(len(kp_names)), kp_names, fontsize=6)
+        im = ax.imshow(np.ma.masked_less(m, 0), aspect="auto", cmap="magma", norm=norm, interpolation="nearest")
+        ax.set_yticks(range(len(kp_names)), kp_names, fontsize=7)
         ax.set_title(f"{LABEL[x]}  vs  {LABEL[y]}", fontsize=9, loc="left")
     axs[-1, 0].set_xlabel("frame")
-    fig.colorbar(im, ax=axs[:, 0].tolist(), label=f"max over cameras (px), colour limit = group p99 ({vmax:.0f})", shrink=0.6)
-    fig.suptitle(f"Fig. {tags[1]} · {title}: distance by frame (grey = no pair)", fontsize=10)
+    cb = fig.colorbar(im, ax=axs[:, 0].tolist(), shrink=0.85, pad=0.02)
+    cb.set_label("largest distance over 5 cameras (px, log-like scale)", fontsize=8)
+    fig.suptitle(f"Fig. {tags[1]} · {title}: distance by frame and keypoint (white = no pair, same colour scale in every row)", fontsize=10)
     fig.savefig(a.out / f"fig{tags[1]}_distance_by_frame.png", dpi=110)
     plt.close(fig)
     return vmax
 
 
 def overlay(a, data, keys, img, no, title, fname):
-    """Same frame and crops for each model; dot colour = keypoint (KP_COLORS), black = node names outside the 11."""
+    """Same frame, same zoomed crop per camera for every model; dot colour = keypoint, black = other node names."""
     keys = [k for k in keys if k in data]
-    fig, axs = plt.subplots(len(keys), 5, figsize=(15, len(keys) * 2.6), squeeze=False)
-    for r, key in enumerate(keys):
-        names, arr, _own = data[key]
-        for c, (x0, y0, x1, y1) in enumerate(CELLS):
+    ref = data[REP][1][FRAME]  # (cam, node, 3): crop window follows the representative SLEAP animal
+    fig, axs = plt.subplots(len(keys), 5, figsize=(15, len(keys) * 3.0 + 0.8), squeeze=False)
+    for c, (x0, y0, x1, y1) in enumerate(CELLS):
+        pts = ref[c, :, :2][~np.isnan(ref[c, :, 0])]
+        edge = (abs(pts[:, 0] - x0) <= 2) | (abs(pts[:, 0] - x1) <= 2) | (abs(pts[:, 1] - y0) <= 2) | (abs(pts[:, 1] - y1) <= 2)
+        pts = pts[~edge] if (~edge).any() else pts  # points clipped to the cell border must not stretch the window
+        cx, cy = pts.mean(0) if len(pts) else ((x0 + x1) / 2, (y0 + y1) / 2)
+        half = max(180.0, (np.ptp(pts, axis=0).max() if len(pts) else 0) * 0.75)
+        half = min(half, (x1 - x0) / 2, (y1 - y0) / 2)
+        wx0 = min(max(cx - half, x0), x1 - 2 * half); wy0 = min(max(cy - half, y0), y1 - 2 * half)
+        win = (int(wx0), int(wy0), int(2 * half), int(2 * half))
+        crop = cv2.cvtColor(img[win[1]:win[1] + win[3], win[0]:win[0] + win[2]], cv2.COLOR_BGR2RGB)
+        rad = win[2] * 0.016 * MARK
+        for r, key in enumerate(keys):
+            names, arr, _own = data[key]
             ax = axs[r, c]
-            ax.imshow(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2RGB))
-            rad = MARKER_R_REL * (x1 - x0) * MARK
+            ax.imshow(crop, extent=(win[0], win[0] + win[2], win[1] + win[3], win[1]))
             for k, n in enumerate(names):
                 p = arr[FRAME, c, k]
                 if not np.isnan(p[0]):
-                    ax.add_patch(plt.Circle((p[0] - x0, p[1] - y0), rad, facecolor=KP_COLORS.get(n, "#111111"), edgecolor="white", linewidth=0.8))
+                    ax.add_patch(plt.Circle((p[0], p[1]), rad, facecolor=KP_COLORS.get(n, "#111111"), edgecolor="white", linewidth=0.9))
+            ax.set_xlim(win[0], win[0] + win[2]); ax.set_ylim(win[1] + win[3], win[1])
             ax.set_xticks([]); ax.set_yticks([])
             if c == 0:
-                ax.set_ylabel(LABEL.get(key, key), fontsize=7)
+                ax.set_ylabel(LABEL.get(key, key), fontsize=8)
             if r == 0:
-                ax.set_title(f"cam {c}", fontsize=8)
-    fig.suptitle(f"Fig. {no} · {title}. Frame {FRAME}, same crops, colour = keypoint, black = other node names, marker {MARK} x MARKER_R_REL", fontsize=9)
-    fig.tight_layout()
+                ax.set_title(f"cam {c}  (zoom {win[2]} px)", fontsize=8)
+    handles = [plt.Line2D([], [], marker="o", ls="", markerfacecolor=KP_COLORS[n], markeredgecolor="white", markersize=8, label=n) for n in KP_COLORS]
+    handles.append(plt.Line2D([], [], marker="o", ls="", markerfacecolor="#111111", markeredgecolor="white", markersize=8, label="other node names (YOLO)"))
+    fig.legend(handles=handles, loc="lower center", ncol=6, fontsize=8, frameon=False)
+    fig.suptitle(f"Fig. {no} · {title}. Frame {FRAME}; every row shows the same zoom window per camera (centred on the representative SLEAP animal)", fontsize=9)
+    fig.tight_layout(rect=(0, 0.07, 1, 0.97))
     fig.savefig(a.out / fname, dpi=110)
     plt.close(fig)
 
