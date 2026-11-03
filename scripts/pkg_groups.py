@@ -33,6 +33,8 @@ KP_COLORS = {
     "forelegL1": "#4EA8DE", "forelegR1": "#1D4ED8", "hindlegL1": "#6BCB77", "hindlegR1": "#1B7F3B",
     "tailstart1": "#C77DFF", "tail1": "#7B2CBF", "tailend1": "#3C096C",
 }
+# Marker radius relative to the tile width (4.5 px at a 640 px tile, 3.4 px at 480), shared by every overlay image.
+MARKER_R_REL = 4.5 / 640
 KP_FAMILY = {"nose1": "head", "neck1": "head", "earL1": "head", "earR1": "head",
              "forelegL1": "forelimb", "forelegR1": "forelimb", "hindlegL1": "hindlimb",
              "hindlegR1": "hindlimb", "tailstart1": "tail", "tail1": "tail", "tailend1": "tail"}

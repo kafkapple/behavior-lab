@@ -186,7 +186,7 @@ def draw_panel(ax, title: str, nodes: list[str], samp: list[np.ndarray], stats: 
                     fontsize=fs, color="#c87518")
         else:  # not interpretable: no box / mean / flag rate
             ax.text(i, 1.01, f"n={n}\nn<{MIN_N}", transform=ax.get_xaxis_transform(), ha="center",
-                    va="bottom", fontsize=fs, color="#8a919b")
+                    va="bottom", fontsize=fs, color="#5f6670", fontweight="bold")
     ax.set_yscale("asinh", linear_width=linear_width)
     ax.set_yticks(list(yticks), labels=[f"{t:g}" for t in yticks])
     ax.set_xticks(range(len(nodes)), labels=[
@@ -196,7 +196,7 @@ def draw_panel(ax, title: str, nodes: list[str], samp: list[np.ndarray], stats: 
     ax.set_xlim(-0.6, len(nodes) - 0.4)
     ax.grid(axis="y", color="#e7eaee", linewidth=0.65, zorder=0)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.set_title(title, fontsize=8 if compact else 10, pad=26)
+    ax.set_title(title, fontsize=8 if compact else 10, pad=26 if "\n" not in title else 30)
 
 
 def figure_groups(set_name: str, nodes: list[str], per_group: dict, out: Path, palette: dict,
@@ -213,7 +213,9 @@ def figure_groups(set_name: str, nodes: list[str], per_group: dict, out: Path, p
     for ax in axes.flat[len(per_group):]:
         ax.axis("off")
     for ax, (key, (nf, samp, stats)) in zip(axes.flat, per_group.items()):
-        draw_panel(ax, f"{key} · {nf} frames", nodes, samp, stats, palette, rng, compact=True)
+        low = any(len(x) < MIN_N for x in samp)  # these keypoints show dots only: say so in the title
+        draw_panel(ax, f"{key} · {set_name} {nf} frames" + (f"\ngray n<{MIN_N} = dots only, no box/mean" if low else ""),
+                   nodes, samp, stats, palette, rng, compact=True)
     for r in range(nrows):
         axes[r][0].set_ylabel("Position error (px) · asinh")
     fig.supxlabel(f"{set_name}: Missing % (missing / visible GT) under each keypoint; amber % = IQR-flagged / "

@@ -4,7 +4,7 @@
     python scripts/pkg_overlay_sheets.py <pkg_images dir> --by-group [--per-sheet 12] 
 
 --by-group: one larger sheet per environment group (scripts/pkg_groups.py) -> <dir>/overlay_groups/<NN>_<group>.jpg,
-3 columns x 640 px tiles, KP_COLORS dots (white ring + dark outer ring), legend bar. Counts per group are printed
+3 columns x 640 px tiles, KP_COLORS dots (radius MARKER_R_REL x tile width = 4.5 px, 1 px white ring, 1 px dark outline; same relative size in per-video sheets), legend bar. Counts per group are printed
 (they must sum to the number of frames in the CSV).
 
 Reads <dir>/labels_long.csv (from extract_pkg_images.py) and <dir>/images; writes <dir>/overlay_sheets/<NN>_<name>.jpg.
@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 
-from pkg_groups import GROUPS, KEYS, KP_COLORS, check_palette, group_of
+from pkg_groups import GROUPS, KEYS, KP_COLORS, MARKER_R_REL, check_palette, group_of
 
 TILE_W = 480
 G_TILE_W, G_COLS = 640, 3
@@ -41,7 +41,7 @@ def sheet(g: pd.DataFrame, root: Path, kps: list[str], n: int) -> tuple[Image.Im
         for _, p in pts.iterrows():
             if pd.notna(p.x_px):
                 x, y, c = p.x_px * s, p.y_px * s, KP_COLORS[p.keypoint]
-                dr.ellipse([x - 4, y - 4, x + 4, y + 4], outline=c, width=2)
+                dot(dr, x, y, c, MARKER_R_REL * TILE_W)
                 drawn += 1
         dr.rectangle([0, 0, TILE_W, 16], fill=(0, 0, 0))
         dr.text((3, 2), f"{f.split} {Path(f.image).stem}", fill=(255, 255, 255))
@@ -62,9 +62,9 @@ def sheet(g: pd.DataFrame, root: Path, kps: list[str], n: int) -> tuple[Image.Im
     return out, drawn, expect
 
 
-def dot(dr: ImageDraw.ImageDraw, x: float, y: float, color: str, r: int = 8) -> None:
-    """Filled dot (r px at 640 px tile width) + white 2 px ring + thin dark outer ring: visible on dark and bright mice."""
-    for rr, c in ((r + 3, (20, 20, 20)), (r + 2, (255, 255, 255)), (r, color)):
+def dot(dr: ImageDraw.ImageDraw, x: float, y: float, color: str, r: float) -> None:
+    """Filled dot of radius r + 1 px white ring + 1 px dark outline. r = MARKER_R_REL * tile width in every mode."""
+    for rr, c in ((r + 2, (20, 20, 20)), (r + 1, (255, 255, 255)), (r, color)):
         dr.ellipse([x - rr, y - rr, x + rr, y + rr], fill=c)
 
 
@@ -83,7 +83,7 @@ def group_sheet(g: pd.DataFrame, root: Path, kps: list[str], n: int, title: str,
         seen = {}
         for _, p in pts.iterrows():
             x, y = p.x_px * s, p.y_px * s
-            dot(dr, x, y, pal[p.keypoint])
+            dot(dr, x, y, pal[p.keypoint], MARKER_R_REL * G_TILE_W)
             seen[p.keypoint] = (x, y)
         assert set(seen) == set(pts.keypoint) and all(
             np.allclose(seen[r.keypoint], (r.x_px * s, r.y_px * s)) for r in pts.itertuples()), f.image
@@ -102,7 +102,7 @@ def group_sheet(g: pd.DataFrame, root: Path, kps: list[str], n: int, title: str,
     dr.text((8, 4), f"{title}   frames {len(frames)} (showing {len(tiles)})", fill=(255, 255, 255), font=font)
     x = 8
     for k in kps:  # legend: filled dot + name
-        dot(dr, x + 10, 45, pal[k], 6)
+        dot(dr, x + 10, 45, pal[k], MARKER_R_REL * G_TILE_W)
         dr.text((x + 24, 36), k, fill=(255, 255, 255), font=small)
         x += 24 + int(dr.textlength(k, font=small)) + 16
     return out, drawn, expect
