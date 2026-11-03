@@ -25,7 +25,7 @@ keypoints (T, K, 3)
 | **Preprocess** | Global mean subtraction + flatten | — | `(T, K*D)` |
 | **Spectrogram** | Morlet CWT (continuous wavelet) | `fs`, `omega`, `n_channels` | `(n_freq, T)` per channel |
 | **Dim Reduction** | PCA → UMAP | `n_components=100` → `50 neighbors, 2D` | `(T, 2)` embedding |
-| **Clustering** | Phenograph (Leiden on k-NN; SUBTLE default `clustering_algo="leiden"`, `module.py:49`; the `phenograph` package default is louvain) | data-driven k | subclusters `(T,)` |
+| **Clustering** | Phenograph (Leiden on k-NN; SUBTLE default `clustering_algo="leiden"`, `module.py:49`; the `phenograph` package default is louvain in 1.5.7, the latest release; Leiden is opt-in since 1.5.3; Levine et al. 2015 used Louvain) | data-driven k | subclusters `(T,)` |
 | **Hierarchy** | DIB (info bottleneck) | — | superclusters `(T,)` |
 | **Metrics** | Transition probability, retention | — | `(C, C)` matrix, `(C,)` retention |
 
