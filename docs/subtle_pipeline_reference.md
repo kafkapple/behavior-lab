@@ -14,7 +14,7 @@ keypoints (T, K, 3)
   → PCA (100 components)
   → UMAP (n_neighbors=50, n_components=2)
   → Phenograph clustering → subclusters
-  → DIB (Divisive Information Bottleneck) → superclusters
+  → DIB (Deterministic Information Bottleneck, Strouse & Schwab 2017) → superclusters
   → Transition matrix + retention metrics
 ```
 
@@ -25,7 +25,7 @@ keypoints (T, K, 3)
 | **Preprocess** | Global mean subtraction + flatten | — | `(T, K*D)` |
 | **Spectrogram** | Morlet CWT (continuous wavelet) | `fs`, `omega`, `n_channels` | `(n_freq, T)` per channel |
 | **Dim Reduction** | PCA → UMAP | `n_components=100` → `50 neighbors, 2D` | `(T, 2)` embedding |
-| **Clustering** | Phenograph (Louvain on k-NN) | data-driven k | subclusters `(T,)` |
+| **Clustering** | Phenograph (Leiden on k-NN; SUBTLE default `clustering_algo="leiden"`, `module.py:49`; the `phenograph` package default is louvain) | data-driven k | subclusters `(T,)` |
 | **Hierarchy** | DIB (info bottleneck) | — | superclusters `(T,)` |
 | **Metrics** | Transition probability, retention | — | `(C, C)` matrix, `(C,)` retention |
 
