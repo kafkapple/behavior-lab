@@ -15,8 +15,9 @@ def test_web_palette_matches_registry():
         pytest.skip("BehaviorSplatter checkout not found")
     sys.path.insert(0, str(BS_SRC))
     sk = pytest.importorskip("behaviorsplatter.temporal_deform.skeletons")
+    assert Path(sk.__file__).resolve().is_relative_to(BS_SRC.resolve()), f"imported {sk.__file__}, not BS_SRC"
     if not hasattr(sk, "region_palette_hex"):
-        pytest.skip("BehaviorSplatter without region_palette_hex (older checkout)")
+        pytest.skip("SKIPPED, NOT CHECKED: BS_SRC has no region_palette_hex (older checkout); set BS_SRC=<BehaviorSplatter worktree at origin/dev>/src")
     hexes, spec, web = sk.region_palette_hex(), sk.SKELETONS["avatar_11"], json.loads(PALETTE.read_text())
     region = {i: r for r, _, idx in spec.region_colors for i in idx}
     got = {n: web[n][1].lower() for n in spec.keypoint_names}
