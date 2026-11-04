@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import subprocess
 import logging
 import re
@@ -42,33 +43,46 @@ def stem_of(p: Path) -> str:
     return STEM_SUFFIX.sub("", p.name.removesuffix(".gz").removesuffix(".json"))
 
 
-def _token(stem: str) -> str | None:
-    m = re.match(r"([A-Za-z]+\d+)", stem)
-    return m.group(1) if m else None
-
-
-def scan(root: Path) -> list[dict]:
-    vids = [v for v in root.rglob("*.mp4") if not any(s.startswith(".") for s in v.relative_to(root).parts)]
-    videos = {}
-    for v in vids:
-        videos.setdefault(v.stem, v)
-    out = []
-    for p in sorted(root.rglob("*.json.gz")):
-        rel = p.relative_to(root)
-        if any(s.startswith(".") for s in rel.parts):
+def scan(root: Path, progress=None) -> list[dict]:
+    """Inventory sessions without traversing the tree twice or comparing every video to every session."""
+    out, all_videos = [], []
+    n_dirs = n_vids = 0
+    for base, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        folder = Path(base)
+        rel_dir = folder.relative_to(root)
+        n_dirs += 1
+        videos = [folder / f for f in files if f.lower().endswith(".mp4")]
+        all_videos.extend(videos)
+        n_vids += len(videos)
+        for f in sorted(x for x in files if x.endswith(".json.gz")):
+            p = folder / f
+            stem = stem_of(p)
+            side = p.with_name(f.removesuffix(".json.gz") + SIDE)
+            out.append({"path": str(p.relative_to(root)), "mb": round(p.stat().st_size / 1e6, 2), "stem": stem,
+                        "video": None, "cams": {}, "subtle": side.exists()})
+        if progress:
+            progress({"dirs": n_dirs, "sessions": len(out), "videos": n_vids, "path": str(rel_dir)})
+    out.sort(key=lambda s: s["path"])
+    direct, camera = {}, {}
+    for v in all_videos:
+        direct.setdefault(v.stem, []).append(v)
+        m = re.search(r"_cam_([1-5])$", v.stem)
+        if not m:
             continue
-        v = videos.get(stem_of(p))
-        tok, cams = _token(stem_of(p)), {}
-        if tok:  # per-camera videos: name holds the animal token as a whole word and `cam_N`
-            pat = re.compile(rf"(?<![A-Za-z0-9]){re.escape(tok)}(?!\d)")
-            for x in vids:
-                m = re.search(r"cam_(\d)", x.stem)
-                if m and pat.search(x.stem) and 1 <= int(m.group(1)) <= 5:
-                    cams[int(m.group(1)) - 1] = str(x.relative_to(root))
-        side = p.with_name(p.name.removesuffix(".json.gz") + SIDE)
-        out.append({"path": str(rel), "mb": round(p.stat().st_size / 1e6, 2), "stem": stem_of(p),
-                    "video": str(v.relative_to(root)) if v else None, "cams": cams, "subtle": side.exists()})
-    log.info("scan %s: %d sessions, %d videos", root, len(out), len(vids))
+        prefix = v.stem[:m.start()]
+        parts = prefix.split("_")
+        for i in range(len(parts)):
+            camera.setdefault(("_".join(parts[i:]), int(m.group(1)) - 1), []).append(v)
+    for s in out:
+        parent = (root / s["path"]).parent
+        match_stem = s["stem"].removesuffix("_full")
+        pick = lambda xs: next((v for v in xs if v.parent == parent), xs[0]) if xs else None  # noqa: E731
+        v = pick(direct.get(match_stem, []))
+        s["video"] = str(v.relative_to(root)) if v else None
+        s["cams"] = {c: str(pick(camera[(match_stem, c)]).relative_to(root))
+                     for c in range(5) if (match_stem, c) in camera}
+    log.info("scan %s: %d sessions, %d videos, %d dirs", root, len(out), n_vids, n_dirs)
     return out
 
 

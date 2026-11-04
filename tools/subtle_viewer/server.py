@@ -8,6 +8,8 @@ import logging
 import mimetypes
 import re
 import sys
+import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -36,6 +38,40 @@ class _Buf(logging.Handler):
 
 
 def _routes(root: Path):
+    scan_state = {"done": False, "dirs": 0, "sessions": 0, "videos": 0, "path": ".", "error": None, "items": []}
+    scan_lock = threading.Lock()
+
+    def scan_start():
+        with scan_lock:
+            if scan_state.get("running") or scan_state["done"]:
+                return {"started": False}
+            scan_state["running"] = True
+            scan_state["t0"] = time.monotonic()
+
+        def run():
+            try:
+                def update(s):
+                    with scan_lock:
+                        scan_state.update(s)
+                items = core.scan(root, update)
+                with scan_lock:
+                    scan_state["items"] = items
+            except Exception as e:
+                logging.getLogger("subtle_viewer").exception("session scan")
+                with scan_lock:
+                    scan_state["error"] = f"{type(e).__name__}: {e}"
+            finally:
+                with scan_lock:
+                    scan_state["done"] = True
+                    scan_state["running"] = False
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"started": True}
+
+    def scan_status():
+        with scan_lock:
+            return {**scan_state, "elapsed": round(time.monotonic() - scan_state["t0"], 1) if "t0" in scan_state else 0}
+
     def session(q):
         s = core.load(root, q["path"][0])
         stride = max(1, int(q.get("stride", ["1"])[0]))
@@ -96,6 +132,9 @@ def _routes(root: Path):
         "doc": lambda q, b: doc(q),
         "kp2d": lambda q, b: kp2d(q),
         "sessions": lambda q, b: core.scan(root),
+        "scan_start": lambda q, b: scan_start(),
+        "scan_status": lambda q, b: scan_status(),
+        "root": lambda q, b: {"path": str(root)},
         "session": lambda q, b: session(q),
         "projects": lambda q, b: core.list_projects(root),
         "project": lambda q, b: core.load_project(root, q["name"][0]),
@@ -195,6 +234,8 @@ def main():
     a = ap.parse_args()
     core.RESULTS_BASE = a.results_dir.resolve()
     root = Path(a.root).expanduser().resolve()
+    if not root.is_dir():
+        ap.error(f"data root is not a directory: {root}")
     h = _Buf()
     h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s", "%H:%M:%S"))
     logging.basicConfig(level=logging.INFO, handlers=[h, logging.StreamHandler()])

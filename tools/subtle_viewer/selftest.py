@@ -31,9 +31,14 @@ def main():
         mk(root / "b", "B1", 7, [0, 0, 1, 1, 1, 2, 2])
         mk(root, "C1", 5)  # no labels
         (root / "b" / "B1.mp4").write_bytes(b"x")
-        s = {x["stem"]: x for x in core.scan(root)}
+        (root / "processed" / "A1").mkdir(parents=True)
+        (root / "processed" / "A1" / "A1_cam_1.mp4").write_bytes(b"x")
+        updates = []
+        s = {x["stem"]: x for x in core.scan(root, updates.append)}
+        assert updates[-1]["sessions"] == 3 and updates[-1]["dirs"] >= 4, updates
         assert set(s) == {"A1", "B1", "C1"}, s  # subfolders found
         assert s["B1"]["video"] == "b/B1.mp4" and s["A1"]["video"] is None  # stem pairing, `_sleap_1423` stripped
+        assert s["A1"]["cams"][0] == "processed/A1/A1_cam_1.mp4"  # JSON and proxy may live in sibling trees
         assert s["A1"]["subtle"] and not s["C1"]["subtle"]
         ses = core.load(root, s["A1"]["path"])
         assert ses["xyz"].shape == (30, 11, 3) and len(ses["edges"]) == 10

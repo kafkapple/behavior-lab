@@ -34,6 +34,8 @@ h3{margin:0 0 6px;font-size:var(--fs-m);color:var(--mut);text-transform:uppercas
 .tile{position:relative;min-width:0;min-height:0;background:#000;overflow:hidden}
 .tile video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}.tile canvas{pointer-events:none}
 .tag{position:absolute;left:6px;bottom:4px;color:#fff;font-size:var(--fs-s);background:#0008;padding:0 4px;border-radius:4px}
+body.noright #right{display:none}body.noright #main{grid-template-columns:200px minmax(0,1fr)}
+body.nomap #pmap{display:none}body.nomap #stage{grid-template-areas:"video skel" "video skel"}
 body.hide #left,body.hide #right{display:none}body.hide #main{grid-template-columns:minmax(0,1fr)}
 #keys{margin-top:2px;font-size:var(--fs-s)}
 .lrow{display:grid;grid-template-columns:18px 34px 1fr 48px;gap:4px;align-items:center;padding:1px 2px;border-radius:4px;cursor:pointer}
@@ -53,7 +55,14 @@ body.hide #left,body.hide #right{display:none}body.hide #main{grid-template-colu
 table{border-collapse:collapse;width:100%}td,th{padding:2px 4px;text-align:left;border-bottom:1px solid var(--line)}
 pre{margin:0;font:var(--fs-s)/1.4 ui-monospace,monospace;white-space:pre-wrap}
 progress{width:100%;height:8px}
-#docview{display:none;position:fixed;inset:5% 10%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto;z-index:10;box-shadow:0 8px 40px #0008}
+#scanprogress{padding:6px;margin-bottom:8px;border:1px solid var(--line);border-radius:6px;overflow-wrap:anywhere}
+#scanprogress progress{height:8px}
+#docview{display:none;position:fixed;inset:5% 7%;grid-template-columns:180px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);background:var(--bg);border:1px solid var(--line);border-radius:10px;z-index:10;box-shadow:0 8px 40px #0008;overflow:hidden}
+#docview>header{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+#docnav{padding:10px;border-right:1px solid var(--line);overflow:auto;background:var(--panel)}
+#docnav button{display:block;width:100%;margin-bottom:4px;text-align:left;white-space:normal}
+#doctext{padding:12px 20px;overflow:auto;min-width:0}
+@media(max-width:700px){#docview{inset:2%;grid-template-columns:1fr;grid-template-rows:auto 110px minmax(0,1fr)}#docnav{border-right:0;border-bottom:1px solid var(--line)}}
 #doctext h1,#doctext h2,#doctext h3{margin:.8em 0 .3em;text-transform:none;color:var(--fg);font-size:var(--fs-xl)}
 #doctext code{background:var(--panel);padding:0 4px;border-radius:4px}#doctext pre{background:var(--panel);padding:8px;border-radius:6px}
 
@@ -62,3 +71,5 @@ progress{width:100%;height:8px}
 /* fixed widths: a changing label must not resize the slider while it is dragged (the thumb jumped away from the pointer) */
 #fi{display:inline-block;min-width:104px;text-align:right;font-variant-numeric:tabular-nums}
 #cur{display:inline-block;width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+#steps{margin:4px 0 8px;font-size:var(--fs-s);border:1px solid var(--line);border-radius:6px;padding:4px 6px}#steps summary{cursor:pointer;color:var(--acc)}#steps ol{margin:4px 0;padding-left:16px}

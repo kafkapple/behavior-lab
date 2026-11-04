@@ -6,7 +6,17 @@ import {setCam, setAll, vids, videoOn, toggleKp, isAll} from './video.js';
 import {refreshProjects, renderGroups} from './project.js';
 
 async function init() {
-  const L = await api('sessions'); $('root').textContent = L.length + ' sessions';
+  const R = await api('root'); $('root').textContent = R.path;
+  await api('scan_start');
+  let status;
+  do {
+    status = await api('scan_status');
+    $('scanmsg').textContent = `Scanning ${status.path} · ${status.dirs} folders · ${status.sessions} sessions · ${status.videos} videos · ${status.elapsed}s`;
+    if (!status.done) await new Promise(resolve => setTimeout(resolve, 350));
+  } while (!status.done);
+  if (status.error) throw new Error(`Session scan failed: ${status.error}`);
+  const L = status.items; $('root').textContent = `${L.length} sessions · ${R.path}`;
+  $('scanprogress').remove();
   $('list').innerHTML = L.map(s => `<div class="sess" data-p="${s.path}"><b>${s.stem}</b> <span class="mut">${s.mb} MB${Object.keys(s.cams).length ? ' · ' + Object.keys(s.cams).length + ' cam' : ''}${s.subtle ? ' · SUBTLE' : ''}</span></div>`).join('') || 'no *.json.gz under the root';
   document.querySelectorAll('.sess').forEach(e => e.onclick = () => open_(e.dataset.p, L.find(x => x.path === e.dataset.p)));
   refreshProjects();
@@ -59,12 +69,23 @@ on('cam', () => { if (playing()) stop(); });
 
 // ---- keyboard, same keys as the BS viewer: Space play, arrows step, +/- zoom, Enter reset view, h panels, ? manuals
 const step = d => { if (!st.S) return; st.fr = Math.max(0, Math.min(st.S.xyz.length - 1, st.fr + d)); emit('frame'); };
+// panel toggles (cluster map, right tabs): button + key, remembered per browser
+function panelToggle(cls, btn, key) {
+  const set = off => { document.body.classList.toggle(cls, off); $(btn).classList.toggle('on', !off);
+    try { localStorage.setItem(key, off ? '1' : '0'); } catch (_) {} window.dispatchEvent(new Event('resize')); };
+  const toggle = () => set(!document.body.classList.contains(cls));
+  $(btn).onclick = toggle;
+  try { set(localStorage.getItem(key) === '1'); } catch (_) { set(false); }
+  return toggle;
+}
+const toggleMap = panelToggle('nomap', 'mapbtn', 'subtle.nomap');
+const toggleRight = panelToggle('noright', 'rbtn', 'subtle.noright');
 const tab = t => document.querySelector(`#tabs button[data-t="${t}"]`).click();
 document.addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'range') return;
   const k = e.key, cams = Object.keys((st.cur && st.cur.cams) || {});
   const A = {' ': toggle, ArrowLeft: () => step(-1), ArrowRight: () => step(1), ArrowUp: () => step(10), ArrowDown: () => step(-10), ',': () => step(-1), '.': () => step(1),
-    '+': () => zoomSkel(1.15), '=': () => zoomSkel(1.15), '-': () => zoomSkel(1 / 1.15), Enter: resetView, h: () => document.body.classList.toggle('hide'),
+    '+': () => zoomSkel(1.15), '=': () => zoomSkel(1.15), '-': () => zoomSkel(1 / 1.15), Enter: resetView, h: () => document.body.classList.toggle('hide'), m: toggleMap, r: toggleRight,
     k: () => toast('keypoints ' + (toggleKp() ? 'on' : 'off')), l: () => tab('clu'), '?': () => document.querySelector('[data-d]') && document.querySelector('[data-d]').click(),
     Escape: () => { st.F = new Set(); emit('filter'); }, 0: () => cams.length ? setAll() : toast('no camera video'),
     1: () => pick(cams, 0), 2: () => pick(cams, 1), 3: () => pick(cams, 2), 4: () => pick(cams, 3), 5: () => pick(cams, 4)};
@@ -93,9 +114,14 @@ function md(src) {
   close(); return out.join('\n');
 }
 async function initDocs() {
-  const N = await api('docs'); $('docs').innerHTML = N.map(n => `<a href="#" data-d="${n}">${n.replace(/^subtle_|\.md$/g, '').replace(/_/g, ' ')}</a>`).join(' · ') || 'none';
-  document.querySelectorAll('[data-d]').forEach(a => a.onclick = async e => { e.preventDefault(); const d = await api('doc?name=' + a.dataset.d); $('doctext').innerHTML = md(d.text); $('docview').style.display = 'block'; });
+  const rank = n => { const i = ['subtle_workthrough.md', 'subtle_viewer_manual.md'].indexOf(n); return i < 0 ? 2 : i; };
+  const N = (await api('docs')).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  $('docs').innerHTML = '<button id="helpbtn" type="button">📖 Help</button>';
+  $('helpbtn').onclick = () => { $('docview').style.display = 'grid'; $('docnav').querySelector('button')?.click(); };
+  $('docnav').innerHTML = N.map(n => `<button type="button" data-d="${n}">${n.replace(/^subtle_|\.md$/g, '').replace(/_/g, ' ')}</button>`).join('');
+  document.querySelectorAll('[data-d]').forEach(a => a.onclick = async () => { const d = await api('doc?name=' + a.dataset.d); $('doctext').innerHTML = md(d.text); document.querySelectorAll('[data-d]').forEach(x => x.classList.toggle('on', x === a)); $('docview').style.display = 'grid'; });
 }
 $('docx').onclick = () => $('docview').style.display = 'none';
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('docview').style.display !== 'none') $('docview').style.display = 'none'; });
 initDocs().catch(() => {});
 init().catch(e => toast(e.message));

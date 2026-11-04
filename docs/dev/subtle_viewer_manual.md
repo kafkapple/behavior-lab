@@ -1,7 +1,12 @@
+---
+created: 2026-10-25T23:26:05
+modified: 2026-11-03T10:46:57
+---
 # SUBTLE Lite Viewer manual (261023)
 
 ## Start
-- Terminal: `subtle <folder> [--port N] [--no-open]` (default port 8777; the folder is scanned recursively).
+- Start with `subtle_workthrough.md` in Help for data → project → Train/Map. Help opens a module list; `?` opens it and Esc closes it.
+- Terminal: `subtle [folder] [--port N] [--no-open]` (default folder is local `data/subtle/cort28d/`, port 8777). The Sessions panel shows scan progress and the active root.
 - Deep link: `http://127.0.0.1:8777/#open=<path>&cam=<0-4>&frame=<n>` opens a session at a frame and camera.
 
 ## Files the viewer reads
