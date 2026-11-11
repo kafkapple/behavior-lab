@@ -27,7 +27,7 @@ source: agent
 | **P5** | archive·beast | avllm-archive·flux → `_archive/dev-repos` | symbolic/temporal **루트 유지**; Drive zip 미실시 |
 | **P6** | nikke | 루트 repo → `mobile/tools/` + symlink | mobile README 커밋 미분리 |
 | **P7** | hubs | → `agent/modules/` + symlink | — |
-| **P8** | data/results | flat 실사 → DATA_RESULTS_LAYOUT §mac | `~/data/results` 6M 통합·INDEX diff 자동화 차기 |
+| **P8** | data/results | MAMMAL 6M → `~/results` merge + `~/data/results/MAMMAL_mouse` symlink | `data/results/BehaviorSplatter` 없음(mac); INDEX diff 자동화 잔여 |
 
 ---
 
@@ -74,10 +74,10 @@ source: agent
 
 ## 잔여 이슈 (우선순위)
 
-1. Win junction (win-dashboard, wsl_migrate)
-2. `scratch/`/`_scratch` 용량 (usagi grep 선행)
-3. `~/data/results` → `~/results` 정리
-4. avllm-symbolic/temporal archive 여부 (현재 **active** 판정)
-5. behavior-lab·mobile 기타 dirty — 스코프 밖 커밋
+1. Win junction — 스크립트만 (`dev-platform-junction.ps1`), PC에서 1회 실행
+2. `scratch/261025_instagram_resources` — usagi 앱이 참조 · **삭제 금지**
+3. `_scratch` 용량 감사
+4. avllm-symbolic/temporal — **active**, archive 안 함
+5. behavior-lab push · mobile README 등 스코프 밖 dirty
 
 **검증 한 줄**: `ls -la ~/dev/{win-dashboard,beast}` · `behavior-lab/docs/dev/README.md` §6

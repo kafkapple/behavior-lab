@@ -31,7 +31,7 @@
 | `derived/` · `preprocessed/` | **호환 stub** — 자식만 symlink → alias 트리 | 삭제 금지 |
 | `M5_local`, `WK1_*`, `raw/markerless_*` 등 | legacy 이름 → alias ( `_LAYOUT_MOVES.tsv` ) | 유지 |
 | `BehaviorSplatter/` (~15G) | BS **mac 캐시** (sceneflow_viewer, annotations, cache) | `~/results` 와 별도; 코드가 `~/data/BehaviorSplatter` 하드코딩 |
-| `results/` (6M) | legacy `MAMMAL_mouse/kp22_dlt` 만 | 신규 산출은 `~/results/MAMMAL_mouse/`; 통합은 차기 승인 |
+| `results/MAMMAL_mouse` | **261112**: 실데이터는 `~/results/MAMMAL_mouse/`에 merge; `~/data/results/MAMMAL_mouse` → symlink | BS config `{home}/data/results/MAMMAL_mouse/kp22_dlt*` 경로 유지 |
 | `weights/`, `garciagarcia-2026/`, `subtle_*` | 프로젝트별 데이터 | alias 등재는 INDEX·README 동기화 때 |
 
 ## ~/dev 레이아웃 (261112)
