@@ -111,3 +111,5 @@
 | BEAST3D fork | `beast/` | BS baseline·Olaf 스크립트 소비 — archive 금지(261112 조사) |
 
 Codex 플레이북 = `playbooks/codex-usage-playbook.md` (구 `~/dev/docs/`).
+
+루트 잔여 21+1 팩트표 = [audits/261112_dev_root_residual.md](audits/261112_dev_root_residual.md) (3차). `conf-radar` → `poc/conf-radar` + 루트 symlink.
