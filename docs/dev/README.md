@@ -91,3 +91,23 @@
 `sdannce-poc/docs/repo_boundary.md` §mask npz 키 규약 참조.
 
 데이터셋 추가 = `sdannce-poc/configs/segmentation/*.yaml` 1개 (캘리브·키포인트·영상레이아웃 3축이 기존 조합이면 코드 0줄).
+
+---
+
+## 6. 폴더 taxonomy (261112)
+
+| 계층 | 경로 | 비고 |
+|---|---|---|
+| MoC | `behavior-lab/docs/dev/` | playbooks · audits · [DATA_RESULTS_LAYOUT.md](DATA_RESULTS_LAYOUT.md) |
+| Agent 런타임 | `agent/{gyeol,engram-*,…}` | nested git |
+| Agent 플랫폼 | `agent/platform/{win-dashboard,wsl_migrate}` | 구경로 symlink 유지 |
+| Agent 모듈 | `agent/modules/{research-hub,curation-hub}` | 구경로 symlink |
+| LLM 이론 | `poc/llm-study/` | [README](../../../poc/llm-study/README.md) |
+| PoC | `poc/` · `poc-archive/` | sdannce-poc 등 핵심은 루트 유지(§1) |
+| 에이전트 실험 | `experiments/` | karpathy 벤치 |
+| 아카이브 | `_archive/dev-repos/` | avllm-archive · flux_cond_img 등 |
+| Mobile | `mobile/tools/nikke-spine-viewer` | `apps/Nikke` 와 쌍 |
+| 학습 메모 | `TIL/` | dormant여도 루트 유지 |
+| BEAST3D fork | `beast/` | BS baseline·Olaf 스크립트 소비 — archive 금지(261112 조사) |
+
+Codex 플레이북 = `playbooks/codex-usage-playbook.md` (구 `~/dev/docs/`).
