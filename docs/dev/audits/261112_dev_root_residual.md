@@ -27,16 +27,17 @@ MoC §1 연구 레포는 **루트 유지**. 아래는 §6 예시 밖 항목의 *
 | **non-git / infra** | | | |
 | _ext | — | vendor ref 45M | BKinD-3D, dinov3 |
 | _wt | 0B | worktree stub | 유지 |
-| app | — | vendor 11M | czkawka → tools 검토 |
-| iphone | 80M | mobile assets | mobile 근처 검토 |
+| app | — | **removed** | `czkawka-master` → `tools/vendor/czkawka-master` ✓ |
+| iphone | 80M | mobile assets | **유지** (dotfiles `iphone` alias·handoff 경로) |
+| ai-engram-repro | 2026-08 | GPU 실험 스크립트 | **유지** (핸드오프·≠ PyPI ai-engram) |
 
 ## scratch (P4 미삭제)
 
 | path | size | consumer |
 |---|---|---|
 | scratch/261025_instagram_resources | 339M | usagi app json |
-| scratch/261024_* | 581M | — |
-| _scratch/raw_keep | 1.4G | grep 0 active |
+| scratch/261024_* | — | **삭제** (Xcode build only, usagi 무관) |
+| _scratch/raw_keep | 1.4G | **KEEP** — `cam_2` md5 ≠ `~/data/mouse-avatar-2312cort/derived/...` |
 | _scratch/260928_tower | 1.6M | gyeol archive only |
 
 검증: `readlink ~/dev/conf-radar` → `poc/conf-radar`

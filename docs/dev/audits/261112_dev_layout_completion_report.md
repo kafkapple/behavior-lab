@@ -72,12 +72,19 @@ source: agent
 
 ---
 
-## 잔여 이슈 (우선순위)
+## 잔여 이슈 (261112 4차 마감 후)
 
-1. Win junction — 스크립트만 (`dev-platform-junction.ps1`), PC에서 1회 실행
-2. `scratch/261025_instagram_resources` — usagi 앱이 참조 · **삭제 금지**
-3. `_scratch` 용량 감사
-4. avllm-symbolic/temporal — **active**, archive 안 함
-5. behavior-lab push · mobile README 등 스코프 밖 dirty
+| 항목 | 상태 |
+|---|---|
+| Win junction | dotfiles `f9ed88f` + [dev-platform-junction.ps1](~/dotfiles/windows/dev-platform-junction.ps1); **PC 1회** |
+| scratch 261025 | usagi `reference.json` — **삭제 금지** |
+| scratch 261024 | **삭제 완료** (~581M build junk) |
+| `_scratch/raw_keep` | **유지** (1.4G; data alias와 md5 불일치) |
+| `tools/vendor/czkawka-master` | app/ 루트 제거 ✓ |
+| symlink 10종 | `readlink` 일괄 OK |
+| dotfiles push | `f9ed88f` (junction only) |
+| avllm-symbolic/temporal · beast · ai-engram-repro · iphone | 루트 **유지** (잔여표) |
+| Drive zip archived repos · INDEX↔disk 자동화 | **미착수** (별 작업) |
+| mobile dirty (앱 코드) | layout 범위 밖 |
 
-**검증 한 줄**: `ls -la ~/dev/{win-dashboard,beast}` · `behavior-lab/docs/dev/README.md` §6
+**검증**: `for s in win-dashboard conf-radar; do readlink ~/dev/$s; done` · `test -f ~/data/results/MAMMAL_mouse/kp22_dlt/keypoints_22_3d_s2.npz`
